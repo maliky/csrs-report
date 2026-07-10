@@ -1,0 +1,246 @@
+#+TITLE: CSRS Report - Notes et plan de developpement
+#+LANGUAGE: fr
+#+STARTUP: overview
+
+* Vision
+
+CSRS Report doit aider la nouvelle direction a suivre, semaine apres semaine, l'activite des employes et l'avancement des taches confiees par leur responsable hierarchique.
+
+L'adoption est une contrainte centrale. L'application doit rester facile a utiliser par des personnes peu habituees aux outils informatiques. La premiere version sera une application web responsive en francais, utilisable sur ordinateur et sur telephone. Une installation PWA ou une integration mobile plus poussee pourra venir apres validation de cette premiere experience.
+
+* Objectifs du produit
+
+- Donner a chaque employe une vue simple des taches de sa semaine.
+- Permettre une mise a jour quotidienne rapide de l'avancement.
+- Permettre a un employe de proposer une nouvelle tache a son N+1.
+- Permettre au N+1 d'accepter, refuser, completer et suivre les taches de ses collaborateurs.
+- Donner aux responsables une synthese de leur equipe avec un acces au detail par personne et par tache.
+- Permettre a chaque responsable de suivre aussi ses propres taches, affectees par son niveau superieur.
+- Faire remonter les informations dans la hierarchie sans coder en dur les niveaux N+1, N+2 ou N+3.
+- Conserver un historique fiable des affectations, validations, progressions et observations.
+
+* Utilisateurs et hierarchie
+
+** Employe
+
+L'employe consulte les taches qui lui sont affectees, renseigne son avancement quotidien, signale un blocage, ajoute une observation et propose de nouvelles taches.
+
+** Responsable hierarchique
+
+Le responsable possede les memes fonctions pour ses propres taches. Il peut aussi :
+
+- preparer les taches de ses collaborateurs ;
+- valider ou refuser leurs propositions ;
+- consulter une synthese de son equipe ;
+- ouvrir le detail d'un employe ou d'une tache ;
+- echanger avec le collaborateur dans le contexte d'une tache.
+
+** Direction et niveaux superieurs
+
+Un responsable de niveau superieur consulte les responsables et equipes places sous son autorite selon une regle d'autorisation a preciser. La structure doit reposer sur des liens hierarchiques generiques et non sur trois roles fixes N+1, N+2 et N+3.
+
+** Administrateur
+
+L'administrateur gere les comptes, l'organisation, les rattachements hierarchiques, les categories, les acces et les parametres techniques. Il ne doit pas devenir le passage obligatoire pour la gestion quotidienne des taches.
+
+* Cas d'usage minimaux
+
+** MWE 1 - Creer l'organisation et les comptes
+
+1. L'administrateur cree une unite, un responsable et un employe.
+2. Il rattache l'employe a son responsable.
+3. L'utilisateur active son acces par la methode d'identification retenue.
+4. Chaque utilisateur ne voit que les donnees autorisees par sa position.
+
+** MWE 2 - Affecter une tache hebdomadaire
+
+1. Le N+1 cree une tache avec un code, un nom court, une description et une echeance.
+2. Il l'affecte a un collaborateur pour une semaine donnee.
+3. Le collaborateur voit la tache dans son tableau de bord.
+
+** MWE 3 - Declarer la progression quotidienne
+
+1. L'employe ouvre la tache depuis son tableau de bord.
+2. Il indique en peu d'actions son niveau d'avancement du jour.
+3. Il peut ajouter une courte observation ou signaler un blocage.
+4. Le N+1 voit la mise a jour dans la synthese de l'equipe.
+
+** MWE 4 - Proposer une tache
+
+1. L'employe saisit une proposition de tache.
+2. Le N+1 la complete si necessaire puis l'accepte ou la refuse.
+3. Une proposition acceptee devient une tache planifiee sans perdre son historique.
+
+** MWE 5 - Suivre une equipe
+
+1. Le N+1 ouvre une synthese de ses collaborateurs.
+2. Il repere les retards, blocages et taches sans mise a jour.
+3. Il ouvre le detail d'un employe ou d'une tache.
+4. Il ajoute une observation dans le contexte de la tache.
+
+* Esquisse du domaine
+
+Le modele suivant est une base de discussion et non un schema fige.
+
+| Entite | Responsabilite principale |
+|--------+---------------------------|
+| Utilisateur | Identite, coordonnees, etat du compte et preferences |
+| Unite organisationnelle | Service, departement ou autre groupe de travail |
+| Rattachement hierarchique | Relation datee entre un employe et son responsable |
+| Semaine de travail | Periode de planification et regles de calendrier |
+| Tache | Code, nom court, description, categorie et informations stables |
+| Affectation | Tache, beneficiaire, semaine, echeance, etat et responsable ayant affecte la tache |
+| Proposition | Tache suggeree, auteur, decision, validateur et motif |
+| Progression quotidienne | Date, valeur d'avancement, note, blocage et auteur |
+| Observation | Echange horodate lie a une tache ou une affectation |
+| Categorie | Classification utile aux syntheses de direction |
+| Verification d'identite | Canal, destination masquee, expiration, tentatives et resultat |
+| Evenement d'audit | Action sensible, auteur, date et objet concerne |
+
+Une tache doit au minimum comporter :
+
+- un code ;
+- un nom court ;
+- une description longue ;
+- une echeance ;
+- un niveau ou etat d'avancement ;
+- une observation ou un fil d'observations ;
+- une categorie quand la taxonomie sera suffisamment stable.
+
+Les textes de tache restent libres au debut. A mesure que la base grandit, une aide a la saisie pourra proposer des taches, libelles ou categories deja utilises sans imposer automatiquement une classification.
+
+* Contraintes d'interface
+
+- Interface et messages principalement en francais.
+- Page d'accueil utile immediatement apres connexion, sans page marketing.
+- Vue hebdomadaire compacte avec les taches, l'echeance, l'etat et la derniere mise a jour.
+- Mise a jour quotidienne possible en quelques actions et sans formulaire long.
+- Utilisation tactile confortable sur un telephone et mise en page responsive sans defilement horizontal obligatoire.
+- Libelles simples, tailles lisibles, contraste suffisant et erreurs expliquees pres du champ concerne.
+- Synthese N+1 concue pour reperer rapidement les exceptions, puis zoomer sur une personne ou une tache.
+- Conservation du contexte lors du retour depuis une vue detaillee.
+- Indication claire des donnees enregistrees, en attente ou refusees.
+- Aucun indicateur reposant uniquement sur une couleur.
+
+* Identite et acces
+
+Deux orientations sont envisagees :
+
+- comptes crees directement par l'institution, puis actives par l'utilisateur ;
+- creation ou activation par code recu sur l'adresse email institutionnelle.
+
+Une verification par SMS est aussi souhaitee. Il reste a decider si l'email et le telephone sont deux choix alternatifs, deux facteurs obligatoires, ou des moyens utilises a des moments differents. Les autorisations de consultation doivent toujours etre appliquees cote serveur selon le rattachement hierarchique actif.
+
+* Hypothese d'architecture
+
+L'orientation initiale est :
+
+- backend Django pour reutiliser les competences existantes, l'administration, les permissions et les migrations ;
+- PostgreSQL comme base de donnees ;
+- Docker Compose pour l'application et la base en developpement ;
+- interface web responsive comme premier client ;
+- frontend rendu par Django ou couche JavaScript limitee pour le MWE ;
+- evaluation de Next.js, d'une API separee ou d'une PWA seulement apres clarification des besoins hors ligne, des notifications et de l'installation mobile.
+
+Cette orientation doit rester reversible jusqu'aux prototypes de parcours et au schema du domaine. Une architecture separee Django API plus Next.js ne doit etre retenue que si elle apporte une valeur concrete superieure a son cout d'exploitation.
+
+* Securite et fiabilite
+
+- Ne collecter que les donnees personnelles necessaires.
+- Ne jamais conserver les codes email ou SMS en clair dans les journaux.
+- Limiter les tentatives de verification et prevoir l'expiration des codes.
+- Journaliser les changements d'affectation, de validation et de progression.
+- Eviter un champ d'observation partage qui permettrait a un utilisateur d'ecraser silencieusement le texte d'un autre.
+- Sauvegarder PostgreSQL et tester la restauration avant le pilote reel.
+- Definir une politique de conservation et d'export des donnees.
+- Tester les permissions avec plusieurs niveaux hierarchiques et des changements de rattachement.
+
+* Deploiement cible
+
+Le domaine prevu est :
+
+- =csrs-app1.koba.sarl=
+
+Le deploiement futur devra suivre cet ordre :
+
+1. confirmer que le DNS public pointe vers le VPS ;
+2. demarrer l'application dans Docker sur un port local non public ;
+3. verifier la reponse de l'application sur ce port ;
+4. creer un vhost Nginx avec un =server_name= exact ;
+5. valider avec =sudo nginx -t= puis recharger Nginx ;
+6. verifier le vhost en HTTP ;
+7. obtenir le certificat avec Certbot ;
+8. verifier HTTPS, la redirection HTTP et le renouvellement automatique.
+
+Ne pas demander de certificat avant que le DNS et le vhost HTTP soient prets.
+
+* Etapes de developpement
+
+** Phase 1 - Clarification et MWE
+
+- Repondre aux questions ouvertes.
+- Valider les roles, les limites de consultation et le cycle de vie d'une tache.
+- Rediger des scenarios d'acceptation pour les cinq MWE.
+
+** Phase 2 - Prototype d'interface
+
+- Prototyper le tableau de bord employe sur ordinateur et telephone.
+- Prototyper la synthese N+1 et la vue detaillee.
+- Tester les parcours avec des utilisateurs peu a l'aise avec l'informatique.
+
+** Phase 3 - Modele et socle technique
+
+- Valider le modele relationnel et les contraintes d'integrite.
+- Initialiser Django, PostgreSQL, Docker Compose et les tests.
+- Implementer l'organisation, les comptes et les permissions.
+
+** Phase 4 - MVP responsive
+
+- Implementer les taches, affectations, propositions et progressions quotidiennes.
+- Implementer les observations et les tableaux de bord employe et N+1.
+- Ajouter l'email ou le SMS selon les decisions prises.
+
+** Phase 5 - Pilote et exploitation
+
+- Importer l'organisation pilote.
+- Former un petit groupe d'utilisateurs.
+- Mesurer l'adoption, les abandons de saisie et les besoins de support.
+- Mettre en place sauvegardes, supervision, deploiement Nginx et TLS.
+
+** Phase 6 - Extension mobile
+
+- Evaluer PWA, installation sur l'ecran d'accueil, notifications et mode hors ligne.
+- N'ajouter ces fonctions qu'a partir de besoins observes pendant le pilote.
+
+* Questions ouvertes
+
+1. Quelle institution et quelles unites organisationnelles utiliseront le premier pilote ?
+2. La hierarchie doit-elle autoriser plusieurs superieurs pour un meme employe ou un seul N+1 actif ?
+3. Jusqu'a quelle profondeur un responsable peut-il consulter les employes indirectement places sous son autorite ?
+4. Qui cree, desactive et reaffecte les comptes lors d'un changement de poste ?
+5. Les comptes seront-ils precrees par l'administration ou actives par l'utilisateur avec son adresse institutionnelle ?
+6. L'utilisateur devra-t-il choisir entre validation par email et SMS, ou les deux seront-ils obligatoires ?
+7. Quel fournisseur enverra les emails et quel fournisseur enverra les SMS, avec quel budget et quels pays pris en charge ?
+8. Que faire lorsqu'un employe ne possede pas de telephone, perd son numero ou ne recoit pas le code ?
+9. Quelles informations personnelles sont reellement necessaires et combien de temps doivent-elles etre conservees ?
+10. Une tache appartient-elle a une seule semaine ou peut-elle etre reportee automatiquement sur plusieurs semaines ?
+11. Qui peut modifier une tache apres son acceptation, et quelles modifications exigent une nouvelle validation ?
+12. Comment mesurer l'avancement : pourcentage libre, etats predefinis, etapes, quantite realisee ou combinaison de ces methodes ?
+13. Une progression quotidienne peut-elle etre corrigee apres sa saisie, et faut-il conserver toutes les versions ?
+14. L'observation partagee doit-elle etre un champ mutable ou un fil de commentaires horodates evitant les ecrasements ?
+15. Une proposition de tache rejetee doit-elle rester visible dans l'historique avec le motif du rejet ?
+16. Quelles categories initiales sont necessaires, et qui peut creer, fusionner ou desactiver une categorie ?
+17. Quels indicateurs doivent apparaitre dans le resume N+1 : retards, blocages, taches sans mise a jour, charge ou progression moyenne ?
+18. Comment definir la semaine de travail, les jours non ouvres, les conges, les fuseaux horaires et les echeances ?
+19. Quelles notifications sont necessaires dans le MVP : nouvelle tache, commentaire, rappel quotidien, retard ou validation ?
+20. Quelles contraintes de volume, sauvegarde, export, audit, confidentialite et disponibilite conditionnent la mise en production ?
+
+* Criteres de sortie de la phase de cadrage
+
+- Les cinq MWE sont confirmes avec leurs acteurs et resultats attendus.
+- Les regles de visibilite hierarchique sont non ambigues.
+- Le cycle de vie d'une tache et d'une proposition est defini.
+- La methode d'avancement quotidien est testable et comprise par les utilisateurs pilotes.
+- La strategie d'identification email et telephone est choisie.
+- Les ecrans principaux ont ete testes sur ordinateur et telephone.
+- Le modele de donnees peut etre implemente sans decision fonctionnelle majeure restante.
