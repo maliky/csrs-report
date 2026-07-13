@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ employee }} — CSRS Report{% endblock %}
+{% block content %}
+<p><a href="{% url 'team-summary' %}?{{ period.query }}">← Retour à l’équipe</a></p><h1>{{ employee }}</h1>
+{% include "work/_period_nav.html" %}
+<div class="task-grid">{% for card in cards %}{% include "work/_task_card.html" with card=card %}{% empty %}<p>Aucune tâche.</p>{% endfor %}</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% load l10n %}
+<article class="task-card task-card-{{ card.deadline_level }}{% if card.assignment.status == 'completed' %} task-card-completed{% endif %}">
+  <h2><a href="{% url 'assignment-detail' card.assignment.pk %}">{{ card.assignment.task.title }}</a></h2>
+  <div class="task-progress-meta">
+    <span class="status status-{{ card.assignment.status }}">{{ card.assignment.get_status_display }}</span>
+    <strong>{{ card.percentage }} % réalisé</strong>
+  </div>
+  <div class="workload-chart" data-total="{{ card.workload.total_days|unlocalize }}" data-completed="{{ card.workload.completed_days|unlocalize }}" data-remaining="{{ card.workload.remaining_days|unlocalize }}" role="img" aria-label="Charge totale {{ card.workload.total_days }} jours, {{ card.workload.completed_days }} jours réalisés, {{ card.workload.remaining_days }} jours restants">
+    <p class="workload-summary"><span>{{ card.workload.completed_days }} j réalisés</span><span>{{ card.workload.remaining_days }} j restants</span><strong>{{ card.workload.total_days }} j au total</strong></p>
+  </div>
+  <p class="task-deadline deadline-{{ card.deadline_level }}"><strong>Échéance</strong> {{ card.assignment.due_date|date:"d/m/Y" }}</p>
+  {% if card.latest and card.latest.blocked %}<p class="task-alert"><span aria-hidden="true">●</span> Point d’attention signalé</p>{% endif %}
+  {% if card.comments %}<details class="observation-preview"><summary>Observations ({{ card.comments|length }})</summary>{% for observation in card.comments %}<article><p>{{ observation.message }}</p><small>{{ observation.actor }} · {{ observation.occurred_at|date:'d/m/Y' }}</small></article>{% endfor %}</details>{% endif %}
+</article>

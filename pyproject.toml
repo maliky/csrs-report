@@ -1,0 +1,37 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.test_settings"
+python_files = ["test_*.py", "*_tests.py"]
+addopts = "-q --strict-markers"
+markers = ["selenium: tests utilisant un navigateur reel"]
+
+[tool.ruff]
+line-length = 90
+target-version = "py313"
+exclude = ["migrations", "staticfiles"]
+
+[tool.ruff.lint]
+select = ["B", "C90", "D", "E", "F", "W"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D213", "E501"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations"]
+
+[[tool.mypy.overrides]]
+module = ["simple_history.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"

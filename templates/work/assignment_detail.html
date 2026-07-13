@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ assignment.task.title }} — CSRS Report{% endblock %}
+{% block content %}
+<p><a href="{% url 'dashboard' %}">← Retour aux tâches</a></p>
+<div class="page-heading">
+  <div><span class="status status-{{ assignment.status }}">{{ assignment.get_status_display }}</span><h1>{{ assignment.task.title }}</h1></div>
+  <div><p>Échéance <strong>{{ assignment.due_date|date:"d/m/Y" }}</strong></p>{% if can_manage %}<a href="{% url 'assignment-edit' assignment.pk %}">Modifier la tâche</a>{% endif %}</div>
+</div>
+<section class="panel">
+  <h2>Historique de progression</h2>
+  <div class="task-history-chart"
+       data-progress-url="{% url 'assignment-progress-json' assignment.pk %}"
+       data-planned="{{ assignment.estimated_work_days }}"
+       data-action="{{ assignment.task.action.code }}"
+       data-start="{{ assignment.start_date|date:'Y-m-d' }}"
+       data-open="{% if assignment.status != 'completed' and assignment.status != 'closed_early' %}true{% else %}false{% endif %}"
+       data-today="{{ today|date:'Y-m-d' }}"
+       data-due="{{ assignment.due_date|date:'Y-m-d' }}"
+       role="img"
+       aria-label="Évolution historique de {{ assignment.task.title }}, du {{ assignment.start_date|date:'d/m/Y' }} au {{ assignment.due_date|date:'d/m/Y' }}, aujourd’hui {{ today|date:'d/m/Y' }}">
+    {% for row in progress_rows %}<i data-x="{{ row.elapsed_work_days }}" data-y="{{ row.percentage }}" data-date="{{ row.day|date:'Y-m-d' }}" data-observed="{{ row.observed|yesno:'true,false' }}"></i>{% endfor %}
+    <p class="chart-fallback">Progression actuelle : {{ initial_progress }} %.</p>
+  </div>
+  <dl class="chart-dates" aria-label="Repères du graphique">
+    <div class="chart-date-start"><dt>Début</dt><dd>{{ assignment.start_date|date:"d/m/Y" }}</dd></div>
+    <div class="chart-date-today"><dt>Aujourd’hui</dt><dd>{{ today|date:"d/m/Y" }}</dd></div>
+    <div class="chart-date-due"><dt>Fin prévue</dt><dd>{{ assignment.due_date|date:"d/m/Y" }}</dd></div>
+  </dl>
+  <p class="chart-caption">{{ progress_observation_count }} saisie{{ progress_observation_count|pluralize }} historique{{ progress_observation_count|pluralize }}. Les points pleins sont les saisies réelles; les points creux reportent la dernière valeur connue.</p>
+</section>
+<div class="detail-grid">
+  <section class="panel">
+    <h2>Détails</h2>
+    <p>{{ assignment.task.description|linebreaksbr }}</p>
+    <dl class="facts">
+      <div><dt>Collaborateur</dt><dd>{{ assignment.employee }}</dd></div>
+      <div><dt>Responsable</dt><dd>{{ assignment.manager }}</dd></div>
+      <div><dt>Date de début</dt><dd>{{ assignment.start_date|date:"d/m/Y" }}</dd></div>
+      <div><dt>Date du jour</dt><dd>{{ today|date:"d/m/Y" }}</dd></div>
+      <div><dt>Fin prévue</dt><dd>{{ assignment.due_date|date:"d/m/Y" }}</dd></div>
+      <div><dt>Charge initiale</dt><dd>{{ assignment.estimated_work_days }} jours</dd></div>
+      <div><dt>Charge réalisée</dt><dd>{{ workload.completed_days }} jours</dd></div>
+      <div><dt>Charge restante</dt><dd>{{ workload.remaining_days }} jours</dd></div>
+      {% if assignment.task.action %}<div><dt>Action</dt><dd>{{ assignment.task.action }}</dd></div>{% endif %}
+    </dl>
+  </section>
+  {% if can_update_progress %}
+  <section class="panel">
+    <h2>Mise à jour du jour</h2>
+    <form method="post" action="{% url 'progress-update' assignment.pk %}" class="stacked-form progress-form" data-progress-baseline="{{ initial_progress }}">
+      {% csrf_token %}
+      <output id="progress-output" class="progress-output">{{ progress_form.percentage.value|default:0 }} %</output>
+      <p class="progress-regression-note" aria-live="polite"></p>
+      {{ progress_form.as_div }}
+      <button class="button button-primary" type="submit">Enregistrer</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% if can_manage %}
+<section class="panel manager-actions">
+  <h2>{% if self_managed %}Clôture de ma tâche{% else %}Décision du responsable{% endif %}</h2>
+  {% if assignment.status == 'awaiting_validation' %}
+  <form method="post" action="{% url 'assignment-action' assignment.pk %}">
+    {% csrf_token %}<input type="hidden" name="action" value="validate">
+    <button class="button button-primary" type="submit">{% if self_managed %}Confirmer mon achèvement{% else %}Valider l’achèvement{% endif %}</button>
+  </form>
+  <form method="post" action="{% url 'assignment-action' assignment.pk %}" class="stacked-form compact">
+    {% csrf_token %}<input type="hidden" name="action" value="reject">{{ reason_form.as_div }}
+    <button class="button" type="submit">{% if self_managed %}Poursuivre ma tâche{% else %}Demander une reprise{% endif %}</button>
+  </form>
+  {% endif %}
+  {% if assignment.status != 'completed' and assignment.status != 'closed_early' %}
+  <form method="post" action="{% url 'assignment-action' assignment.pk %}" class="stacked-form compact">
+    {% csrf_token %}<input type="hidden" name="action" value="close">{{ reason_form.as_div }}
+    <button class="button button-danger" type="submit">{% if self_managed %}Clôturer ma tâche avant achèvement{% else %}Clôturer avant achèvement{% endif %}</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+<section class="panel comments">
+  <h2>Fil d’activité</h2>
+  {% for activity in activities %}
+    <article class="activity activity-{{ activity.kind }}"><p>{{ activity.message|linebreaksbr }}</p><footer>{{ activity.get_kind_display }} · {{ activity.actor }} · {{ activity.occurred_at|date:"d/m/Y H:i" }}{% if activity.percentage_after is not None %} · {{ activity.percentage_after }} %{% endif %}</footer></article>
+  {% empty %}<p>Aucune activité.</p>{% endfor %}
+  {% if can_comment %}
+  <form method="post" action="{% url 'comment-add' assignment.pk %}" class="stacked-form">
+    {% csrf_token %}{{ comment_form.as_div }}
+    <button class="button" type="submit">Ajouter l’observation</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

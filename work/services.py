@@ -1,0 +1,1210 @@
+"""Typed functional domain services for CSRS Report."""
+
+from __future__ import annotations
+
+from collections import deque
+from dataclasses import asdict, dataclass
+from calendar import monthrange
+from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from enum import StrEnum
+from math import ceil
+from statistics import mean, median
+from typing import Iterable, Iterator, TypeAlias, cast
+
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import Q, QuerySet
+from django.utils import timezone
+from django.utils.text import slugify
+
+from accounts.models import User
+from work.models import (
+    AssignmentStatus,
+    ActivityKind,
+    Holiday,
+    InstitutionalAction,
+    ProgressEntry,
+    ProposalStatus,
+    ReportingLine,
+    Task,
+    TaskActivity,
+    TaskAssignment,
+    TaskCodeSequence,
+    TaskProposal,
+    WorkCalendar,
+)
+
+ACTIVE_STATES = (
+    AssignmentStatus.PLANNED,
+    AssignmentStatus.ACTIVE,
+    AssignmentStatus.AWAITING_VALIDATION,
+)
+DecimalPairT: TypeAlias = tuple[Decimal, Decimal]
+
+
+@dataclass(frozen=True)
+class Projection:
+    """Remaining-work projection for one assignment."""
+
+    current_percentage: int
+    baseline_days: Decimal
+    observed_days: Decimal | None
+
+    @property
+    def effective_days(self) -> Decimal:
+        return (
+            self.observed_days if self.observed_days is not None else self.baseline_days
+        )
+
+
+@dataclass(frozen=True)
+class WorkloadBreakdown:
+    """Proportional workload split displayed consistently across the UI."""
+
+    total_days: Decimal
+    completed_days: Decimal
+    remaining_days: Decimal
+
+
+@dataclass(frozen=True)
+class ProgressPoint:
+    """One progression value positioned on a business-day axis."""
+
+    workday_offset: int
+    percentage: int
+    entry_date: date
+    observed: bool = True
+
+
+@dataclass(frozen=True)
+class DailyProgressRow:
+    """One working-day row exposed to charts and authenticated JSON clients."""
+
+    task_id: int
+    start_date: date
+    day: date
+    due_date: date
+    planned_work_days: Decimal
+    elapsed_work_days: int
+    remaining_schedule_days: Decimal
+    overdue_days: Decimal
+    percentage: int
+    observed: bool
+
+    def as_json(self) -> dict[str, object]:
+        """Return a stable, privacy-minimal JSON representation."""
+        payload = asdict(self)
+        for key in ("start_date", "day", "due_date"):
+            payload[key] = cast(date, payload[key]).isoformat()
+        for key in (
+            "planned_work_days",
+            "remaining_schedule_days",
+            "overdue_days",
+        ):
+            payload[key] = float(cast(Decimal, payload[key]))
+        return payload
+
+
+class DeadlineLevel(StrEnum):
+    """Visual urgency derived from the consumed assignment schedule."""
+
+    NORMAL = "normal"
+    ATTENTION = "attention"
+    WARNING = "warning"
+    URGENT = "urgent"
+    OVERDUE = "overdue"
+    COMPLETED = "completed"
+
+
+@dataclass(frozen=True)
+class TaskProgressSeries:
+    """Compact per-task progression profile for the team dashboard."""
+
+    assignment: TaskAssignment
+    points: tuple[ProgressPoint, ...]
+    today: date
+    observation_count: int
+    planned_days: Decimal
+    displayed_days: Decimal
+    overrun_days: Decimal
+    percentage: int
+    workload: WorkloadBreakdown
+    action_key: str
+    deadline_level: DeadlineLevel
+    blocked: bool
+    late: bool
+    missing_update: bool
+
+
+@dataclass(frozen=True)
+class EmployeeSummary:
+    """One row in a direct-team period dashboard."""
+
+    employee: User
+    task_count: int
+    mean_progress: Decimal
+    median_progress: Decimal
+    remaining_total: Decimal
+    remaining_mean: Decimal
+    blocked_count: int
+    late_count: int
+    missing_update_count: int
+    progress_delta: Decimal = Decimal("0.00")
+    trend: tuple["WeeklyTrendPoint", ...] = ()
+    task_series: tuple[TaskProgressSeries, ...] = ()
+
+
+@dataclass(frozen=True)
+class TeamNode:
+    """One recursively expandable collaborator in the organization tree."""
+
+    summary: EmployeeSummary
+    children: tuple["TeamNode", ...]
+
+
+@dataclass(frozen=True)
+class WeeklyTrendPoint:
+    """Mean employee progress at one week-end within a reporting period."""
+
+    end_date: date
+    mean_progress: Decimal
+
+
+@dataclass(frozen=True)
+class ReportingPeriod:
+    """A normalized week or calendar month used by reporting views.
+
+    Attributes:
+        kind: Either ``week`` or ``month``.
+        start: Inclusive first date.
+        end: Inclusive last date.
+
+    """
+
+    kind: str
+    start: date
+    end: date
+
+    @property
+    def query(self) -> str:
+        """Return the canonical query string without a leading question mark."""
+        if self.kind == "month":
+            return f"month={self.start:%Y-%m}"
+        return f"week={self.start:%Y-%m-%d}"
+
+    @property
+    def label(self) -> str:
+        """Return a concise French period label."""
+        if self.kind == "month":
+            month_names = (
+                "janvier",
+                "fevrier",
+                "mars",
+                "avril",
+                "mai",
+                "juin",
+                "juillet",
+                "aout",
+                "septembre",
+                "octobre",
+                "novembre",
+                "decembre",
+            )
+            return f"{month_names[self.start.month - 1]} {self.start.year}"
+        return f"semaine du {self.start:%d/%m/%Y}"
+
+
+@dataclass(frozen=True)
+class AssignmentSnapshot:
+    """Read-only assignment indicators at the end of a reporting period."""
+
+    assignment: TaskAssignment
+    percentage: int
+    progress_delta: int
+    projection: Projection
+    workload: WorkloadBreakdown
+    deadline_level: DeadlineLevel
+    latest: ProgressEntry | None
+    comments: tuple[TaskActivity, ...]
+
+
+def week_start_for(day: date) -> date:
+    """Return the Monday containing day."""
+    return day - timedelta(days=day.weekday())
+
+
+def reporting_period(*, week: str = "", month: str = "", today: date) -> ReportingPeriod:
+    """Parse reporting query values, preferring a valid calendar month.
+
+    Args:
+        week: ISO date located anywhere in the requested week.
+        month: Calendar month formatted as ``YYYY-MM``.
+        today: Fallback date, passed explicitly to keep the function deterministic.
+
+    Returns:
+        A normalized inclusive reporting period.
+
+    """
+    if month:
+        try:
+            start = date.fromisoformat(f"{month}-01")
+            return ReportingPeriod(
+                "month", start, start.replace(day=monthrange(start.year, start.month)[1])
+            )
+        except ValueError:
+            pass
+    if week:
+        try:
+            monday = week_start_for(date.fromisoformat(week))
+            return ReportingPeriod("week", monday, monday + timedelta(days=6))
+        except ValueError:
+            pass
+    monday = week_start_for(today)
+    return ReportingPeriod("week", monday, monday + timedelta(days=6))
+
+
+def adjacent_period(period: ReportingPeriod, direction: int) -> ReportingPeriod:
+    """Return the previous or next period of the same kind."""
+    if period.kind == "week":
+        start = period.start + timedelta(days=7 * direction)
+        return ReportingPeriod("week", start, start + timedelta(days=6))
+    boundary = (
+        period.start - timedelta(days=1)
+        if direction < 0
+        else period.end + timedelta(days=1)
+    )
+    start = boundary.replace(day=1)
+    return ReportingPeriod(
+        "month", start, start.replace(day=monthrange(start.year, start.month)[1])
+    )
+
+
+def holiday_days(start: date, end: date) -> set[date]:
+    """Return configured holidays in an inclusive interval."""
+    return set(
+        Holiday.objects.filter(day__range=(start, end)).values_list("day", flat=True)
+    )
+
+
+def business_days_between(
+    start: date, end: date, calendar: WorkCalendar | None = None
+) -> int:
+    """Count workdays after start through end using a retained calendar.
+
+    The optional calendar-free path is kept for old reports and treats ``Holiday``
+    as the legacy global calendar. New assignments always pass their version.
+    """
+    if end <= start:
+        return 0
+    if calendar is not None:
+        return calendar.workdays_between(start, end)
+    holidays = holiday_days(start, end)
+    cursor = start + timedelta(days=1)
+    total = 0
+    while cursor <= end:
+        if cursor.weekday() < 5 and cursor not in holidays:
+            total += 1
+        cursor += timedelta(days=1)
+    return total
+
+
+def due_date_for(start: date, workload: Decimal, calendar: WorkCalendar) -> date:
+    """Calculate the due workday, rounding decimal workloads upward."""
+    return calendar.due_date_for(start, workload)
+
+
+def workload_for(start: date, due: date, calendar: WorkCalendar) -> Decimal:
+    """Calculate the whole working-day duration represented by a due date."""
+    return Decimal(calendar.workdays_between(start, due)).quantize(Decimal("0.01"))
+
+
+def iter_working_days(start: date, end: date, calendar: WorkCalendar) -> Iterator[date]:
+    """Yield working days inclusively without persisting synthetic observations."""
+    cursor = start
+    while cursor <= end:
+        if calendar.is_working_day(cursor):
+            yield cursor
+        cursor += timedelta(days=1)
+
+
+def daily_progress_rows(
+    assignment: TaskAssignment, *, today: date | None = None
+) -> tuple[DailyProgressRow, ...]:
+    """Derive the full daily chart series from real progress observations.
+
+    Missing days carry the last known percentage and are explicitly marked as
+    unobserved. Open work extends to the true current day; closed work stops at
+    ``completed_at`` and never receives a synthetic current point.
+    """
+    current_day = today or timezone.localdate()
+    if assignment.completed_at is not None:
+        end = min(current_day, assignment.completed_at.date())
+    else:
+        end = current_day
+    end = max(assignment.start_date, end)
+    entries = {
+        item.entry_date: item
+        for item in assignment.progress_entries.filter(
+            entry_date__gte=assignment.start_date, entry_date__lte=end
+        ).order_by("entry_date", "updated_at")
+    }
+    percentage = 0
+    rows: list[DailyProgressRow] = []
+    chart_days = set(iter_working_days(assignment.start_date, end, assignment.calendar))
+    # Keep exceptional weekend observations truthful without inventing weekend rows.
+    chart_days.update(entries)
+    for day in sorted(chart_days):
+        entry = entries.get(day)
+        if entry is not None:
+            percentage = entry.percentage
+        elapsed = business_days_between(assignment.start_date, day, assignment.calendar)
+        elapsed_decimal = Decimal(elapsed)
+        due_offset = Decimal(ceil(assignment.estimated_work_days))
+        rows.append(
+            DailyProgressRow(
+                task_id=assignment.pk,
+                start_date=assignment.start_date,
+                day=day,
+                due_date=assignment.due_date,
+                planned_work_days=assignment.estimated_work_days,
+                elapsed_work_days=elapsed,
+                remaining_schedule_days=max(
+                    Decimal("0.00"), assignment.estimated_work_days - elapsed_decimal
+                ),
+                overdue_days=max(Decimal("0.00"), elapsed_decimal - due_offset),
+                percentage=percentage,
+                observed=entry is not None,
+            )
+        )
+    return tuple(rows)
+
+
+def current_progress(assignment: TaskAssignment, until: date | None = None) -> int:
+    """Return the latest percentage, optionally limited to a date."""
+    entries = assignment.progress_entries.all()
+    if until:
+        entries = entries.filter(entry_date__lte=until)
+    entry = entries.order_by("-entry_date", "-updated_at").first()
+    return entry.percentage if entry else 0
+
+
+def workload_breakdown(total_days: Decimal, percentage: int) -> WorkloadBreakdown:
+    """Split a workload proportionally using one shared calculation."""
+    bounded = max(0, min(100, percentage))
+    completed = (total_days * Decimal(bounded) / Decimal(100)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    remaining = (total_days - completed).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return WorkloadBreakdown(total_days, completed, remaining)
+
+
+def deadline_level(
+    assignment: TaskAssignment, *, on_day: date, percentage: int
+) -> DeadlineLevel:
+    """Classify deadline urgency using 50, 75 and 90 percent schedule thresholds."""
+    if assignment.status == AssignmentStatus.COMPLETED or percentage == 100:
+        return DeadlineLevel.COMPLETED
+    if on_day > assignment.due_date:
+        return DeadlineLevel.OVERDUE
+    if on_day <= assignment.start_date:
+        return DeadlineLevel.NORMAL
+    total = max(
+        1,
+        business_days_between(
+            assignment.start_date, assignment.due_date, assignment.calendar
+        ),
+    )
+    consumed = business_days_between(assignment.start_date, on_day, assignment.calendar)
+    ratio = consumed * 100 / total
+    if ratio >= 90:
+        return DeadlineLevel.URGENT
+    if ratio >= 75:
+        return DeadlineLevel.WARNING
+    if ratio >= 50:
+        return DeadlineLevel.ATTENTION
+    return DeadlineLevel.NORMAL
+
+
+def task_progress_series(
+    assignment: TaskAssignment, period: ReportingPeriod
+) -> TaskProgressSeries:
+    """Build a task profile from the same real daily series as the JSON route."""
+    today = timezone.localdate()
+    rows = daily_progress_rows(assignment, today=today)
+    points = [
+        ProgressPoint(
+            row.elapsed_work_days,
+            row.percentage,
+            row.day,
+            row.observed,
+        )
+        for row in rows
+    ]
+    percentage = points[-1].percentage if points else 0
+    effective_end = points[-1].entry_date if points else assignment.start_date
+    current_offset = points[-1].workday_offset if points else 0
+    planned = assignment.estimated_work_days
+    elapsed = Decimal(current_offset)
+    displayed = max(Decimal(ceil(planned)), elapsed, Decimal("1.00"))
+    latest = (
+        assignment.progress_entries.filter(entry_date__lte=effective_end)
+        .order_by("-entry_date", "-updated_at")
+        .first()
+    )
+    return TaskProgressSeries(
+        assignment=assignment,
+        points=tuple(points),
+        today=today,
+        observation_count=sum(point.observed for point in points),
+        planned_days=planned,
+        displayed_days=displayed,
+        overrun_days=max(Decimal("0.00"), elapsed - Decimal(ceil(planned))),
+        percentage=percentage,
+        workload=workload_breakdown(planned, percentage),
+        action_key=assignment.task.action.code
+        if assignment.task.action
+        else "sans-action",
+        deadline_level=deadline_level(
+            assignment, on_day=effective_end, percentage=percentage
+        ),
+        blocked=bool(latest and latest.blocked),
+        late=assignment.due_date < effective_end and percentage < 100,
+        missing_update=latest is None or latest.entry_date < period.start,
+    )
+
+
+def remaining_projection(
+    assignment: TaskAssignment, until: date | None = None
+) -> Projection:
+    """Combine initial workload and positive observed progress velocity."""
+    entries = list(
+        assignment.progress_entries.filter(
+            **({"entry_date__lte": until} if until else {})
+        ).order_by("entry_date", "updated_at")
+    )
+    current = entries[-1].percentage if entries else 0
+    baseline = (
+        assignment.estimated_work_days * Decimal(100 - current) / Decimal(100)
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    observed: Decimal | None = None
+    distinct: list[ProgressEntry] = []
+    for entry in entries:
+        if distinct and distinct[-1].entry_date == entry.entry_date:
+            distinct[-1] = entry
+        else:
+            distinct.append(entry)
+    if len(distinct) >= 2:
+        first, last = distinct[0], distinct[-1]
+        elapsed = business_days_between(
+            first.entry_date, last.entry_date, assignment.calendar
+        )
+        gained = last.percentage - first.percentage
+        if elapsed > 0 and gained > 0 and last.percentage < 100:
+            observed = (
+                Decimal(100 - last.percentage) * Decimal(elapsed) / Decimal(gained)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        elif last.percentage == 100:
+            observed = Decimal("0.00")
+    return Projection(current, baseline, observed)
+
+
+def active_lines(on_day: date | None = None) -> QuerySet[ReportingLine]:
+    """Return reporting lines active on the requested day."""
+    target = on_day or timezone.localdate()
+    return ReportingLine.objects.filter(start_date__lte=target).filter(
+        Q(end_date__isnull=True) | Q(end_date__gte=target)
+    )
+
+
+def primary_manager(employee: User, on_day: date | None = None) -> User | None:
+    """Return an employee's active primary manager."""
+    line = (
+        active_lines(on_day)
+        .filter(employee=employee, is_primary=True)
+        .select_related("supervisor")
+        .first()
+    )
+    return line.supervisor if line else None
+
+
+def can_self_assign(user: User) -> bool:
+    """Allow an organizational root user to create personal assignments."""
+    return user.is_active and not user.is_it_admin and primary_manager(user) is None
+
+
+def is_direct_supervisor(supervisor: User, employee: User) -> bool:
+    return active_lines().filter(supervisor=supervisor, employee=employee).exists()
+
+
+def is_primary_supervisor(supervisor: User, employee: User) -> bool:
+    return (
+        active_lines()
+        .filter(supervisor=supervisor, employee=employee, is_primary=True)
+        .exists()
+    )
+
+
+def can_view_employee(supervisor: User, employee: User) -> bool:
+    """Check cycle-safe downward visibility through the full organization graph."""
+    if supervisor == employee or supervisor.is_it_admin or supervisor.is_superuser:
+        return True
+    edges: dict[int, set[int]] = {}
+    for manager_id, employee_id in active_lines().values_list(
+        "supervisor_id", "employee_id"
+    ):
+        edges.setdefault(manager_id, set()).add(employee_id)
+    queue: deque[int] = deque([supervisor.pk])
+    visited = {supervisor.pk}
+    while queue:
+        person_id = queue.popleft()
+        for child_id in edges.get(person_id, set()):
+            if child_id == employee.pk:
+                return True
+            if child_id not in visited:
+                visited.add(child_id)
+                queue.append(child_id)
+    return False
+
+
+def can_view_assignment(user: User, assignment: TaskAssignment) -> bool:
+    return can_view_employee(user, assignment.employee)
+
+
+def is_self_managed_assignment(user: User, assignment: TaskAssignment) -> bool:
+    """Return whether the organizational root owns and manages the assignment."""
+    return (
+        assignment.employee_id == user.pk
+        and assignment.manager_id == user.pk
+        and can_self_assign(user)
+    )
+
+
+def can_manage_assignment(user: User, assignment: TaskAssignment) -> bool:
+    self_managed = is_self_managed_assignment(user, assignment)
+    return (
+        user.is_it_admin
+        or user.is_superuser
+        or self_managed
+        or (
+            assignment.manager_id == user.pk
+            and is_primary_supervisor(user, assignment.employee)
+        )
+    )
+
+
+def can_comment_assignment(user: User, assignment: TaskAssignment) -> bool:
+    return (
+        user == assignment.employee
+        or user.is_it_admin
+        or user.is_superuser
+        or is_direct_supervisor(user, assignment.employee)
+    )
+
+
+@transaction.atomic
+def set_primary_supervisor(
+    *, employee: User, supervisor: User, unit_id: int, start_date: date
+) -> ReportingLine:
+    """Set one primary line and transfer active assignment responsibility."""
+    if employee == supervisor:
+        raise ValidationError("Une personne ne peut pas etre son propre responsable.")
+    old_lines = list(
+        ReportingLine.objects.select_for_update().filter(
+            employee=employee, is_primary=True, end_date__isnull=True
+        )
+    )
+    if any(line.supervisor_id == supervisor.pk for line in old_lines):
+        return next(line for line in old_lines if line.supervisor_id == supervisor.pk)
+    old_managers = {line.supervisor_id for line in old_lines}
+    for line in old_lines:
+        line.is_primary = False
+        line.save(update_fields=["is_primary"])
+    existing_line = ReportingLine.objects.filter(
+        employee=employee, supervisor=supervisor, end_date__isnull=True
+    ).first()
+    if existing_line:
+        existing_line.is_primary = True
+        existing_line.unit_id = unit_id
+        existing_line.full_clean()
+        existing_line.save(update_fields=["is_primary", "unit"])
+        line = existing_line
+    else:
+        line = ReportingLine(
+            employee=employee,
+            supervisor=supervisor,
+            unit_id=unit_id,
+            start_date=start_date,
+            is_primary=True,
+        )
+        line.full_clean()
+        line.save()
+    assignments = TaskAssignment.objects.select_for_update().filter(
+        employee=employee, manager_id__in=old_managers, status__in=ACTIVE_STATES
+    )
+    for assignment in assignments:
+        task = assignment.task
+        if task.assignments.exclude(pk=assignment.pk).exists():
+            task.pk = None
+            task.code = f"{task.code[:25]}-R{employee.pk}-{assignment.pk}"
+            task.created_by = supervisor
+            task.save()
+            assignment.task = task
+        elif task.created_by_id in old_managers:
+            task.created_by = supervisor
+            task.save(update_fields=["created_by"])
+        assignment.manager = supervisor
+        assignment.save(update_fields=["manager", "task"])
+    return line
+
+
+def ensure_manage(user: User, assignment: TaskAssignment) -> None:
+    if not can_manage_assignment(user, assignment):
+        raise PermissionDenied(
+            "Seul le responsable principal peut effectuer cette action."
+        )
+
+
+def visible_activities(assignment: TaskAssignment) -> QuerySet[TaskActivity]:
+    """Return current user-facing activities while retaining corrected audit rows."""
+    return assignment.activities.filter(superseded_by__isnull=True).select_related(
+        "actor", "progress_entry"
+    )
+
+
+@transaction.atomic
+def next_task_code(action: InstitutionalAction, year: int) -> str:
+    """Allocate ``ACTION-YEAR-0001`` safely under concurrent creation."""
+    sequence, _created = TaskCodeSequence.objects.select_for_update().get_or_create(
+        action=action, year=year, defaults={"next_value": 1}
+    )
+    normalized_action = slugify(action.code).upper()[:30].rstrip("-")
+    value = sequence.next_value
+    candidate = f"{normalized_action}-{year}-{value:04d}"
+    while Task.objects.filter(code=candidate).exists():
+        value += 1
+        candidate = f"{normalized_action}-{year}-{value:04d}"
+    sequence.next_value = value + 1
+    sequence.save(update_fields=["next_value"])
+    return candidate
+
+
+@transaction.atomic
+def create_assignment_for_user(
+    *,
+    manager: User,
+    employee: User,
+    title: str,
+    description: str,
+    action: InstitutionalAction,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    calendar: WorkCalendar,
+) -> TaskAssignment:
+    """Create one classified task and its independently planned assignment."""
+    code = next_task_code(action, start_date.year)
+    task = Task(
+        code=code,
+        title=title,
+        description=description,
+        action=action,
+        created_by=manager,
+    )
+    task.full_clean()
+    task.save()
+    assignment = TaskAssignment(
+        task=task,
+        employee=employee,
+        manager=manager,
+        calendar=calendar,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        status=AssignmentStatus.PLANNED,
+    )
+    assignment.full_clean()
+    assignment.save()
+    return assignment
+
+
+@transaction.atomic
+def update_assignment_schedule(
+    *,
+    user: User,
+    assignment: TaskAssignment,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+) -> None:
+    """Apply a coherent schedule and append its visible audit event."""
+    ensure_manage(user, assignment)
+    old = {
+        "start_date": assignment.start_date.isoformat(),
+        "due_date": assignment.due_date.isoformat(),
+        "estimated_work_days": str(assignment.estimated_work_days),
+    }
+    assignment.start_date = start_date
+    assignment.due_date = due_date
+    assignment.estimated_work_days = estimated_work_days
+    assignment.full_clean()
+    assignment.save(update_fields=["start_date", "due_date", "estimated_work_days"])
+    new = {
+        "start_date": start_date.isoformat(),
+        "due_date": due_date.isoformat(),
+        "estimated_work_days": str(estimated_work_days),
+    }
+    if old != new:
+        TaskActivity.objects.create(
+            assignment=assignment,
+            kind=ActivityKind.SCHEDULE,
+            actor=user,
+            message="Planification mise a jour.",
+            details={"before": old, "after": new},
+        )
+
+
+@transaction.atomic
+def record_progress(
+    *,
+    user: User,
+    assignment: TaskAssignment,
+    entry_date: date,
+    percentage: int,
+    note: str,
+    blocked: bool,
+) -> ProgressEntry:
+    """Create or correct one daily progress entry under the correction rules."""
+    employee_edit = user == assignment.employee
+    manager_edit = can_manage_assignment(user, assignment)
+    if not employee_edit and not manager_edit:
+        raise PermissionDenied("Vous ne pouvez pas modifier cette progression.")
+    if assignment.status == AssignmentStatus.CLOSED_EARLY:
+        raise ValidationError("Une tache cloturee ne peut plus recevoir de progression.")
+    if employee_edit and entry_date != timezone.localdate():
+        raise PermissionDenied("Une saisie passee doit etre corrigee par le responsable.")
+    if not (user.is_it_admin or user.is_superuser) and percentage % 5:
+        raise ValidationError("La progression doit etre saisie par pas de 5 %.")
+    previous = current_progress(assignment)
+    if (percentage < previous or blocked) and not note.strip():
+        raise ValidationError(
+            "Une note est obligatoire pour une regression ou un point d'attention."
+        )
+    existing = ProgressEntry.objects.filter(
+        assignment=assignment, entry_date=entry_date
+    ).first()
+    previous_activity = None
+    if existing is not None:
+        previous_activity = (
+            visible_activities(assignment)
+            .filter(kind=ActivityKind.PROGRESS, progress_entry=existing)
+            .order_by("-occurred_at", "-pk")
+            .first()
+        )
+        existing.percentage = percentage
+        existing.note = note.strip()
+        existing.blocked = blocked
+        existing.author = user
+        existing.save()
+        entry = existing
+    else:
+        entry = ProgressEntry.objects.create(
+            assignment=assignment,
+            entry_date=entry_date,
+            percentage=percentage,
+            note=note.strip(),
+            blocked=blocked,
+            author=user,
+        )
+    activity_message = note.strip() or f"Progression enregistree a {percentage} %."
+    TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.PROGRESS,
+        actor=user,
+        message=activity_message,
+        percentage_before=previous,
+        percentage_after=percentage,
+        progress_entry=entry,
+        supersedes=previous_activity,
+    )
+    was_completed = assignment.status == AssignmentStatus.COMPLETED
+    if was_completed and percentage == 100:
+        pass
+    elif percentage == 100:
+        assignment.status = AssignmentStatus.AWAITING_VALIDATION
+        assignment.completed_at = None
+    elif was_completed:
+        assignment.status = AssignmentStatus.ACTIVE
+        assignment.completed_at = None
+        TaskActivity.objects.create(
+            assignment=assignment,
+            kind=ActivityKind.REOPENED,
+            actor=user,
+            message=(
+                f"Tache rouverte de {previous} % a {percentage} %. {note.strip()}"
+            ).strip(),
+            percentage_before=previous,
+            percentage_after=percentage,
+        )
+        from work.notifications import queue_reopening_notification
+
+        queue_reopening_notification(assignment, user)
+    elif assignment.status == AssignmentStatus.AWAITING_VALIDATION:
+        assignment.status = AssignmentStatus.ACTIVE
+    elif assignment.status == AssignmentStatus.PLANNED:
+        assignment.status = AssignmentStatus.ACTIVE
+    assignment.save(update_fields=["status", "completed_at"])
+    return entry
+
+
+@transaction.atomic
+def validate_completion(user: User, assignment: TaskAssignment) -> None:
+    ensure_manage(user, assignment)
+    if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
+        raise ValidationError("Cette tache n'est pas en attente de validation.")
+    assignment.status = AssignmentStatus.COMPLETED
+    assignment.completed_at = timezone.now()
+    assignment.save(update_fields=["status", "completed_at"])
+    TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.VALIDATED,
+        actor=user,
+        message="Achevement valide.",
+        percentage_before=100,
+        percentage_after=100,
+    )
+
+
+@transaction.atomic
+def reject_completion(user: User, assignment: TaskAssignment, reason: str) -> None:
+    ensure_manage(user, assignment)
+    if not reason.strip():
+        raise ValidationError("Un motif est obligatoire.")
+    assignment.status = AssignmentStatus.ACTIVE
+    assignment.save(update_fields=["status"])
+    TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.REJECTED,
+        actor=user,
+        message=reason.strip(),
+        percentage_before=current_progress(assignment),
+        percentage_after=current_progress(assignment),
+    )
+    from work.notifications import queue_comment_notification
+
+    queue_comment_notification(assignment, user)
+
+
+@transaction.atomic
+def close_early(user: User, assignment: TaskAssignment, reason: str) -> None:
+    ensure_manage(user, assignment)
+    if not reason.strip():
+        raise ValidationError("Un motif est obligatoire.")
+    assignment.status = AssignmentStatus.CLOSED_EARLY
+    assignment.closed_reason = reason.strip()
+    assignment.completed_at = timezone.now()
+    assignment.save(update_fields=["status", "closed_reason", "completed_at"])
+    TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.CLOSED,
+        actor=user,
+        message=reason.strip(),
+        percentage_before=current_progress(assignment),
+        percentage_after=current_progress(assignment),
+    )
+
+
+@transaction.atomic
+def add_observation(
+    *, user: User, assignment: TaskAssignment, message: str
+) -> TaskActivity:
+    """Append a general observation under direct-participant permissions."""
+    if not can_comment_assignment(user, assignment):
+        raise PermissionDenied("Vous ne pouvez pas commenter cette tache.")
+    cleaned = message.strip()
+    if not cleaned:
+        raise ValidationError("Une observation est obligatoire.")
+    activity = TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.COMMENT,
+        actor=user,
+        message=cleaned,
+    )
+    from work.notifications import queue_comment_notification
+
+    queue_comment_notification(assignment, user)
+    return activity
+
+
+@transaction.atomic
+def accept_proposal(
+    user: User, proposal: TaskProposal, code: str | None = None
+) -> TaskAssignment:
+    """Turn an employee proposal into a managed task assignment."""
+    if not is_primary_supervisor(user, proposal.employee) and not user.is_it_admin:
+        raise PermissionDenied(
+            "Seul le responsable principal peut accepter la proposition."
+        )
+    task = Task.objects.create(
+        code=code or next_task_code(proposal.action, proposal.start_date.year),
+        title=proposal.title,
+        description=proposal.description,
+        action=proposal.action,
+        created_by=user,
+    )
+    assignment = TaskAssignment(
+        task=task,
+        employee=proposal.employee,
+        manager=user,
+        calendar=proposal.calendar,
+        start_date=proposal.start_date,
+        due_date=proposal.due_date,
+        estimated_work_days=proposal.estimated_work_days,
+        status=AssignmentStatus.PLANNED,
+    )
+    assignment.full_clean()
+    assignment.save()
+    proposal.status = ProposalStatus.ACCEPTED
+    proposal.reviewed_by = user
+    proposal.accepted_assignment = assignment
+    proposal.decided_at = timezone.now()
+    proposal.save(
+        update_fields=["status", "reviewed_by", "accepted_assignment", "decided_at"]
+    )
+    from work.notifications import queue_assignment_notification
+
+    queue_assignment_notification(assignment)
+    return assignment
+
+
+@transaction.atomic
+def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
+    if not is_primary_supervisor(user, proposal.employee) and not user.is_it_admin:
+        raise PermissionDenied(
+            "Seul le responsable principal peut refuser la proposition."
+        )
+    cleaned_reason = reason.strip()
+    if not cleaned_reason:
+        raise ValidationError("Un motif de rejet est obligatoire.")
+    proposal.status = ProposalStatus.REJECTED
+    proposal.reviewed_by = user
+    proposal.decision_note = cleaned_reason
+    proposal.decided_at = timezone.now()
+    proposal.save(update_fields=["status", "reviewed_by", "decision_note", "decided_at"])
+
+
+def weekly_assignments(employee: User, monday: date) -> QuerySet[TaskAssignment]:
+    """Return assignments overlapping the selected Monday-to-Sunday week."""
+    sunday = monday + timedelta(days=6)
+    return (
+        TaskAssignment.objects.filter(employee=employee, start_date__lte=sunday)
+        .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=monday))
+        .select_related("task", "employee", "manager", "task__action")
+    )
+
+
+def period_assignments(
+    employee: User, period: ReportingPeriod
+) -> QuerySet[TaskAssignment]:
+    """Return assignments that overlap an inclusive reporting period."""
+    return (
+        TaskAssignment.objects.filter(employee=employee, start_date__lte=period.end)
+        .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
+        .select_related("task", "employee", "manager", "task__action")
+        .prefetch_related("progress_entries", "activities__actor")
+    )
+
+
+def assignment_snapshot(
+    assignment: TaskAssignment, period: ReportingPeriod
+) -> AssignmentSnapshot:
+    """Build display indicators using only observations available in the period."""
+    latest = (
+        assignment.progress_entries.filter(entry_date__lte=period.end)
+        .order_by("-entry_date", "-updated_at")
+        .first()
+    )
+    before = current_progress(assignment, period.start - timedelta(days=1))
+    current = latest.percentage if latest else 0
+    comments = tuple(
+        visible_activities(assignment)
+        .filter(
+            kind__in=(ActivityKind.COMMENT, ActivityKind.PROGRESS),
+            occurred_at__date__lte=period.end,
+        )
+        .exclude(message="")
+        .order_by("-occurred_at", "-pk")
+    )
+    workload = workload_breakdown(assignment.estimated_work_days, current)
+    return AssignmentSnapshot(
+        assignment=assignment,
+        percentage=current,
+        progress_delta=current - before,
+        projection=remaining_projection(assignment, period.end),
+        workload=workload,
+        deadline_level=deadline_level(
+            assignment, on_day=min(period.end, timezone.localdate()), percentage=current
+        ),
+        latest=latest,
+        comments=comments,
+    )
+
+
+def summarize_employee(employee: User, monday: date) -> EmployeeSummary:
+    """Aggregate one employee row for the selected week."""
+    sunday = monday + timedelta(days=6)
+    assignments = list(weekly_assignments(employee, monday))
+    if not assignments:
+        zero = Decimal("0.00")
+        return EmployeeSummary(employee, 0, zero, zero, zero, zero, 0, 0, 0)
+    percentages = [current_progress(item, sunday) for item in assignments]
+    projections = [
+        workload_breakdown(item.estimated_work_days, percentage).remaining_days
+        for item, percentage in zip(assignments, percentages, strict=True)
+    ]
+    latest_entries = [
+        item.progress_entries.filter(entry_date__lte=sunday)
+        .order_by("-entry_date", "-updated_at")
+        .first()
+        for item in assignments
+    ]
+    remaining_total = sum(projections, Decimal("0.00"))
+
+    def quantize(value: int | float) -> Decimal:
+        return Decimal(str(value)).quantize(Decimal("0.01"))
+
+    return EmployeeSummary(
+        employee=employee,
+        task_count=len(assignments),
+        mean_progress=quantize(mean(percentages)),
+        median_progress=quantize(median(percentages)),
+        remaining_total=remaining_total,
+        remaining_mean=(remaining_total / len(assignments)).quantize(Decimal("0.01")),
+        blocked_count=sum(1 for entry in latest_entries if entry and entry.blocked),
+        late_count=sum(
+            1
+            for assignment, percentage in zip(assignments, percentages, strict=True)
+            if assignment.due_date < sunday and percentage < 100
+        ),
+        missing_update_count=sum(
+            1
+            for entry in latest_entries
+            if entry is None or not (monday <= entry.entry_date <= sunday)
+        ),
+        progress_delta=quantize(
+            mean(
+                current_progress(item, sunday)
+                - current_progress(item, monday - timedelta(days=1))
+                for item in assignments
+            )
+        ),
+    )
+
+
+def summarize_employee_period(employee: User, period: ReportingPeriod) -> EmployeeSummary:
+    """Aggregate one employee over a week or calendar month."""
+    assignments = list(period_assignments(employee, period))
+    if not assignments:
+        zero = Decimal("0.00")
+        return EmployeeSummary(employee, 0, zero, zero, zero, zero, 0, 0, 0, zero, ())
+    snapshots = [assignment_snapshot(item, period) for item in assignments]
+    percentages = [item.percentage for item in snapshots]
+    remaining = [item.workload.remaining_days for item in snapshots]
+    total = sum(remaining, Decimal("0.00"))
+
+    def decimal_mean(values: Iterable[int]) -> Decimal:
+        return Decimal(str(mean(values))).quantize(Decimal("0.01"))
+
+    trend: list[WeeklyTrendPoint] = []
+    cursor = min(period.start + timedelta(days=6), period.end)
+    while cursor <= period.end:
+        visible = [item for item in assignments if item.start_date <= cursor]
+        if visible:
+            trend.append(
+                WeeklyTrendPoint(
+                    cursor,
+                    decimal_mean(current_progress(item, cursor) for item in visible),
+                )
+            )
+        if cursor == period.end:
+            break
+        cursor = min(cursor + timedelta(days=7), period.end)
+
+    series = tuple(task_progress_series(item, period) for item in assignments)
+    return EmployeeSummary(
+        employee=employee,
+        task_count=len(assignments),
+        mean_progress=decimal_mean(percentages),
+        median_progress=Decimal(str(median(percentages))).quantize(Decimal("0.01")),
+        remaining_total=total,
+        remaining_mean=(total / len(assignments)).quantize(Decimal("0.01")),
+        blocked_count=sum(1 for item in snapshots if item.latest and item.latest.blocked),
+        late_count=sum(
+            1
+            for item in snapshots
+            if item.assignment.due_date < period.end and item.percentage < 100
+        ),
+        missing_update_count=sum(
+            1
+            for item in snapshots
+            if item.latest is None or item.latest.entry_date < period.start
+        ),
+        progress_delta=decimal_mean(item.progress_delta for item in snapshots),
+        trend=tuple(trend),
+        task_series=series,
+    )
+
+
+def direct_employee_period_summaries(
+    manager: User, period: ReportingPeriod
+) -> list[EmployeeSummary]:
+    """Build period summaries for each active direct collaborator."""
+    employees = User.objects.filter(
+        reporting_lines__in=active_lines(period.end).filter(supervisor=manager)
+    ).distinct()
+    return [summarize_employee_period(employee, period) for employee in employees]
+
+
+def team_tree(manager: User, period: ReportingPeriod) -> tuple[TeamNode, ...]:
+    """Build all descendant subteams without a hard-coded depth limit."""
+    lines = list(
+        active_lines(period.end)
+        .filter(is_primary=True)
+        .select_related("employee")
+        .order_by("employee__position", "employee__email")
+    )
+    edges: dict[int, list[User]] = {}
+    for line in lines:
+        edges.setdefault(line.supervisor_id, []).append(line.employee)
+
+    def build(parent_id: int, visited: frozenset[int]) -> tuple[TeamNode, ...]:
+        nodes: list[TeamNode] = []
+        for employee in edges.get(parent_id, []):
+            if employee.pk in visited:
+                continue
+            descendants = build(employee.pk, visited | {employee.pk})
+            nodes.append(
+                TeamNode(
+                    summary=summarize_employee_period(employee, period),
+                    children=descendants,
+                )
+            )
+        return tuple(nodes)
+
+    return build(manager.pk, frozenset({manager.pk}))
+
+
+def direct_employee_summaries(manager: User, monday: date) -> list[EmployeeSummary]:
+    """Build one summary row per direct employee, never one table per employee."""
+    employees = User.objects.filter(
+        reporting_lines__in=active_lines().filter(supervisor=manager)
+    ).distinct()
+    return [summarize_employee(employee, monday) for employee in employees]
+
+
+def visible_assignments(user: User) -> Iterable[TaskAssignment]:
+    """Yield assignments authorized for a user without relying on hidden UI."""
+    queryset = TaskAssignment.objects.select_related("task", "employee", "manager")
+    return (
+        assignment for assignment in queryset if can_view_assignment(user, assignment)
+    )

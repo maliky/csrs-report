@@ -2,6 +2,589 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-13 lun.> Dates explicites et fidelite des graphiques de progression
+** Besoin confirme
+
+- Dans le detail d'une tache et sur son graphique, rendre immediatement visibles la date de debut, la date du jour et la date de fin prevue.
+- Une courbe represente exclusivement l'historique de =ProgressEntry= de la tache. Un jour sans saisie peut reporter la derniere valeur connue, mais il reste marque =observed: false= et ne devient jamais une observation.
+- Les taches d'illustration comparables ne doivent pas toutes reutiliser exactement le meme profil de progression.
+
+** Decisions d'interface et de donnees
+
+- L'axe horizontal des graphiques est desormais un axe de dates calendaires et non un simple compteur de jours.
+- Trois lignes nommees reperent =Debut=, =Aujourd'hui= et =Fin prevue=. Elles restent visibles comme contexte, y compris pour une tache terminee; la courbe d'une tache terminee continue toutefois de s'arreter a =completed_at= et aucune zone de retard n'est ajoutee apres sa cloture.
+- Chaque point fournit sa date, son pourcentage et sa nature dans une info-bulle : =saisie historique= pour une valeur enregistree et =valeur reportee= pour le portage explicite d'une valeur connue.
+- Le nombre de saisies historiques est affiche dans le detail et dans le profil compact d'equipe.
+- Le chargeur d'illustration conserve les memes familles de scenarios metier, mais applique a chaque collaborateur une variation deterministe et limitee des dates et des pourcentages intermediaires. Les achevements a 100 % et les formes particulières, comme la regression, restent preserves.
+- Une nouvelle execution du chargeur remplace toutes les progressions des taches =PIL-= avant de les recreer. Elle ne cumule donc pas l'ancien profil et le nouveau profil.
+
+** Realisation et verification
+
+- [X] Fiche de tache : debut, date du jour et fin prevue dans les details et sous le graphique.
+- [X] Graphique detaille et profils d'equipe : echelle temporelle D3, trois reperes dates et info-bulles des points.
+- [X] Route JSON verifiee : les points =observed: true= correspondent exactement aux lignes =ProgressEntry= enregistrees.
+- [X] Profils d'illustration : les quatorze longues taches comparables possedent quatorze signatures historiques datees distinctes.
+- [X] Idempotence du chargeur preservee apres regeneration des historiques.
+- [X] Tests serveur hors Selenium, Ruff, mypy et controle des migrations reussis.
+- [X] Selenium reussi avec rendu D3 et reperes dates aux largeurs telephone et ordinateur.
+- [ ] Reconstruction des conteneurs et regeneration de la population d'illustration sur le site public, a effectuer seulement sur demande explicite.
+
+* <2026-07-12 dim. 04:23> UI et plateform test
+Trouver des textes different pour les Observations. deux taches different n ont generalement pas exactement les meme observation
+
+vue mois ok mais ecrit le nom du mois plutot que le numero
+
+un tache terminee qui dont le taux de realisation est reduit doit devenir 'en cours' et prendre le style des autres cartes en cours
+en tant que dg, j ai reduit le % de progression et j ai du mettre une observation. tres bien, masi ensuite je ne vois pas cette observation dans un historique. le lieu ou vont les observation du jour nest pas clair.
+
+Au niveau de lq modification oou creation de tache, indique par des asterisque rouge les champs obligatoires et assurer que l un ou l qutre de echeance / charge estimee est renseigner, modifier l un doit modifier lautre. pour eviter une incoherence . ce lien entre les deux champs devrait meme etre au niveau DB/django.  debut + charge estime = echeance.
+
+plutot que action institutionnel nommer le change code normaliser ou quelque chosde de similaire.
+
+si une tache n est pas 100% realiser elle ne doit pas avoir la couleur ou le style des carte terminee.
+
+dans equipe plutot que d avoir des colonnes pour moyenne mediane reste cumule reste moyen, mettre cela dans une colonne ou les element sont stacked.
+
+Au niveau de la tache il faut remplacer la barre d'avancement par le graphique qvec lq ligne montant de 0 a 100%  elle doit etre aussi celle utilise poru montrer la collaboration des equipe.
+
+il me semble que les graphique presenter ne sont pas lies au donnee historique d evolution.  cq doit etre le cas.  le graphique ne fqit que presenter l historique des enregistrements. Il ne s agit pas de faire semblant.  la meilleur manier de faire et de generer a partir de l historique un fichier json qui contient une ligne par jour ouvrable avec pour chaque jour, date de debut de la tache, date du jour, echeance.
+A partir de cela on pourra calculer le % de progression, le nombre de jour ecouler, nombre de jour restant, ou de retartd dans le cas du depassement de l echeance.
+
+sur le graphique une ligne verticale en pointillee indique le jour courant, un ligne plein l echeance. seulement si le jour courant est plus grand que l echeance et la tache non terminee doit on mettre la partit echance jour courant en rouge/rose.   utiliser d3.js pour les graphique ou vega.  add to DEV.org an example of json for me to test the graphique crafting in observablehq.com
+
+Au niveau de la navigation. le n+3 doit pouvoir voir sans modifier les taches des n+2 et n+1 et n.  dans le dashboard de l equipe le dg voit les tache du daf  mais aussi des lien vers les mebre de l equipe du daf. il peut ainsi voir les tache des tous les collaborateurs.
+
+** Etat actuel verifie
+
+- =TaskAssignment.start_date=, =due_date= et =estimated_work_days= sont obligatoires, mais aucune contrainte ne relie actuellement l'echeance a la charge.
+- =ProgressEntry= contient un pourcentage, une note, un blocage, un auteur et une date. Une seule ligne courante existe par tache et par jour ; =django-simple-history= conserve ses corrections.
+- =TaskComment= constitue un second historique immuable. Le detail de la tache affiche ces commentaires, mais pas les notes contenues dans les progressions.
+- Le graphique utilise les =ProgressEntry= enregistrees, puis ajoute un point synthetique a la date de consultation avec le dernier pourcentage connu.
+- Les permissions permettent deja une consultation descendante sur trois niveaux, mais =/equipe= ne construit que les lignes des collaborateurs directs.
+- Le chargeur est idempotent, mais plusieurs taches reutilisent actuellement les memes textes d'observation.
+
+** Questions a trancher avant le plan de realisation
+
+*** Dates, charge et modele de la tache
+
+1. [x] La =charge estimee= represente-t-elle une duree calendaire exclusive sur la tache, ou un effort pouvant etre reparti en parallele avec d'autres taches ?
+   - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte.
+Pour l instant il s agit d une duree calendaire excluse sur une tache.
+
+2. [x] Lors de la creation, faut-il exiger =debut + charge= et calculer l'echeance, ou accepter =debut + echeance= et calculer la charge ?
+   Les deux sont acceptable
+3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ?
+update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
+
+4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ?
+lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
+5. [x] Le calcul doit-il exclure samedi, dimanche et les jours feries configures dans =Holiday= ?
+   oui, seulement les jours ouvrables.  utiliser la calendrier ivoirien officiel, importer. le calendrier de reference doit pouvoir etre changer la l admin. il doit pouvoir ajouter ou retirer des jours ouvrable.
+6. [x] Une charge decimale comme =2,5 jours= reste-t-elle autorisee ? Si oui, l'echeance doit-elle etre arrondie au jour ouvrable superieur ?
+   oui.
+7. [x] La coherence doit-elle etre garantie par le modele Django et les services transactionnels, avec une contrainte de base seulement sur les invariants exprimables en SQL ? Une egalite utilisant les jours feries ne peut pas etre une simple =CHECK CONSTRAINT= PostgreSQL.
+   je voyais la contraite garantie au niveau du model djanog effectivement.
+
+8. [x] =Action institutionnelle= doit-il seulement etre renomme =Code normalise= dans l'interface, ou faut-il creer un vrai modele de code/categorie de tache distinct des plans institutionnels ?
+   garder cela pour l instant.
+9. [x] Une tache peut-elle conserver une action institutionnelle et posseder en plus un code normalise, ou le nouveau code remplace-t-il completement ce rattachement ?
+   une tache a un code unique normalize ratacher a une action institutionelle.  explique moi ce que tu veux clarifier ici ?
+
+10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ?
+explique moi ce que tu veux clarifier ici ?
+
+*** Etats, reouverture et observations
+
+11. [x] Lorsqu'une tache terminee repasse sous 100 %, faut-il immediatement la remettre =En cours=, vider =completed_at= et conserver l'ancienne validation uniquement dans l'audit ?
+    remettre en cours
+12. [x] Cette reouverture doit-elle creer automatiquement un evenement visible dans le fil, par exemple =Tache rouverte de 100 % a 80 %= avec l'auteur et la justification ?
+    oui. cela peut etre une observation.
+13. [x] Le responsable doit-il recevoir une notification lors de la reouverture d'une tache terminee ?
+    oui.
+14. [x] Souhaitez-vous un fil d'activite unique melangeant progressions, notes du jour, commentaires, validations, reprises et changements d'echeance ?
+    oui
+15. [x] Si oui, faut-il introduire un modele immuable =TaskActivity= comme source du fil, ou construire le fil a la lecture a partir de =ProgressEntry=, =TaskComment= et des tables d'audit existantes ?
+    ca me semble correct, mais propose des alternatives
+16. [x] Une correction de la progression du meme jour remplace-t-elle la valeur visible de ce jour, tout en gardant les versions precedentes uniquement dans l'audit, ou chaque correction doit-elle apparaitre dans le fil utilisateur ?
+    elle la remplace.  quand tu dit dans l audit je comprend dans la table history de django qui track to les changement en bd is that correct ?
+17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ?
+dans le fil d'activie uniquement
+
+*** Historique journalier et JSON des graphiques
+
+18. [x] Le JSON doit-il etre genere a la demande par une route authentifiee, par exemple =/taches/31/progression.json=, plutot que stocke sous forme de fichier en base ou sur disque ?
+    generer
+19. [x] Cette route JSON applique-t-elle exactement les memes permissions de lecture que la page de detail de la tache ?
+    oui
+20. [x] Pour chaque jour ouvrable sans saisie, faut-il reporter le dernier pourcentage connu avec =observed: false=, plutot que creer un faux enregistrement de progression ?
+    oui
+21. [x] Avant la premiere saisie, le pourcentage journalier vaut-il explicitement 0 % ?
+    oui
+22. [x] Apres l'achevement valide, faut-il continuer les lignes journalieres a 100 % jusqu'a la fin de la periode demandee, ou arreter la serie a =completed_at= ?
+    arreter la serie a completed at
+23. [x] La courbe doit-elle etre en escalier, horizontale entre deux observations et verticale le jour d'une nouvelle saisie, afin de ne pas inventer une progression intermediaire ?
+    non elle peut etre lissee mais graphiquement il faut des point (dot) journalier
+24. [x] Le point synthetique actuellement ajoute a la date de consultation doit-il disparaitre au profit de la serie journaliere portant clairement =observed: false= ?
+    Je ne comprend pas explique.
+25. [x] Le JSON Observable doit-il contenir les notes et l'alias de l'auteur, ou uniquement les dates, pourcentages, charge, echeance et indicateurs de retard afin de minimiser les donnees exposees ?
+    uniquement les donnees utile au graphique, pas de notes ni d auteur
+26. [x] Le schema minimal suivant convient-il : =task_id=, =start_date=, =day=, =due_date=, =planned_work_days=, =elapsed_work_days=, =remaining_schedule_days=, =overdue_days=, =percentage= et =observed= ?
+    yes
+27. [x] Pour une consultation historique d'un mois passe, la ligne verticale =jour courant= represente-t-elle la vraie date du jour ou la fin de la periode consultee ?
+    lorsque la tache est terminer, il ne faut pas reprenseter le jour courant sur le graphique
+28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ?
+non
+
+*** Navigation hierarchique
+
+29. [x] Dans =/equipe=, faut-il afficher tous les descendants dans une seule table, ou garder les collaborateurs directs puis permettre de deployer chaque sous-equipe ?
+    deployer chaque sous equipe
+30. [x] Pour =dg=, la structure souhaitee est-elle =daf -> finances / kpon -> collaborateurs= et =drv -> formation / valorisation -> collaborateurs=, avec chaque personne et chaque tache ouvrables par lien ?
+    oui
+31. [x] La profondeur maximale reste-t-elle strictement limitee a trois niveaux descendants, comme dans la permission actuelle ?
+    non, elle est uniquement limite par la profondeur de l organigrame
+
+32. [x] Un responsable indirect voit-il les observations et l'historique complet des progressions, ou seulement les pourcentages, charges et echeances ?
+    historique complet
+33. [x] Les actions de modification doivent-elles rester reservees au collaborateur, au responsable principal direct et a l'administrateur, meme lorsque le N+2 ou N+3 consulte le detail ?
+    oui
+
+*** Realisme des donnees d'illustration
+
+34. [x] Faut-il rediger un vocabulaire propre a chaque domaine : direction, finances, informatique, formation, bibliotheque, communication, partenariats et entretien ?
+    oui, il faut aussi construire exauhstivement tout l organigrame du csrs qui doit probablement etre visible en ligne.  en y ajoutant probablement du detail comme le jardinier.
+35. [x] Combien d'observations par tache faut-il viser : deux a quatre echanges courts, ou un historique plus long sur les taches couvrant plusieurs mois ?
+    deux a quatre echanges courts
+36. [x] Les observations doivent-elles alterner de maniere credible entre le collaborateur et son responsable, avec question, reponse, blocage, resolution et validation selon le cas ?
+    oui
+37. [x] Souhaitez-vous quelques fautes legeres et styles differents pour rendre les auteurs plausibles, ou un francais institutionnel uniforme ?
+    simule des fautes commune en francais ivoirien ou pour une personne ecrivant avec un telephone,
+38. [x] Les textes doivent-ils etre deterministes pour conserver l'idempotence et faciliter les captures comparables entre deux chargements ?
+    oui
+39. [x] Les observations existantes saisies manuellement doivent-elles toujours etre preservees, le chargeur ne modifiant que les lignes qu'il identifie comme donnees d'illustration ?
+    non
+40. [x] Faut-il garantir dans les donnees chargees au moins un exemple complet par cas : progression normale, stagnation, regression justifiee, blocage resolu, retard, reouverture apres validation et achevement anticipe ?
+    oui
+
+** Decisions complementaires appliquees
+
+- =Task= reste la definition partageable et =TaskAssignment= porte le collaborateur, le calendrier, la charge, l'echeance et la progression independantes.
+- Le fil utilisateur a pour source canonique le modele immuable =TaskActivity=. Les corrections du meme jour creent un successeur visible; les anciennes valeurs restent dans =django-simple-history=.
+- Le code est alloue transactionnellement par action et par annee sous la forme =ACTION-ANNEE-0001=. Sa correction reste reservee a l'administration.
+- Chaque affectation conserve la version de calendrier avec laquelle elle a ete planifiee. Une nouvelle version ne modifie pas l'historique existant.
+- Une tache non cloturee utilise toujours la vraie date courante dans son graphique, meme si elle est ouverte depuis une vue de periode passee. Une tache cloturee s'arrete a =completed_at=.
+- L'organigramme d'illustration reprend uniquement les unites et postes internes publics du CSRS; tous les alias, emails et identites restent fictifs. Les associes et partenaires externes sont exclus.
+
+** Realisation de l'extension
+
+- [X] Calendrier de travail versionne, calendrier ivoirien 2026 initial, exceptions administrables et verrouillage des versions deja utilisees.
+- [X] Synchronisation bidirectionnelle =debut / charge / echeance= dans les formulaires et refus par le modele Django des valeurs divergentes.
+- [X] Action institutionnelle obligatoire et code normalise sequentiel par action et par annee.
+- [X] Fil =TaskActivity= unifie pour progressions, notes, commentaires, validations, reprises, reouvertures, clotures et changements de planification.
+- [X] Reouverture automatique sous 100 %, remise en cours, observation visible et notification du responsable principal.
+- [X] Route authentifiee =/taches/<id>/progression.json=, sans auteur ni observation, derivee des saisies reelles et completee par portage explicite =observed: false=.
+- [X] Courbe D3 commune au detail et a la synthese, points journaliers, echeance pleine, date courante pointillee et zone de retard uniquement pour une tache ouverte.
+- [X] Consultation descendante sans limite artificielle et sous-equipes recursives deployables dans =/equipe=; les droits d'ecriture restent limites au collaborateur, au responsable principal direct et a l'administrateur.
+- [X] Organigramme interne et postes d'illustration etendus sans donnees personnelles reelles; observations deterministes personnalisees par tache et cas de reouverture inclus.
+- [X] Tests ajoutes pour les calendriers, charges decimales, codes, corrections auditees, reouverture, JSON, permissions et profondeur hierarchique.
+
+** Exemple JSON pour Observable
+
+URL applicative de la tache 31 :
+
+[[https://csrs.koba.sarl/taches/31/progression.json][https://csrs.koba.sarl/taches/31/progression.json]]
+
+Chargement dans une cellule JavaScript Observable :
+
+#+begin_src js
+history = await d3.json("https://csrs.koba.sarl/taches/31/progression.json")
+#+end_src
+
+Cette route est actuellement authentifiee et applique les memes droits que la page de detail. L'URL fonctionne dans une session CSRS autorisee, mais un notebook heberge sur =observablehq.com= ne peut pas la charger directement tant que l'authentification inter-domaines et CORS ne sont pas configures. Pour un essai immediat dans Observable, ouvrir l'URL apres connexion puis copier le JSON dans une cellule; ne pas rendre la route publique pour contourner cette protection.
+
+#+begin_src json
+[
+  {
+    "task_id": 31,
+    "start_date": "2026-05-04",
+    "day": "2026-05-04",
+    "due_date": "2026-05-20",
+    "planned_work_days": 12.0,
+    "elapsed_work_days": 0,
+    "remaining_schedule_days": 12.0,
+    "overdue_days": 0.0,
+    "percentage": 0,
+    "observed": false
+  },
+  {
+    "task_id": 31,
+    "start_date": "2026-05-04",
+    "day": "2026-05-05",
+    "due_date": "2026-05-20",
+    "planned_work_days": 12.0,
+    "elapsed_work_days": 1,
+    "remaining_schedule_days": 11.0,
+    "overdue_days": 0.0,
+    "percentage": 15,
+    "observed": true
+  }
+]
+#+end_src
+
+La route ne contient ni note, ni auteur, ni donnee personnelle. Voir aussi =docs/progression-json.md= pour l'utilisation dans Observable.
+
+
+* <2026-07-12 dim.> Aide-memoire des comptes d'illustration
+** Connexion
+
+- 45 comptes sont disponibles : 44 comptes organisationnels fictifs et le compte technique =dev=.
+- Connexion avec l'alias ci-dessous ou l'adresse =alias@demo.invalid=, sans distinction entre majuscules et minuscules.
+- Les comptes organisationnels utilisent le mot de passe fourni hors depot par =CSRS_DEMO_PASSWORD=.
+- =dev= utilise le mot de passe distinct fourni par =CSRS_ADMIN_PASSWORD=.
+- Aucun mot de passe n'est conserve dans ce document.
+
+** Hierarchie
+
+#+begin_example
+dev  Administrateur technique, hors hierarchie
+
+dg  Direction generale
+├── ct  Conseiller technique de la direction
+├── rse  Communication institutionnelle et RSE
+├── genre  Genre, equite et inclusion
+├── ethique  Ethique
+├── suivi  Suivi et evaluation
+├── controle  Controle de gestion
+├── daf  Direction administrative et financiere
+│   ├── finances  Responsable comptabilite, finances et caisse
+│   │   ├── comptable  Comptable
+│   │   └── caissier  Caissier
+│   ├── kpon  Responsable technologies et systemes d'information
+│   │   └── atall  Agent technologies et systemes d'information
+│   ├── rh  Ressources humaines et moyens generaux
+│   │   └── moyens  Cellule moyens generaux
+│   ├── achats  Achats et approvisionnements
+│   ├── documentation  Documentation et archives
+│   └── i2a  Intendance, accueil et assistance
+│       └── patrimoine  Patrimoine et logistique
+│           └── stations  Stations, bureaux et logements
+├── drv  Direction de la valorisation et des expertises
+│   ├── formation  Responsable formation et renforcement des capacites
+│   │   ├── assistant  Assistant de formation
+│   │   └── bibliothecaire  Bibliothecaire
+│   ├── valorisation  Responsable valorisation et partenariats
+│   │   ├── communication  Charge de communication
+│   │   ├── partenariat  Charge des partenariats
+│   │   └── jardinier  Jardinier
+│   └── capitalisation  Capitalisation et valorisation
+└── drd  Direction recherche et developpement
+    ├── uar  Unite d'appui a la recherche
+    ├── ressources  Gestion technique des ressources
+    ├── recherche  Coordination de la recherche scientifique
+    │   ├── biodiversite  Axe biodiversite
+    │   ├── sante  Axe sante
+    │   ├── environnement  Axe environnement
+    │   ├── agriculture  Axe agriculture et nutrition
+    │   ├── securite  Axe securite alimentaire
+    │   └── societe  Axe sciences sociales
+    ├── clinique  Recherche clinique
+    ├── observatoire  Observatoires
+    ├── microscopie  Unite de microscopie
+    └── labo  Laboratoire central
+        └── qualite  Bonnes pratiques de laboratoire
+#+end_example
+
+** Roles utiles pour les parcours
+
+| Alias / groupe | Role dans la plateforme | Parcours principal a verifier |
+|----------------+--------------------------+-------------------------------|
+| =dev= | Administrateur technique hors organigramme | Administration, correction precise des progressions et consultation globale |
+| =dg= | Racine organisationnelle et responsable de =daf= / =drv= | Taches personnelles, validation explicite, synthese de direction et propositions des N+1 directs |
+| =daf=, =drv=, =drd= | Directeurs sous =dg= | Suivre leurs propres taches et deployer leurs responsables et unites |
+| =finances=, =kpon=, =formation=, =valorisation= | Responsables de service | Affecter, commenter, valider et consulter la synthese de leur equipe directe |
+| =comptable=, =caissier=, =atall=, =assistant=, =bibliothecaire=, =communication=, =partenariat=, =jardinier= | Collaborateurs sans subordonnes | Consulter leurs taches, saisir la progression, ajouter des observations et proposer une tache |
+| =ct=, =rse=, =genre=, =ethique=, =suivi=, =controle= | Fonctions transversales de direction | Illustrer les rattachements directs et la consultation sans identite reelle |
+| =rh=, =i2a=, =achats=, =documentation=, =recherche=, =clinique=, =observatoire=, =labo=, =microscopie= | Responsables d'unites internes | Deployer l'organigramme et ouvrir les sous-equipes depuis la synthese |
+| =sante=, =environnement=, =securite=, =societe=, =biodiversite=, =agriculture=, =qualite=, =patrimoine=, =stations= | Fonctions specialisees | Verifier la profondeur hierarchique sans limite artificielle |
+
+Le responsable principal peut affecter, modifier, valider et clore les taches de ses collaborateurs directs. Un niveau superieur peut consulter sa descendance autorisee, mais ne remplace pas le responsable principal dans les decisions quotidiennes.
+
+* DONE <2026-07-11 sam. 18:47> UI
+CLOSED: [2026-07-12 dim. 04:23]
+lets imporve the ui. for the dg no need to have (je suis bloaquer). Expliquer what is decision du responsable pour le DG ? le titre doit etre plus parlant. il faut que ce soit slef referencing at the DG level. les deux  champs  observation s sur la page taches ne semble pas correctes. un seul devrait suffir non ?  sur la page home, la semain en cours n est pas assez visible.  l afficher entre les bouton de navigation. les echeances aussine sont pas tres visible.   pour la task card mettre en premier le titre, puis pastille /tag meme ligne que % realisation puis charge et echeances.  integred dans un graphic plus succing les info charege total, what is done upt to now and what is left. can be the same bar but with d3js axis indicateing the unit day, then a label for the days done, above the remaining (not as a label) the remaining. and at the end the total days... this should be readble in less space with less text.  using good hci principles.  then we have observation (not recentes they could be any time obseravations).  I do not see a different between week and month. the difference should be notable.
+dans /equipe
+discuss the possibility of small multiple to drill down direclty to the task of of each of the collaborators. the idea is to see in one spot the number of task for each collaborator and the degree of finishion.
+
+I think the best is a stacked bar, where each part length is proportional to the task and the color proportional to the % of finition.  transparent 0% 100% opacity for 100% finished.
+on hover we have the name of the task and detail about it.
+the statis are still good, median reste cumule rest moyen..
+
+remove the exceptions colum.
+
+title such as 'Rattraper les livrables en retard — Direction administrative et financiere' are too long. Direction administrative et financiere.
+
+I am not convinced byt the +5pts (or it should be clarified somewhere that it is the progression from previsous) but best should be a small line showing evolution through time.  instead of a bar we could have on the y axis of the progression the realisation %.  2 cm thick should be enough to show the progress espcialy if we have small line for 25% 50% and 75% percent.
+
+** decisions ui confirmees
+
+*** tache personnelle de la direction generale
+
+1. [x] pour une tache que =dg= s'est affectee, faut-il supprimer uniquement le champ =je suis bloque= ou remplacer ce signalement par une action plus adaptee, par exemple =signaler un point d'attention= ?
+   signaler un point d attention
+2. [x] lorsque =dg= est a la fois collaborateur et responsable, le bloc =decision du responsable= doit-il devenir =cloture de ma tache=, avec les actions =confirmer l'achevement= et =poursuivre le travail= ?
+   yes,
+3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ?
+validation explicites
+
+*** progression et observations
+
+4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ?
+conserver en clarifiant les titres
+5. [x] la note de progression reste facultative en fonctionnement normal et devient obligatoire lors d'une regression ou d'un point d'attention.
+6. [x] sur les cartes, faut-il afficher les deux dernieres observations, toutes les observations dans un bloc repliable, ou seulement un indicateur donnant acces au detail ?
+   toutes les observations dans un bloc repliable
+
+*** carte de tache et charge de travail
+
+7. [x] l'ordre cible est-il confirme : titre, puis sur une meme ligne statut et pourcentage, puis visualisation de la charge et echeance, puis observations ?
+   oui
+8. [x] les =jours realises= doivent-ils etre calcules comme =charge initiale x progression=, tandis que les =jours restants= utilisent la projection actuelle, ou faut-il que les deux segments proviennent du meme calcul proportionnel ?
+   les deux vient du meme calcul proportionel.
+   le slider de progression doit utiliser un pas de 5 %. c est bloque pour les utilistqeur mais ajustable par l admin.
+
+9. [x] la visualisation doit-elle utiliser d3.js, ou un svg/css sans dependance est-il preferable si le resultat, les axes en jours et l'accessibilite sont equivalents ?
+   svg css sans dependance est prefereable uniquement si on obtient le meme resultat ce dont je doute. donc d3.js pour plus de flexibilite.
+
+10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ?
+titre, jours realises, jours restants, charge totale et echeance.
+
+11. [x] l'echeance doit-elle changer de couleur lorsqu'elle approche ou est depassee, et quels seuils faut-il retenir ?
+oui. une echelle presaue logarithmique du genre 50 75 90
+
+*** navigation semaine et mois
+
+12. [x] le libelle de la periode courante doit-il etre place exactement entre les boutons precedent et suivant sur toutes les vues ?
+    c est preferable mais ce qu il faut c est surtout le rendre plus visible.
+
+13. [x] la vue semaine doit-elle montrer le detail quotidien, tandis que la vue mois montre quatre ou cinq points hebdomadaires, afin que la difference soit immediatement perceptible ?
+    detail quotidient ?  non.  le niveau actuel des cartes est bon. mais la vue mois dois montrer plus de taches car il faut montrer les taches totalement realisee meme si grisee. ces dernier doivent rester accessible.  la diference peut etre en term de couleur de titre par exemple pour le label du mois
+
+14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ?
+oui.
+
+*** synthese de l'equipe et petits multiples
+#     meme largeur, nous parlons de pourcentage de realisation.  le nombre de jour est indique sur les x. nombre de jour ecoule depuis le debut de la tache.    ce qui nous interesse  c est le profil de progresssion.
+
+15. [x] dans la barre empilee d'un collaborateur, la largeur de chaque segment doit-elle etre proportionnelle a la charge estimee en jours ou toutes les taches doivent-elles avoir la meme largeur ?
+    pas la largeur, la longueur. la largeur est standard
+
+16. [x] la couleur represente-t-elle une teinte differente par statut avec une intensite liee a la progression, ou une couleur unique dont l'opacite va de 0 a 100 % ?
+    une teinte different par type de tache avec un intensite/opacitee liee a la progression.
+
+17. [x] comme l'opacite et le survol ne suffisent pas pour l'accessibilite et le telephone, quelles informations faut-il afficher au clic ou au clavier avant d'ouvrir directement la tache ?
+    le pourcentage de realisation, le temps restant. la charge initial
+
+18. [x] la petite courbe d'evolution doit-elle representer la progression moyenne de toutes les taches du collaborateur, ou une courbe distincte par tache dans le petit multiple ?
+    une courbe distincte par tache. une courbe par carte dediee a une tache.
+
+19. [x] les reperes 25 %, 50 % et 75 % doivent-ils apparaitre dans chaque petit graphique, avec une hauteur maximale d'environ 2 cm ?
+    oui, ca me semble approprie. objection ?
+20. [x] apres suppression de la colonne =exceptions=, les blocages, retards et absences de mise a jour doivent-ils rester visibles sous forme de marqueurs sur les segments ou seulement dans le detail du collaborateur ?
+    trouver une petite legende graphiaue, genre point rouge. triangle warning...
+    utiliser un point d interrogation somewhere on the page to give info on the legend maybe.
+
+*** libelles et donnees existantes
+
+21. [x] les titres longs deja charges sont raccourcis dans les donnees ; la fonction ou le collaborateur reste affiche separement lorsque necessaire.
+22. [x] les titres d'activite conservent un libelle court sans suffixe de fonction.
+23. [x] le texte =+5 pts= est remplace par la courbe et ses valeurs accessibles.
+
+** realisation de la refonte ui
+
+- [x] charge realisee et restante calculees avec une meme decomposition proportionnelle typee.
+- [x] curseur utilisateur par pas de 5 %, avec ajustement entier toujours possible dans l'administration.
+- [x] libelles propres aux taches personnelles de =dg= et validation explicite conservee.
+- [x] cartes compactes : titre, statut et pourcentage, charge d3 en jours, echeance coloree et observations repliables.
+- [x] periode courante centree et vue mensuelle visuellement distincte, avec taches terminees accessibles et grisees.
+- [X] Petites courbes D3 par tache dans =/equipe=, axes jours / pourcentage, reperes 25/50/75 et extension coloree en cas de depassement.
+- [X] Couleurs stables par action institutionnelle, marqueurs de blocage, retard et absence de mise a jour, avec legende accessible.
+- [X] Colonne =Exceptions= et libelle =+N points= retires ; statistiques moyenne, mediane et restes conservees.
+- [X] Titres et actions des donnees d'illustration normalises sans changement d'identifiant.
+- [X] Tests metier et vues : 41 tests hors navigateur reussis.
+- [X] Selenium valide D3, le depassement, le clavier, la regression et les largeurs 390 px / 1280 px.
+- [X] Sauvegarde PostgreSQL verifiee : =backups/csrs_20260711T214637Z.dump=.
+- [X] Simulation puis chargement reels reussis : 73 affectations, 42 propositions, titres courts et cinq actions institutionnelles.
+- [X] Services web, notifier et PostgreSQL sains ; accueil mensuel, =/equipe=, tache 31, employe 24 et tache personnelle de =dg= verifies en =200=.
+- [X] D3 v7.9.0 servi localement en HTTPS ; aucun CDN requis a l'execution.
+
+
+* <2026-07-11 sam.> Historique d'activite, vues mensuelles et propositions
+** Objectif
+
+Illustrer le fonctionnement courant de la plateforme sur douze semaines, sans libelle visible signalant un jeu d'essai. Les activites, progressions, propositions et observations doivent rester coherentes avec la fonction de chaque compte et permettre de lire les tableaux de bord a l'echelle de la semaine et du mois civil.
+
+** Decisions confirmees
+
+1. [X] Charger douze semaines d'historique et conserver un volume de donnees suffisamment riche pour les vues mensuelles.
+2. [X] Utiliser le mois civil, avec une tendance composee des points de fin de semaine.
+3. [X] Chaque page collaborateur affiche uniquement les taches propres a cette personne ; la tache 31 reste rattachee a =daf= et la page 24 a =finances=.
+4. [X] =dg=, sans responsable principal, peut s'affecter une tache et la valider explicitement apres le passage a 100 %.
+5. [X] Une proposition est visible par son auteur et son responsable principal dans les etats en attente, valide et rejete.
+6. [X] Le terme conversation designe les observations immuables rattachees a une tache ; les cartes montrent les deux plus recentes et le detail conserve l'historique complet.
+7. [X] Une diminution de progression reste autorisee et auditee, avec un signal ambre discret et une annonce textuelle accessible.
+
+** Realisation
+
+- [X] Types fonctionnels immuables pour les periodes, instantanes, tendances et syntheses.
+- [X] Navigation compatible =?week=YYYY-MM-DD= et nouvelle vue =?month=YYYY-MM=.
+- [X] Progression, evolution et charge en jours visibles depuis le detail d'un collaborateur.
+- [X] Historique des propositions avec filtres, motif de rejet et lien vers la tache creee.
+- [X] Migration versionnee reliant une proposition validee a son affectation.
+- [X] Chargeur idempotent : 16 comptes, 14 rattachements, 73 affectations, 42 propositions et plus de 100 observations.
+- [X] Tache 31 et taches de =finances= enrichies d'observations courtes entre collaborateur et responsable.
+- [X] Verification statique : Ruff, mypy et controle des migrations.
+- [X] Tests metier, permissions, vues et chargeur : 33 reussis.
+- [X] Test Selenium : regression de progression et largeurs 390 px / 1280 px.
+- [X] Sauvegarde PostgreSQL verifiee : =backups/csrs_20260711T180926Z.dump=.
+- [X] Simulation transactionnelle puis chargement PostgreSQL reussis : 73 affectations, 42 propositions et aucun terme reserve dans les contenus visibles.
+- [X] Services web, notifier et PostgreSQL sains ; HTTPS et pages 31, 24, mensuelles et propositions verifies en =200=.
+
+* <2026-07-11 sam. 11:36> Users
+** Objectif
+
+Creer une population fictive suffisamment large pour tester les tableaux de bord, les trois niveaux de visibilite et les actions du responsable principal. Les fonctions s'inspirent de l'organisation publique du CSRS sans reprendre de nom, de telephone ou d'adresse email reels.
+
+** Authentification de demonstration
+
+- Chaque compte accepte son alias court ou son adresse =alias@demo.invalid=.
+- Les comptes sont autoactives uniquement pour cette demonstration.
+- Les comptes metier partagent un mot de passe fourni au chargeur par =CSRS_DEMO_PASSWORD=.
+- Le superutilisateur =dev= utilise un mot de passe distinct fourni par =CSRS_ADMIN_PASSWORD=.
+- Aucun mot de passe ne doit etre conserve dans ce fichier, Git, une image Docker ou les journaux.
+- Les futurs comptes reels conservent le parcours normal d'activation par email.
+
+** Hierarchie fictive
+
+| Alias          | Fonction                                                | Responsable principal |
+|----------------+---------------------------------------------------------+------------------------|
+| dev            | Administrateur technique hors organigramme              | -                      |
+| dg             | Direction generale                                      | -                      |
+| daf            | Direction administrative et financiere                  | dg                     |
+| drv            | Direction recherche, ressources et valorisation          | dg                     |
+| finances       | Responsable comptabilite, finances et caisse             | daf                    |
+| kpon           | Responsable technologies et systemes d'information       | daf                    |
+| formation      | Responsable formation et renforcement des capacites      | drv                    |
+| valorisation   | Responsable valorisation et partenariats                 | drv                    |
+| comptable      | Comptable                                               | finances               |
+| caissier       | Caissier                                                | finances               |
+| atall          | Agent technologies et systemes d'information             | kpon                   |
+| assistant      | Assistant de formation                                  | formation              |
+| bibliothecaire | Bibliothecaire                                          | formation              |
+| communication  | Charge de communication                                 | valorisation           |
+| partenariat    | Charge des partenariats                                 | valorisation           |
+| jardinier      | Jardinier                                               | valorisation           |
+
+Cette structure contient 16 comptes et 14 rattachements principaux. =kpon= remplace le noeud generique =tsi= et ne gere que =atall=. =jardinier= depend de =valorisation=.
+
+** Activites chargees
+
+Chaque subordonne recoit cinq affectations reparties sur douze semaines ainsi que trois propositions couvrant les decisions validee, en attente et rejetee. =dg= possede trois taches personnelles. La population couvre progression normale, correction, blocage resolu, retard, absence de mise a jour, validation et achevement. Les adresses =demo.invalid= ne recoivent aucune notification.
+
+** Realisation et verification
+
+- [X] Champ =login_alias= et connexion insensible a la casse par alias ou email.
+- [X] Commande idempotente =seed_pilot_users= avec =--dry-run=, =--replace-legacy= et =--reset-password=.
+- [X] Tests automatises : structure, droits administrateur, mots de passe distincts, absence de notification et seconde execution stable.
+- [X] Sauvegarde PostgreSQL verifiee avant remplacement de l'ancienne demonstration.
+- [X] Migration et simulation transactionnelle reussies sur PostgreSQL conteneurise.
+- [X] Ancienne population remplacee ; structure initiale de 16 utilisateurs, 14 rattachements et 28 affectations, etendue ensuite par la phase d'historique.
+- [X] Connexion par alias et email verifiee pour tous les comptes ; sessions et tableaux de bord =200= pour =dg=, =daf=, =kpon=, =atall= et =jardinier=.
+- [X] Variables de mot de passe absentes de =.env=, des services actifs, de l'image et des conteneurs ponctuels.
+- [X] Selenium valide la connexion par alias et les largeurs 390 px et 1280 px.
+- [X] HTTPS retourne =200= et les services web/PostgreSQL sont sains.
+- [X] Sauvegarde finale verifiee : =backups/csrs_20260711T124118Z.dump=.
+
+* <2026-07-11 sam.> Realisation du socle Django et du prototype MVP
+** Decisions integrees
+
+- Un employe peut avoir plusieurs responsables directs, mais un seul responsable principal actif. Le principal affecte, accepte, modifie, valide et clot les taches. Les responsables directs secondaires consultent et commentent. Les responsables indirects consultent en lecture seule jusqu'a trois niveaux.
+- Lors d'un changement de responsable principal, les affectations actives de l'employe sont transferees automatiquement au nouveau responsable et l'operation reste auditee.
+- Une progression a 100 % place l'affectation dans l'etat =A valider=. Le responsable principal valide l'achevement ou demande une reprise avec un commentaire.
+- Les modifications du responsable principal ne demandent pas de nouvelle validation, mais elles sont conservees par l'audit.
+- Une proposition rejetee disparait des vues de travail mais reste conservee dans la base et dans =django-simple-history=.
+- Le tableau responsable couvre une semaine selectionnee et contient une seule ligne par employe direct : nombre de taches, progression moyenne et mediane, reste cumule, reste moyen, blocages, retards et absences de mise a jour.
+- Le MVP rattache les taches aux plans institutionnels. La modelisation des competences est reportee apres validation du MVP.
+
+** Socle realise
+
+- [X] Virtualenv pyenv =csrs= sous Python 3.13.2, activable avec =pyenv activate csrs=.
+- [X] Django 5.2 LTS, PostgreSQL 17, Docker Compose, Gunicorn et WhiteNoise.
+- [X] Utilisateur personnalise identifie par email et activation par lien a usage unique.
+- [X] Domaine versionne : organisation, rattachements, plans, taches, affectations, propositions, progressions, commentaires et jours feries.
+- [X] Services fonctionnels types pour les permissions, transitions, transferts et projections.
+- [X] Audit par =django-simple-history= avec attribution de l'utilisateur par middleware.
+- [X] Interfaces responsive en francais : tableau employe, detail, curseur de progression, proposition, synthese equipe et file de validation.
+- [X] File email pour nouvelles taches et nouveaux commentaires : lots limites, cinq tentatives, attente exponentielle et journal limite au type d'erreur.
+- [X] Source PlantUML dans =docs/task-lifecycle.puml= et rendu SVG valide dans =docs/task-lifecycle.svg=.
+- [X] Donnees de demonstration strictement fictives via =python manage.py seed_demo=.
+- [X] Configuration de deploiement locale sur =127.0.0.1:18005= et modele Nginx pour =csrs.koba.sarl=.
+
+** Matrice des permissions
+
+| Acteur                         | Consulter                         | Commenter                   | Affecter / accepter | Modifier / valider / clore |
+|--------------------------------+-----------------------------------+-----------------------------+---------------------+----------------------------|
+| Employe                        | Ses affectations et propositions  | Ses affectations            | Proposer seulement  | Progression du jour        |
+| Responsable principal direct   | Employe direct                    | Oui                         | Oui                 | Oui                        |
+| Responsable secondaire direct  | Employe direct                    | Oui                         | Non                 | Non                        |
+| Responsable indirect niveau 2-3| Descendance autorisee             | Non                         | Non                 | Non                        |
+| IT / administrateur            | Toute l'organisation              | Oui                         | Oui                 | Oui                        |
+
+Toutes ces autorisations sont appliquees cote serveur. L'absence d'un bouton ne constitue jamais le controle d'acces.
+
+** Projection du travail restant
+
+Chaque affectation possede une date de debut, une echeance et une charge initiale en jours ouvres. Avant deux observations distinctes, le reste vaut =charge initiale * (100 - progression) / 100=. Apres deux observations sur des jours ouvres distincts, une seconde projection extrapole la vitesse positive observee. Une stagnation ou une regression conserve l'estimation initiale et affiche une projection observee indisponible.
+
+** Similitudes utiles avec TUSIS
+
+| Sujet              | Pratique reprise                                                       | Difference CSRS Report                                      |
+|--------------------+------------------------------------------------------------------------+--------------------------------------------------------------|
+| Socle              | Django, PostgreSQL, migrations, administration et vues serveur          | Application plus petite centree sur le suivi hebdomadaire    |
+| Qualite Python     | pytest, Ruff, mypy, django-stubs et petits services fonctionnels types  | Typage strict des services metier des le premier schema      |
+| Roles              | Droits controles en base et dans les vues, tests de non-fuite           | Pas de roles fixes VPAA/Dean/Chair/Faculty ; graphe generique|
+| Perimetre          | Affectations de role datees et requetes limitees au perimetre courant   | Responsable principal unique et profondeur maximale de trois |
+| Audit              | =django-simple-history= et auteur issu de la requete                     | Progression quotidienne et transferts hierarchiques audites  |
+| Interface          | Tableaux de bord par responsabilite et tests navigateur                 | Une seule synthese de tous les employes directs              |
+
+** Verification technique
+
+- [X] Migrations appliquees sur une base SQLite vide de developpement.
+- [X] Tests metier et permissions avec pytest.
+- [X] =ruff format --check= et =ruff check=.
+- [X] =mypy accounts work config=.
+- [X] Test Selenium reel a 390 px et 1280 px sans defilement horizontal.
+- [X] Migrations et donnees fictives verifiees dans PostgreSQL 17 conteneurise.
+- [X] Reponse =200= de la vue de connexion sur le port local 18005.
+- [X] Vhost Nginx exact, =nginx -t= reussi et redirection HTTP publique verifiee.
+- [X] HTTPS retourne =200=, le certificat expire le 9 octobre 2026 et =certbot renew --dry-run= reussit.
+- [X] Premiere sauvegarde PostgreSQL produite et validee par =pg_restore --list= ; retention locale de 14 jours.
+- [X] =.env= exclu du contexte Docker ; l'image finale ne contient pas =/app/.env= et les deux anciennes images CSRS ont ete supprimees.
+
+** Protocole du pilote utilisateur
+
+Le pilote requiert au minimum un administrateur IT, un responsable et deux employes. Sur ordinateur et telephone, ils executent les cinq MWE sans aide initiale. Pour chaque parcours, noter la reussite, le temps, les hesitations, les erreurs et l'abandon eventuel. Ne collecter ni mot de passe ni donnee personnelle dans le compte rendu.
+
+- [ ] Comptes pilotes crees et actives par email.
+- [ ] Cinq MWE executes par de vrais utilisateurs.
+- [ ] Incomprehensions, erreurs et abandons consignes ici.
+- [ ] Methode de progression comprise et validee par les utilisateurs.
+
+** Evaluation SMS du 11 juillet 2026
+
+L'API officielle Orange SMS Cote d'Ivoire envoie vers les abonnes de tous les operateurs ivoiriens, utilise OAuth et propose des accuses de reception. Elle n'est pas gratuite : le petit forfait de decouverte contient 20 SMS pour 145 FCFA et les forfaits normaux commencent a 100 SMS pour 725 FCFA, selon la page tarifaire consultee ce jour. Aucune API SMS MTN Cote d'Ivoire equivalente n'a ete trouvee dans la documentation officielle.
+
+Decision : conserver l'email comme canal du MVP. Le telephone reste facultatif. Une future integration Orange devra utiliser un adaptateur isole, des reprises limitees, un journal sans code ni numero complet et des secrets hors depot.
+
 * <2026-07-10 ven.> Phase suivante - Scenarios et prototypes du MVP
 ** Objectif
 
@@ -9,29 +592,29 @@ Transformer le cadrage confirme en parcours testables avant de figer le modele d
 
 ** Plan
 
-1. Rediger les scenarios d'acceptation des cinq MWE avec, pour chacun, l'acteur, les preconditions, l'action, le resultat attendu et les refus d'acces a tester.
-2. Formaliser le cycle de vie d'une tache : proposition, acceptation, planification, affectation, progression, report, cloture et cloture anticipee.
-3. Formaliser la visibilite dans une hierarchie comportant plusieurs responsables et limitee a trois niveaux descendants.
-4. Definir une premiere taxonomie reliant les taches ou competences au plan d'action, puis au plan strategique, sans rendre cette classification irreversible.
-5. Prototyper le tableau de bord employe, la saisie quotidienne et la synthese responsable, d'abord sur un ecran de telephone et sur un ecran d'ordinateur.
-6. Tester les prototypes avec quelques utilisateurs du service IT du Centre Suisse de Recherches Scientifiques en Cote d'Ivoire et noter les incomprehensions, erreurs et abandons.
-7. A partir des parcours valides, rediger le modele relationnel, les contraintes d'integrite et la matrice des permissions avant l'initialisation de Django.
+1. [X] Rediger les scenarios d'acceptation des cinq MWE avec les refus d'acces a tester.
+2. [X] Formaliser le cycle de vie d'une tache et d'une proposition dans PlantUML.
+3. [X] Formaliser la visibilite avec plusieurs responsables et trois niveaux descendants.
+4. [X] Definir la taxonomie initiale des plans institutionnels ; les competences sont reportees apres le MVP.
+5. [X] Realiser les vues responsive du tableau employe, de la saisie et de la synthese responsable.
+6. [ ] Tester ces vues avec de vrais utilisateurs du service IT et noter les incomprehensions, erreurs et abandons.
+7. [X] Implementer le modele relationnel, les contraintes d'integrite et la matrice des permissions.
 
 ** Livrables et criteres de sortie
 
-- Cinq scenarios d'acceptation valides, incluant les cas de refus d'acces.
-- Un diagramme d'etats textuel de la tache et de la proposition.
-- Une matrice acteur/action/perimetre pour les permissions hierarchiques.
-- Des prototypes responsive du tableau de bord employe, de la saisie quotidienne, de la synthese responsable et du detail d'une tache.
-- Une courte synthese du test pilote indiquant ce qui est compris, ce qui doit etre simplifie et les decisions encore ouvertes.
-- Un modele de donnees implementable sans decision fonctionnelle majeure restante.
+- [X] Cinq scenarios d'acceptation couverts, incluant les cas de refus d'acces.
+- [X] Diagramme PlantUML de la tache et de la proposition.
+- [X] Matrice acteur/action/perimetre inspiree des controles de perimetre de TUSIS.
+- [X] Vues responsive du tableau employe, de la saisie, de la synthese et du detail.
+- [ ] Synthese du test pilote humain.
+- [X] Modele de donnees implemente avec migrations versionnees.
 
 ** Questions a trancher pendant cette phase
 
-1. Lorsqu'un employe a plusieurs responsables directs, lequel peut affecter, accepter, modifier ou clore ses taches : chacun d'eux, un responsable principal, ou des responsables designes par perimetre ?
-2. Une modification importante d'une tache acceptee (beneficiaire, echeance, objectif ou rattachement au plan d'action) exige-t-elle une nouvelle validation ou seulement une trace d'audit et une notification ?
-3. Une proposition rejetee doit-elle etre invisible dans l'interface courante tout en restant conservee dans le journal d'audit ?
-4. Pour la synthese responsable, faut-il commencer par une liste d'exceptions, un tableau par employe, ou une combinaison des deux ?
+1. [X] Un seul responsable principal affecte, accepte, modifie et clot ; les autres responsables directs consultent et commentent.
+2. [X] Une modification du responsable principal produit une trace d'audit sans nouvelle validation.
+3. [X] Une proposition rejetee est absente de l'interface courante et conservee par l'audit.
+4. [X] La synthese est un tableau unique de tous les employes directs avec les indicateurs cumules et moyens.
 
 * <2026-07-10 ven. 23:32> Init
 ** Vision
@@ -193,7 +776,7 @@ Cette orientation doit rester reversible jusqu'aux prototypes de parcours et au 
 
 Le domaine prevu est :
 
-- =csrsone.koba.sarl=
+- =csrs.koba.sarl=
 
 Le deploiement futur devra suivre cet ordre :
 
@@ -249,21 +832,21 @@ Ne pas demander de certificat avant que le DNS et le vhost HTTP soient prets.
 ** Questions ouvertes
 
 1. [X] Premier pilote : Centre Suisse de Recherches Scientifiques en Cote d'Ivoire, unite organisationnelle IT.
-2. [ ] Plusieurs responsables directs sont autorises, mais leurs perimetres respectifs d'affectation, de validation et de modification restent a preciser.
+2. [X] Plusieurs responsables directs sont autorises. Un seul est principal et peut affecter, accepter, modifier, valider ou clore. Les autres consultent et commentent.
 3. [X] Un responsable peut consulter jusqu'a trois niveaux descendants sous son autorite.
 4. [X] Le service IT cree, desactive et reaffecte les comptes.
 5. [X] Les comptes sont precrees par l'administration puis actives par un lien envoye a l'adresse email enregistree.
 6. [X] Le telephone est facultatif. S'il est renseigne, il peut etre verifie par SMS, mais son absence ou sa non-verification ne bloque jamais l'acces.
-7. [ ] Les emails seront envoyes par =mail.koba.sarl=. Une solution SMS locale, si possible gratuite et compatible avec Orange ou MTN Cote d'Ivoire, reste a evaluer ; elle ne bloque pas le MVP.
+7. [X] Les emails seront envoyes par =mail.koba.sarl=. L'API Orange payante est documentee dans l'entree du 11 juillet ; le SMS facultatif est reporte apres le MVP.
 8. [X] Un telephone absent, perdu ou non verifie n'empeche pas l'utilisation de l'application.
 9. [X] Donnees personnelles minimales : nom, prenom, fonction, email et telephone facultatif. Les donnees liees aux taches sont conservees au moins trois ans ; la suppression ou l'archivage au-dela de cette duree reste a documenter avant la production.
 10. [X] Une tache peut etre reportee automatiquement sur plusieurs semaines ou cloturee avant son achevement par un responsable autorise.
-11. [ ] Le responsable direct et ses superieurs autorises peuvent modifier une tache acceptee. Les modifications exigeant une nouvelle validation restent a definir.
+11. [X] Seul le responsable principal de l'affectation peut la modifier. Ses modifications sont auditees sans nouvelle validation.
 12. [X] La progression est saisie comme un pourcentage libre de 0 a 100, puis regroupee en etats ou etapes lisibles dans les syntheses.
 13. [X] L'employe peut corriger sa progression pendant la journee de saisie. Ensuite, un responsable doit autoriser la correction ou l'effectuer. La valeur quotidienne courante peut etre remplacee, mais l'evolution de la tache au fil des jours est conservee.
 14. [X] Les observations forment un fil de commentaires horodates et ne s'ecrasent pas mutuellement.
-15. [ ] Une proposition rejetee ne reste pas visible dans l'historique utilisateur ; sa conservation minimale dans l'audit reste a confirmer.
-16. [ ] Le service IT ou l'administrateur gere les categories. La taxonomie initiale reliant taches, competences, plan d'action et plan strategique doit etre proposee et validee.
+15. [X] Une proposition rejetee est masquee dans l'interface de travail et conservee par =django-simple-history=.
+16. [X] Le service IT ou l'administrateur gere le plan strategique, les plans d'action et les actions institutionnelles. Les competences sont reportees apres le MVP.
 17. [X] La synthese responsable couvre les retards, blocages, taches sans mise a jour, charge et progression moyenne. La presentation sera choisie pendant le prototypage.
 18. [X] Le calendrier suit les jours ouvrables et jours feries de Cote d'Ivoire, dans le fuseau horaire local. Les conges individuels seront traites lors de la modelisation du calendrier.
 19. [X] Le MVP notifie par defaut les nouvelles taches et les nouveaux commentaires. Les rappels quotidiens et alertes de retard sont desactives par defaut.
@@ -272,9 +855,9 @@ Ne pas demander de certificat avant que le DNS et le vhost HTTP soient prets.
 ** Criteres de sortie de la phase de cadrage
 
 - [X] Les cinq MWE sont confirmes avec leurs acteurs et resultats attendus.
-- [ ] Les regles de visibilite hierarchique sont non ambigues. Il reste a definir les droits respectifs de plusieurs responsables directs et la resolution des chemins hierarchiques multiples.
-- [ ] Le cycle de vie d'une tache et d'une proposition est defini. Sa formalisation est un livrable de la phase suivante.
+- [X] Les regles de visibilite hierarchique sont formalisees et couvertes par des tests de permissions.
+- [X] Le cycle de vie d'une tache et d'une proposition est defini dans PlantUML et dans les services metier.
 - [ ] La methode d'avancement quotidien est testable et comprise par les utilisateurs pilotes. La methode est choisie, mais doit encore etre testee avec les utilisateurs.
 - [X] La strategie d'identification par email et de telephone facultatif est choisie.
-- [ ] Les ecrans principaux ont ete testes sur ordinateur et telephone. Les prototypes et le test pilote sont prevus dans la phase suivante.
-- [ ] Le modele de donnees peut etre implemente sans decision fonctionnelle majeure restante. Les permissions entre responsables multiples, les modifications exigeant une nouvelle validation, la trace d'une proposition rejetee et la taxonomie initiale restent a trancher.
+- [ ] Les ecrans principaux passent les tests automatises sur ordinateur et telephone ; le test avec de vrais utilisateurs reste a executer.
+- [X] Le modele de donnees est implemente sans decision fonctionnelle majeure restante pour le MVP.

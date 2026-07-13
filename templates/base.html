@@ -1,0 +1,38 @@
+{% load static %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CSRS Report{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'vendor/d3.v7.min.js' %}" defer></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+  <header class="site-header">
+    <a class="brand" href="{% url 'dashboard' %}">CSRS Report</a>
+    {% if user.is_authenticated %}
+      <nav aria-label="Navigation principale">
+        <a href="{% url 'dashboard' %}">Mes tâches</a>
+        <a href="{% url 'proposal-list' %}">Propositions</a>
+        {% if user.supervised_lines.exists %}
+          <a href="{% url 'team-summary' %}">Mon équipe</a>
+          <a href="{% url 'assignment-create' %}">Affecter</a>
+        {% endif %}
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
+        <form action="{% url 'logout' %}" method="post" class="inline-form">
+          {% csrf_token %}<button class="link-button" type="submit">Déconnexion</button>
+        </form>
+      </nav>
+    {% endif %}
+  </header>
+  <main id="contenu" class="container" tabindex="-1">
+    {% for message in messages %}
+      <div class="message message-{{ message.tags|default:'info' }}" role="status">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

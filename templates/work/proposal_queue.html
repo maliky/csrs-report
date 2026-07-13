@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Propositions — CSRS Report{% endblock %}
+{% block content %}
+<h1>Propositions à traiter</h1>
+<div class="task-grid">
+{% for proposal in proposals %}
+<article class="task-card"><p class="eyebrow">{{ proposal.employee }}</p><h2>{{ proposal.title }}</h2><p>{{ proposal.description }}</p><p>Du {{ proposal.start_date|date:"d/m/Y" }} au {{ proposal.due_date|date:"d/m/Y" }} · {{ proposal.estimated_work_days }} jours</p>
+<div class="button-row"><form method="post" action="{% url 'proposal-decide' proposal.pk %}">{% csrf_token %}<input type="hidden" name="action" value="accept"><button class="button button-primary">Accepter</button></form></div>
+<form method="post" action="{% url 'proposal-decide' proposal.pk %}" class="stacked-form compact">{% csrf_token %}<input type="hidden" name="action" value="reject"><label for="reason-{{ proposal.pk }}">Motif du refus</label><textarea id="reason-{{ proposal.pk }}" name="reason" rows="2"></textarea><button class="button">Refuser</button></form></article>
+{% empty %}<div class="empty-state"><p>Aucune proposition en attente.</p></div>{% endfor %}
+</div>
+{% endblock %}

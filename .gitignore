@@ -10,6 +10,8 @@ secrets/
 .DS_Store
 Thumbs.db
 *~
+\#*\#
+.#*
 *.swp
 *.swo
 .idea/
@@ -61,7 +63,7 @@ uploads/
 postgres-data/
 pgdata/
 docker-compose.override.yml
+backups/
 
 # Generated static assets
 staticfiles/
-

@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-csrs}
+      POSTGRES_USER: ${POSTGRES_USER:-csrs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - csrs_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-csrs}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-csrs}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18005:8000"
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/connexion/', headers={'Host':'csrs.koba.sarl','X-Forwarded-Proto':'https'}); assert urllib.request.urlopen(r).status == 200"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  notifier:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-csrs}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-csrs}
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    command: python manage.py send_notifications --watch --interval 30 --limit 50
+
+volumes:
+  csrs_postgres_data:

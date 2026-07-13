@@ -1,0 +1,570 @@
+"""Core CSRS work-tracking data model."""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+from decimal import Decimal
+from math import ceil
+
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+from simple_history.models import HistoricalRecords
+
+
+class OrganizationUnit(models.Model):
+    """A service, department, or nested organizational unit."""
+
+    name = models.CharField("nom", max_length=180)
+    code = models.CharField("code", max_length=32, unique=True)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="children"
+    )
+    active = models.BooleanField("active", default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ReportingLine(models.Model):
+    """A dated manager-to-employee relationship."""
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reporting_lines"
+    )
+    supervisor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="supervised_lines",
+    )
+    unit = models.ForeignKey(
+        OrganizationUnit, on_delete=models.PROTECT, related_name="reporting_lines"
+    )
+    start_date = models.DateField("debut", default=date.today)
+    end_date = models.DateField("fin", null=True, blank=True)
+    is_primary = models.BooleanField("responsable principal", default=False)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["employee", "-is_primary", "-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(employee=models.F("supervisor")),
+                name="reporting_line_distinct_people",
+            ),
+            models.CheckConstraint(
+                condition=Q(end_date__isnull=True)
+                | Q(end_date__gte=models.F("start_date")),
+                name="reporting_line_valid_dates",
+            ),
+            models.UniqueConstraint(
+                fields=["employee"],
+                condition=Q(is_primary=True, end_date__isnull=True),
+                name="one_active_primary_supervisor",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        qualifier = "principal" if self.is_primary else "secondaire"
+        return f"{self.employee} → {self.supervisor} ({qualifier})"
+
+    def clean(self) -> None:
+        """Reject cycles in the active reporting graph."""
+        super().clean()
+        if not self.employee_id or not self.supervisor_id:
+            return
+        if self.employee_id == self.supervisor_id:
+            raise ValidationError("Une personne ne peut pas etre son propre responsable.")
+        edges: dict[int, set[int]] = {}
+        lines = ReportingLine.objects.filter(end_date__isnull=True)
+        if self.pk:
+            lines = lines.exclude(pk=self.pk)
+        for manager_id, employee_id in lines.values_list("supervisor_id", "employee_id"):
+            edges.setdefault(manager_id, set()).add(employee_id)
+        frontier = [self.employee_id]
+        visited = {self.employee_id}
+        while frontier:
+            person_id = frontier.pop()
+            for child_id in edges.get(person_id, set()):
+                if child_id == self.supervisor_id:
+                    raise ValidationError(
+                        "Le rattachement creerait une boucle hierarchique."
+                    )
+                if child_id not in visited:
+                    visited.add(child_id)
+                    frontier.append(child_id)
+
+
+class StrategicPlan(models.Model):
+    name = models.CharField("nom", max_length=220)
+    start_date = models.DateField("debut")
+    end_date = models.DateField("fin")
+    active = models.BooleanField("actif", default=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ActionPlan(models.Model):
+    strategic_plan = models.ForeignKey(
+        StrategicPlan, on_delete=models.PROTECT, related_name="action_plans"
+    )
+    name = models.CharField("nom", max_length=220)
+    code = models.CharField("code", max_length=40, unique=True)
+
+    def __str__(self) -> str:
+        return f"{self.code} — {self.name}"
+
+
+class InstitutionalAction(models.Model):
+    action_plan = models.ForeignKey(
+        ActionPlan, on_delete=models.PROTECT, related_name="actions"
+    )
+    name = models.CharField("nom", max_length=220)
+    code = models.CharField("code", max_length=40, unique=True)
+    active = models.BooleanField("active", default=True)
+
+    def __str__(self) -> str:
+        return f"{self.code} — {self.name}"
+
+
+class TaskCodeSequence(models.Model):
+    """Transactional counter used to generate task codes per action and year."""
+
+    action = models.ForeignKey(
+        InstitutionalAction, on_delete=models.PROTECT, related_name="code_sequences"
+    )
+    year = models.PositiveSmallIntegerField("annee")
+    next_value = models.PositiveIntegerField("prochain numero", default=1)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["action", "year"], name="one_task_sequence_per_action_year"
+            )
+        ]
+
+
+class WorkCalendar(models.Model):
+    """Versioned working calendar retained by historical assignments."""
+
+    name = models.CharField("nom", max_length=120)
+    version = models.CharField("version", max_length=32)
+    is_default = models.BooleanField("calendrier par defaut", default=False)
+    active = models.BooleanField("actif", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "version"], name="unique_work_calendar_version"
+            ),
+            models.UniqueConstraint(
+                fields=["is_default"],
+                condition=Q(is_default=True),
+                name="one_default_work_calendar",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.version})"
+
+    def is_working_day(self, day: date) -> bool:
+        """Return the configured value, falling back to Monday through Friday."""
+        override = (
+            self.days.filter(day=day).values_list("is_working_day", flat=True).first()
+        )
+        return bool(override) if override is not None else day.weekday() < 5
+
+    def due_date_for(self, start: date, workload: Decimal) -> date:
+        """Return the workday reached after the start for the rounded-up workload."""
+        remaining = ceil(workload)
+        cursor = start
+        while remaining:
+            cursor += timedelta(days=1)
+            if self.is_working_day(cursor):
+                remaining -= 1
+        return cursor
+
+    def workdays_between(self, start: date, end: date) -> int:
+        """Count working days after start through end, including end."""
+        if end <= start:
+            return 0
+        cursor = start + timedelta(days=1)
+        total = 0
+        while cursor <= end:
+            total += int(self.is_working_day(cursor))
+            cursor += timedelta(days=1)
+        return total
+
+
+class WorkCalendarDay(models.Model):
+    """One explicit non-working holiday or exceptional working day."""
+
+    calendar = models.ForeignKey(
+        WorkCalendar, on_delete=models.CASCADE, related_name="days"
+    )
+    day = models.DateField("date")
+    name = models.CharField("libelle", max_length=180)
+    is_working_day = models.BooleanField("jour ouvre", default=False)
+
+    class Meta:
+        ordering = ["day"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["calendar", "day"], name="one_override_per_calendar_day"
+            )
+        ]
+
+    def __str__(self) -> str:
+        nature = "ouvre" if self.is_working_day else "non ouvre"
+        return f"{self.day:%d/%m/%Y} — {self.name} ({nature})"
+
+    def clean(self) -> None:
+        """Freeze calendar overrides as soon as the version is referenced."""
+        super().clean()
+        if self.calendar_id and self.calendar.assignments.exists():
+            raise ValidationError(
+                "Ce calendrier est deja utilise; clonez-le pour le modifier."
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+
+def default_work_calendar_id() -> int:
+    """Return a stable default calendar, creating the development fallback if needed."""
+    calendar = WorkCalendar.objects.filter(is_default=True).first()
+    if calendar is None:
+        calendar, _created = WorkCalendar.objects.get_or_create(
+            name="Cote d'Ivoire",
+            version="2026.1",
+            defaults={"is_default": True, "active": True},
+        )
+        if not calendar.is_default:
+            WorkCalendar.objects.exclude(pk=calendar.pk).update(is_default=False)
+            WorkCalendar.objects.filter(pk=calendar.pk).update(is_default=True)
+            calendar.is_default = True
+    return calendar.pk
+
+
+class AssignmentStatus(models.TextChoices):
+    PLANNED = "planned", "Planifiee"
+    ACTIVE = "active", "En cours"
+    AWAITING_VALIDATION = "awaiting_validation", "A valider"
+    COMPLETED = "completed", "Terminee"
+    CLOSED_EARLY = "closed_early", "Cloturee avant achevement"
+
+
+class Task(models.Model):
+    """Reusable task definition shared by one or more assignments."""
+
+    code = models.CharField("code interne", max_length=40, unique=True)
+    title = models.CharField("nom court", max_length=180)
+    description = models.TextField("description")
+    action = models.ForeignKey(
+        InstitutionalAction,
+        on_delete=models.PROTECT,
+        related_name="tasks",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_tasks"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class TaskAssignment(models.Model):
+    """Individual ownership, schedule, and state for a task."""
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="assignments")
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="task_assignments",
+    )
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="managed_assignments",
+    )
+    calendar = models.ForeignKey(
+        WorkCalendar,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+        default=default_work_calendar_id,
+    )
+    start_date = models.DateField("debut")
+    due_date = models.DateField("echeance")
+    estimated_work_days = models.DecimalField(
+        "charge estimee en jours",
+        max_digits=7,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    status = models.CharField(
+        "etat",
+        max_length=24,
+        choices=AssignmentStatus.choices,
+        default=AssignmentStatus.PLANNED,
+    )
+    closed_reason = models.TextField("motif de cloture", blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["due_date", "task__title"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(due_date__gte=models.F("start_date")),
+                name="assignment_due_after_start",
+            ),
+            models.UniqueConstraint(
+                fields=["task", "employee"], name="unique_task_employee_assignment"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.task} — {self.employee}"
+
+    def clean(self) -> None:
+        """Reject schedules that diverge from the retained working calendar."""
+        super().clean()
+        if not self.start_date or not self.due_date or not self.estimated_work_days:
+            return
+        calendar = self.calendar
+        expected = calendar.due_date_for(self.start_date, self.estimated_work_days)
+        if self.due_date != expected:
+            raise ValidationError(
+                {
+                    "due_date": (
+                        "L'echeance doit correspondre a la date de debut, a la charge "
+                        f"et au calendrier retenu ({expected:%d/%m/%Y})."
+                    )
+                }
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Guarantee schedule coherence for every application write path."""
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+
+class ProposalStatus(models.TextChoices):
+    SUBMITTED = "submitted", "Soumise"
+    ACCEPTED = "accepted", "Validee"
+    REJECTED = "rejected", "Rejetee"
+
+
+class TaskProposal(models.Model):
+    """Employee task proposal reviewed by the primary manager."""
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="task_proposals"
+    )
+    title = models.CharField("nom court", max_length=180)
+    description = models.TextField("description")
+    action = models.ForeignKey(InstitutionalAction, on_delete=models.PROTECT)
+    calendar = models.ForeignKey(
+        WorkCalendar,
+        on_delete=models.PROTECT,
+        related_name="proposals",
+        default=default_work_calendar_id,
+    )
+    start_date = models.DateField("debut")
+    due_date = models.DateField("echeance")
+    estimated_work_days = models.DecimalField(
+        "charge estimee en jours", max_digits=7, decimal_places=2
+    )
+    status = models.CharField(
+        max_length=16, choices=ProposalStatus.choices, default=ProposalStatus.SUBMITTED
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reviewed_proposals",
+    )
+    accepted_assignment = models.OneToOneField(
+        TaskAssignment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="source_proposal",
+    )
+    decision_note = models.TextField("motif", blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(due_date__gte=models.F("start_date")),
+                name="proposal_due_after_start",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def clean(self) -> None:
+        """Apply the same calendar invariant before a proposal can be accepted."""
+        super().clean()
+        if not self.start_date or not self.due_date or not self.estimated_work_days:
+            return
+        expected = self.calendar.due_date_for(self.start_date, self.estimated_work_days)
+        if self.due_date != expected:
+            raise ValidationError(
+                {"due_date": f"L'echeance calculee est le {expected:%d/%m/%Y}."}
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+
+class ProgressEntry(models.Model):
+    """One mutable daily observation; history retains saved corrections."""
+
+    assignment = models.ForeignKey(
+        TaskAssignment, on_delete=models.CASCADE, related_name="progress_entries"
+    )
+    entry_date = models.DateField("date")
+    percentage = models.PositiveSmallIntegerField(
+        "avancement",
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    note = models.TextField("observation", blank=True)
+    blocked = models.BooleanField("blocage", default=False)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["entry_date", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["assignment", "entry_date"],
+                name="one_progress_per_assignment_day",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.assignment}: {self.percentage}% ({self.entry_date})"
+
+
+class ActivityKind(models.TextChoices):
+    PROGRESS = "progress", "Progression"
+    COMMENT = "comment", "Observation"
+    VALIDATED = "validated", "Achevement valide"
+    REJECTED = "rejected", "Reprise demandee"
+    REOPENED = "reopened", "Tache rouverte"
+    CLOSED = "closed", "Tache cloturee"
+    SCHEDULE = "schedule", "Planification modifiee"
+
+
+class TaskActivity(models.Model):
+    """Append-only user-facing activity stream for one assignment."""
+
+    assignment = models.ForeignKey(
+        TaskAssignment, on_delete=models.CASCADE, related_name="activities"
+    )
+    kind = models.CharField("type", max_length=24, choices=ActivityKind.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="task_activities"
+    )
+    occurred_at = models.DateTimeField("date", default=timezone.now)
+    message = models.TextField("observation")
+    percentage_before = models.PositiveSmallIntegerField(null=True, blank=True)
+    percentage_after = models.PositiveSmallIntegerField(null=True, blank=True)
+    progress_entry = models.ForeignKey(
+        ProgressEntry,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities",
+    )
+    details = models.JSONField(default=dict, blank=True)
+    supersedes = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="superseded_by",
+    )
+
+    class Meta:
+        ordering = ["occurred_at", "pk"]
+        indexes = [models.Index(fields=["assignment", "occurred_at"])]
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Prevent edits while allowing creation of a correcting successor."""
+        if self.pk:
+            raise ValidationError("Une activite publiee ne peut pas etre modifiee.")
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+
+class Holiday(models.Model):
+    """Institution-maintained non-working day for Côte d'Ivoire."""
+
+    day = models.DateField("date", unique=True)
+    name = models.CharField("libelle", max_length=180)
+
+    class Meta:
+        ordering = ["day"]
+
+    def __str__(self) -> str:
+        return f"{self.day:%d/%m/%Y} — {self.name}"
+
+
+class NotificationStatus(models.TextChoices):
+    PENDING = "pending", "En attente"
+    SENT = "sent", "Envoyee"
+    FAILED = "failed", "Echec definitif"
+
+
+class NotificationDelivery(models.Model):
+    """Bounded email outbox without verification codes or exposed credentials."""
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+    )
+    event_type = models.CharField("evenement", max_length=32)
+    subject = models.CharField("sujet", max_length=180)
+    body = models.TextField("message")
+    status = models.CharField(
+        max_length=12,
+        choices=NotificationStatus.choices,
+        default=NotificationStatus.PENDING,
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error_type = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["status", "next_attempt_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.event_type} — {self.status}"

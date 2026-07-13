@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Activer mon compte — CSRS Report{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <h1>Activer mon compte</h1>
+  <p>Choisissez votre mot de passe pour terminer l’activation.</p>
+  <form method="post" class="stacked-form">
+    {% csrf_token %}{{ form.as_div }}
+    <button class="button button-primary" type="submit">Activer mon compte</button>
+  </form>
+</section>
+{% endblock %}

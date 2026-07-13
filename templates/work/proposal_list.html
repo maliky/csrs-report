@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Propositions — CSRS Report{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Suivi des décisions</p><h1>Propositions</h1></div><a class="button" href="{% url 'proposal-create' %}">Nouvelle proposition</a></div>
+<nav class="period-switch" aria-label="Filtrer les propositions"><a href="?status=all"{% if selected_status == 'all' %} aria-current="page"{% endif %}>Toutes</a><a href="?status=submitted"{% if selected_status == 'submitted' %} aria-current="page"{% endif %}>En attente</a><a href="?status=accepted"{% if selected_status == 'accepted' %} aria-current="page"{% endif %}>Validées</a><a href="?status=rejected"{% if selected_status == 'rejected' %} aria-current="page"{% endif %}>Rejetées</a></nav>
+<section><h2>Mes propositions</h2><div class="task-grid">{% include "work/_proposal_cards.html" with proposals=own_proposals manageable=False %}</div></section>
+{% if has_team %}<section><h2>Propositions de mon équipe</h2><div class="task-grid">{% include "work/_proposal_cards.html" with proposals=team_proposals manageable=True %}</div></section>{% endif %}
+{% endblock %}

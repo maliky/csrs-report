@@ -41,5 +41,4 @@ Ces directives s'appliquent a tout le depot `csrs_report` et restent volontairem
 - Verifier les migrations sur une base vide et sur une base contenant des donnees de test.
 - Ne pas modifier Nginx, DNS, Certbot ou le service de production sans demande explicite.
 - Pour le futur deploiement, verifier dans l'ordre DNS, service applicatif, port local, vhost Nginx, `nginx -t`, puis certificat TLS.
-- Aucun certificat ne doit etre demande avant que `csrs-app1.koba.sarl` resolve vers ce serveur et que le vhost HTTP fonctionne.
-
+- Aucun certificat ne doit etre demande avant que `csrs.koba.sarl` resolve vers ce serveur et que le vhost HTTP fonctionne.

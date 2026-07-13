@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Mes tâches — CSRS Report{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Mes tâches</h1>{% if can_self_assign %}<a class="button" href="{% url 'assignment-create' %}">Créer une tâche personnelle</a>{% else %}<a class="button" href="{% url 'proposal-create' %}">Proposer une tâche</a>{% endif %}</div>
+{% include "work/_period_nav.html" %}
+{% if cards %}<div class="task-grid">{% for card in cards %}{% include "work/_task_card.html" with card=card %}{% endfor %}</div>{% else %}<div class="empty-state"><h2>Aucune tâche</h2><p>Aucune tâche ne vous est affectée pour cette période.</p></div>{% endif %}
+{% endblock %}
