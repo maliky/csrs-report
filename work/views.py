@@ -122,8 +122,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def assignment_detail(request: HttpRequest, pk: int) -> HttpResponse:
     assignment = get_object_or_404(
         TaskAssignment.objects.select_related(
-            "task", "employee", "manager", "task__action"
-        ),
+            "task", "employee", "manager", "task__action", "calendar"
+        ).prefetch_related("calendar__days"),
         pk=pk,
     )
     user = request_user(request)
@@ -167,7 +167,9 @@ def assignment_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def assignment_progress_json(request: HttpRequest, pk: int) -> JsonResponse:
     """Expose chart-only daily history under the task detail permission."""
     assignment = get_object_or_404(
-        TaskAssignment.objects.select_related("calendar", "employee", "manager"),
+        TaskAssignment.objects.select_related(
+            "calendar", "employee", "manager"
+        ).prefetch_related("calendar__days"),
         pk=pk,
     )
     if not can_view_assignment(request_user(request), assignment):

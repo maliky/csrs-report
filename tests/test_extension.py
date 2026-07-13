@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
@@ -183,12 +183,16 @@ def test_daily_rows_are_real_carried_and_stop_at_completion(
         entry_date=third, percentage=70, author=people["employee"]
     )
     rows = daily_progress_rows(assignment, today=third)
-    assert rows[0].percentage == 0
-    assert rows[0].observed is False
-    assert rows[1].percentage == 25
-    assert rows[1].observed is True
-    assert rows[2].percentage == 25
-    assert rows[2].observed is False
+    by_day = {row.day: row for row in rows}
+    second = assignment.calendar.due_date_for(monday, Decimal("2.00"))
+    assert by_day[monday].percentage == 0
+    assert by_day[monday].observed is False
+    assert by_day[first].percentage == 25
+    assert by_day[first].observed is True
+    assert by_day[second].percentage == 25
+    assert by_day[second].observed is False
+    assert by_day[third].percentage == 70
+    assert by_day[third].observed is True
     assignment.completed_at = timezone.make_aware(datetime.combine(third, time(16)))
     assignment.status = AssignmentStatus.COMPLETED
     assignment.save(update_fields=["completed_at", "status"])
@@ -198,9 +202,30 @@ def test_daily_rows_are_real_carried_and_stop_at_completion(
 
 
 @pytest.mark.django_db
+def test_daily_rows_include_non_working_calendar_days(
+    assignment: TaskAssignment,
+) -> None:
+    national_day = date(2026, 8, 7)
+    rows = daily_progress_rows(assignment, today=national_day)
+    by_day = {row.day: row for row in rows}
+
+    assert len(rows) == (national_day - assignment.start_date).days + 1
+    assert by_day[national_day].is_working_day is False
+    assert (
+        by_day[national_day].elapsed_work_days
+        == by_day[national_day - timedelta(days=1)].elapsed_work_days
+    )
+
+
+@pytest.mark.django_db
 def test_progress_json_has_chart_schema_and_task_permissions(
     client, assignment: TaskAssignment, people: dict[str, User]
 ) -> None:
+    assignment.start_date = date(2026, 4, 30)
+    assignment.due_date = assignment.calendar.due_date_for(
+        assignment.start_date, assignment.estimated_work_days
+    )
+    assignment.save(update_fields=["start_date", "due_date"])
     client.force_login(people["manager"])
     response = client.get(reverse("assignment-progress-json", args=[assignment.pk]))
     assert response.status_code == 200
@@ -208,6 +233,7 @@ def test_progress_json_has_chart_schema_and_task_permissions(
         "task_id",
         "start_date",
         "day",
+        "is_working_day",
         "due_date",
         "planned_work_days",
         "elapsed_work_days",
@@ -216,6 +242,8 @@ def test_progress_json_has_chart_schema_and_task_permissions(
         "percentage",
         "observed",
     }
+    labour_day = next(row for row in response.json() if row["day"] == "2026-05-01")
+    assert labour_day["is_working_day"] is False
     client.force_login(people["outsider"])
     assert (
         client.get(reverse("assignment-progress-json", args=[assignment.pk])).status_code

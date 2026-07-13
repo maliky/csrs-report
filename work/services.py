@@ -79,11 +79,12 @@ class ProgressPoint:
 
 @dataclass(frozen=True)
 class DailyProgressRow:
-    """One working-day row exposed to charts and authenticated JSON clients."""
+    """One calendar-day row exposed to charts and authenticated JSON clients."""
 
     task_id: int
     start_date: date
     day: date
+    is_working_day: bool
     due_date: date
     planned_work_days: Decimal
     elapsed_work_days: int
@@ -319,12 +320,11 @@ def workload_for(start: date, due: date, calendar: WorkCalendar) -> Decimal:
     return Decimal(calendar.workdays_between(start, due)).quantize(Decimal("0.01"))
 
 
-def iter_working_days(start: date, end: date, calendar: WorkCalendar) -> Iterator[date]:
-    """Yield working days inclusively without persisting synthetic observations."""
+def iter_calendar_days(start: date, end: date) -> Iterator[date]:
+    """Yield every calendar day inclusively without persisting synthetic rows."""
     cursor = start
     while cursor <= end:
-        if calendar.is_working_day(cursor):
-            yield cursor
+        yield cursor
         cursor += timedelta(days=1)
 
 
@@ -333,9 +333,9 @@ def daily_progress_rows(
 ) -> tuple[DailyProgressRow, ...]:
     """Derive the full daily chart series from real progress observations.
 
-    Missing days carry the last known percentage and are explicitly marked as
-    unobserved. Open work extends to the true current day; closed work stops at
-    ``completed_at`` and never receives a synthetic current point.
+    Every calendar day states whether it is worked. Missing observations carry
+    the last known percentage and are explicitly marked as unobserved. Open work
+    extends to the true current day; closed work stops at ``completed_at``.
     """
     return daily_progress_rows_from_entries(
         assignment,
@@ -361,7 +361,7 @@ def daily_progress_rows_from_entries(
         today: True current day used to stop an open assignment.
 
     Returns:
-        Working-day rows with carried values marked as unobserved.
+        Calendar-day rows with work status and carried values marked unobserved.
 
     """
     if assignment.completed_at is not None:
@@ -380,23 +380,27 @@ def daily_progress_rows_from_entries(
             key=lambda item: (item.entry_date, item.updated_at),
         )
     }
+    calendar_overrides = {
+        item.day: item.is_working_day for item in assignment.calendar.days.all()
+    }
     percentage = 0
+    elapsed = 0
     rows: list[DailyProgressRow] = []
-    chart_days = set(iter_working_days(assignment.start_date, end, assignment.calendar))
-    # Keep exceptional weekend observations truthful without inventing weekend rows.
-    chart_days.update(entries)
-    for day in sorted(chart_days):
+    due_offset = Decimal(ceil(assignment.estimated_work_days))
+    for day in iter_calendar_days(assignment.start_date, end):
+        is_working_day = calendar_overrides.get(day, day.weekday() < 5)
+        if day > assignment.start_date and is_working_day:
+            elapsed += 1
         entry = entries.get(day)
         if entry is not None:
             percentage = entry.percentage
-        elapsed = business_days_between(assignment.start_date, day, assignment.calendar)
         elapsed_decimal = Decimal(elapsed)
-        due_offset = Decimal(ceil(assignment.estimated_work_days))
         rows.append(
             DailyProgressRow(
                 task_id=assignment.pk,
                 start_date=assignment.start_date,
                 day=day,
+                is_working_day=is_working_day,
                 due_date=assignment.due_date,
                 planned_work_days=assignment.estimated_work_days,
                 elapsed_work_days=elapsed,
@@ -1242,7 +1246,7 @@ def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
         TaskAssignment.objects.select_related(
             "task", "task__action", "employee", "manager", "calendar"
         )
-        .prefetch_related("progress_entries")
+        .prefetch_related("calendar__days", "progress_entries")
         .order_by("employee_id", "task__code", "pk")
     )
     if user.is_it_admin or user.is_superuser:

@@ -69,6 +69,7 @@ La reponse separe les metadonnees, une ligne par affectation, et les series jour
       "task_id": 31,
       "start_date": "2026-05-04",
       "day": "2026-05-04",
+      "is_working_day": true,
       "due_date": "2026-05-20",
       "planned_work_days": 12.0,
       "elapsed_work_days": 0,
@@ -81,6 +82,7 @@ La reponse separe les metadonnees, une ligne par affectation, et les series jour
       "task_id": 31,
       "start_date": "2026-05-04",
       "day": "2026-05-05",
+      "is_working_day": true,
       "due_date": "2026-05-20",
       "planned_work_days": 12.0,
       "elapsed_work_days": 1,
@@ -95,7 +97,18 @@ La reponse separe les metadonnees, une ligne par affectation, et les series jour
 
 =task_id= relie =tasks= et =progress=. =employee_id= permet un regroupement sans exporter le nom du collaborateur. La description, les notes, les observations, les auteurs, les adresses email et les telephones sont exclus.
 
-Une saisie reelle porte =observed: true=. Un jour ouvrable sans saisie reporte la derniere valeur connue avec =observed: false= ; avant la premiere saisie, la valeur est 0 %. Une tache ouverte s'etend jusqu'a la vraie date du jour. Une tache terminee ou cloturee s'arrete a =completed_at=.
+Chaque date calendaire apparait dans =progress=. Par exemple, la fete nationale du calendrier ivoirien est explicitement non ouvree :
+
+#+begin_src json
+{
+  "day": "2026-08-07",
+  "is_working_day": false
+}
+#+end_src
+
+Le champ =is_working_day= provient de la version du =WorkCalendar= conservee par la tache. Il vaut =false= pour les samedis, dimanches et exceptions non ouvrees, et =true= pour les jours normalement ou exceptionnellement ouvres.
+
+Une saisie reelle porte =observed: true=. Un jour sans saisie reporte la derniere valeur connue avec =observed: false= ; avant la premiere saisie, la valeur est 0 %. Les compteurs de charge ne progressent que lorsque =is_working_day= vaut =true=. Une tache ouverte s'etend jusqu'a la vraie date du jour. Une tache terminee ou cloturee s'arrete a =completed_at=.
 
 * Securite et CORS
 

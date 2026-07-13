@@ -2,6 +2,20 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-13 lun.> Jours ouvres et non ouvres dans les JSON
+** Besoin confirme
+
+- Les JSON de progression doivent contenir chaque jour calendaire, y compris les jours non ouvres, afin que la visualisation distingue explicitement leur nature.
+- Chaque ligne porte =is_working_day: true= pour un jour ouvre et =is_working_day: false= pour un week-end ou une exception non ouvree du calendrier conserve par la tache.
+- Les compteurs =elapsed_work_days=, =remaining_schedule_days= et =overdue_days= ne progressent pas pendant un jour non ouvre. Le pourcentage reste reporte avec =observed: false= en l'absence de saisie reelle.
+
+** Realisation
+
+- [X] Serie commune etendue a tous les jours calendaires, de =start_date= jusqu'au jour courant ou =completed_at=.
+- [X] Champ booleen =is_working_day= ajoute aux routes individuelle et globale.
+- [X] Calcul rendu lineaire avec les exceptions du =WorkCalendar= chargees une seule fois pour l'export global.
+- [X] Cas du 7 aout 2026, jour non ouvre du calendrier ivoirien, couvert par les tests et la documentation Org.
+
 * <2026-07-13 lun.> Export global et temporaire vers Observable
 ** Besoin confirme
 
@@ -17,7 +31,7 @@
 - Le CORS =Access-Control-Allow-Origin: *= est limite a cette route sans cookie. La reponse refuse le cache avec =Cache-Control: no-store= et autorise le precontrole =Authorization=.
 - La reponse versionnee separe =tasks=, une ligne par affectation, et =progress=, les lignes journalieres reliees par =task_id=. Une tache sans point journalier reste ainsi presente dans =tasks=.
 - =tasks= contient le code, le titre, l'action, l'etat, les dates, la charge et un =employee_id= numerique pour le regroupement. Il ne contient ni nom, ni alias, ni email, ni telephone, ni description.
-- =progress= conserve exactement le schema individuel deja valide : dates, charge, jours ecoules/restants/depasses, pourcentage et =observed=.
+- =progress= conserve le schema individuel : dates, nature ouvree ou non ouvree, charge, jours ecoules/restants/depasses, pourcentage et =observed=.
 
 ** Realisation
 
@@ -230,7 +244,7 @@ Chargement dans une cellule JavaScript Observable :
 history = await d3.json("https://csrs.koba.sarl/taches/31/progression.json")
 #+end_src
 
-Cette route est actuellement authentifiee et applique les memes droits que la page de detail. L'URL fonctionne dans une session CSRS autorisee, mais un notebook heberge sur =observablehq.com= ne peut pas la charger directement tant que l'authentification inter-domaines et CORS ne sont pas configures. Pour un essai immediat dans Observable, ouvrir l'URL apres connexion puis copier le JSON dans une cellule; ne pas rendre la route publique pour contourner cette protection.
+Cette route individuelle reste authentifiee par la session et applique les memes droits que la page de detail. Pour charger directement toutes les taches depuis un notebook, utiliser la page =/observable/= et sa route globale avec jeton temporaire; ne pas rendre la route individuelle publique pour contourner cette protection.
 
 #+begin_src json
 [
@@ -238,6 +252,7 @@ Cette route est actuellement authentifiee et applique les memes droits que la pa
     "task_id": 31,
     "start_date": "2026-05-04",
     "day": "2026-05-04",
+    "is_working_day": true,
     "due_date": "2026-05-20",
     "planned_work_days": 12.0,
     "elapsed_work_days": 0,
@@ -250,6 +265,7 @@ Cette route est actuellement authentifiee et applique les memes droits que la pa
     "task_id": 31,
     "start_date": "2026-05-04",
     "day": "2026-05-05",
+    "is_working_day": true,
     "due_date": "2026-05-20",
     "planned_work_days": 12.0,
     "elapsed_work_days": 1,

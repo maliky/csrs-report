@@ -133,6 +133,7 @@ def test_observable_export_contains_all_and_only_visible_tasks(
         "task_id",
         "start_date",
         "day",
+        "is_working_day",
         "due_date",
         "planned_work_days",
         "elapsed_work_days",
