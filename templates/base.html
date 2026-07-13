@@ -17,6 +17,7 @@
       <nav aria-label="Navigation principale">
         <a href="{% url 'dashboard' %}">Mes tâches</a>
         <a href="{% url 'proposal-list' %}">Propositions</a>
+        <a href="{% url 'observable-export' %}">Observable</a>
         {% if user.supervised_lines.exists %}
           <a href="{% url 'team-summary' %}">Mon équipe</a>
           <a href="{% url 'assignment-create' %}">Affecter</a>

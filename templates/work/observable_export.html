@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Export Observable — CSRS Report{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Données autorisées</p>
+      <h1>Envoyer mes tâches vers Observable</h1>
+    </div>
+  </div>
+
+  <section class="panel observable-help" aria-labelledby="observable-scope-title">
+    <h2 id="observable-scope-title">Un export pour toutes les tâches visibles</h2>
+    <p>
+      Ce jeu de données contient vos tâches et celles de vos équipes que vous avez
+      le droit de consulter. Les droits sont vérifiés à nouveau par le serveur à
+      chaque chargement.
+    </p>
+    <p>
+      Les notes, observations, auteurs, noms, adresses email et numéros de téléphone
+      ne sont jamais exportés. Un identifiant numérique permet seulement de regrouper
+      les tâches d’un même collaborateur.
+    </p>
+  </section>
+
+  <section class="panel observable-help" aria-labelledby="observable-copy-title">
+    <h2 id="observable-copy-title">Code prêt à copier</h2>
+    <ol>
+      <li>Copiez le code ci-dessous dans une cellule JavaScript Observable.</li>
+      <li>Utilisez ensuite <code>csrs.tasks</code> et <code>csrs.progress</code>.</li>
+      <li>Rechargez cette page pour obtenir un nouveau jeton après expiration.</li>
+    </ol>
+    <pre class="code-block"><code id="observable-snippet">{{ snippet }}</code></pre>
+    <button
+      class="button button-primary"
+      type="button"
+      data-copy-target="observable-snippet"
+      data-copy-label="Copier le code Observable"
+    >Copier le code Observable</button>
+    <p class="schedule-help">
+      Ce jeton expire dans {{ ttl_minutes }} minute{{ ttl_minutes|pluralize }}.
+      Il donne temporairement vos droits de lecture : ne le publiez pas et ne
+      l’enregistrez pas dans un notebook public.
+    </p>
+    <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
+  </section>
+
+  <details class="panel observable-help">
+    <summary>Détails techniques</summary>
+    <dl class="facts observable-facts">
+      <div>
+        <dt>Adresse JSON</dt>
+        <dd><code>{{ endpoint }}</code></dd>
+      </div>
+      <div>
+        <dt>Durée du jeton</dt>
+        <dd>{{ ttl_minutes }} minute{{ ttl_minutes|pluralize }}</dd>
+      </div>
+    </dl>
+    <label for="observable-token"><strong>Jeton temporaire</strong></label>
+    <textarea id="observable-token" class="token-field" rows="4" readonly>{{ token }}</textarea>
+    <button
+      class="button"
+      type="button"
+      data-copy-target="observable-token"
+      data-copy-label="Copier le jeton"
+    >Copier le jeton</button>
+  </details>
+{% endblock %}

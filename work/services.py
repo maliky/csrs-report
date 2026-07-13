@@ -337,17 +337,48 @@ def daily_progress_rows(
     unobserved. Open work extends to the true current day; closed work stops at
     ``completed_at`` and never receives a synthetic current point.
     """
-    current_day = today or timezone.localdate()
+    return daily_progress_rows_from_entries(
+        assignment,
+        assignment.progress_entries.all(),
+        today=today or timezone.localdate(),
+    )
+
+
+def daily_progress_rows_from_entries(
+    assignment: TaskAssignment,
+    progress_entries: Iterable[ProgressEntry],
+    *,
+    today: date,
+) -> tuple[DailyProgressRow, ...]:
+    """Build a daily series from an explicit collection of persisted entries.
+
+    This pure-data boundary lets aggregate exports prefetch every progression in
+    one query while the regular task route keeps the same public behavior.
+
+    Args:
+        assignment: Assignment providing dates, workload, and retained calendar.
+        progress_entries: Persisted observations available to the caller.
+        today: True current day used to stop an open assignment.
+
+    Returns:
+        Working-day rows with carried values marked as unobserved.
+
+    """
     if assignment.completed_at is not None:
-        end = min(current_day, assignment.completed_at.date())
+        end = min(today, assignment.completed_at.date())
     else:
-        end = current_day
+        end = today
     end = max(assignment.start_date, end)
     entries = {
         item.entry_date: item
-        for item in assignment.progress_entries.filter(
-            entry_date__gte=assignment.start_date, entry_date__lte=end
-        ).order_by("entry_date", "updated_at")
+        for item in sorted(
+            (
+                item
+                for item in progress_entries
+                if assignment.start_date <= item.entry_date <= end
+            ),
+            key=lambda item: (item.entry_date, item.updated_at),
+        )
     }
     percentage = 0
     rows: list[DailyProgressRow] = []
@@ -549,6 +580,11 @@ def can_view_employee(supervisor: User, employee: User) -> bool:
     """Check cycle-safe downward visibility through the full organization graph."""
     if supervisor == employee or supervisor.is_it_admin or supervisor.is_superuser:
         return True
+    return employee.pk in visible_employee_ids(supervisor)
+
+
+def visible_employee_ids(supervisor: User) -> frozenset[int]:
+    """Return the supervisor and every active descendant, cycle safely."""
     edges: dict[int, set[int]] = {}
     for manager_id, employee_id in active_lines().values_list(
         "supervisor_id", "employee_id"
@@ -559,12 +595,10 @@ def can_view_employee(supervisor: User, employee: User) -> bool:
     while queue:
         person_id = queue.popleft()
         for child_id in edges.get(person_id, set()):
-            if child_id == employee.pk:
-                return True
             if child_id not in visited:
                 visited.add(child_id)
                 queue.append(child_id)
-    return False
+    return frozenset(visited)
 
 
 def can_view_assignment(user: User, assignment: TaskAssignment) -> bool:
@@ -1202,9 +1236,15 @@ def direct_employee_summaries(manager: User, monday: date) -> list[EmployeeSumma
     return [summarize_employee(employee, monday) for employee in employees]
 
 
-def visible_assignments(user: User) -> Iterable[TaskAssignment]:
-    """Yield assignments authorized for a user without relying on hidden UI."""
-    queryset = TaskAssignment.objects.select_related("task", "employee", "manager")
-    return (
-        assignment for assignment in queryset if can_view_assignment(user, assignment)
+def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
+    """Return all assignments currently visible through the organization graph."""
+    queryset = (
+        TaskAssignment.objects.select_related(
+            "task", "task__action", "employee", "manager", "calendar"
+        )
+        .prefetch_related("progress_entries")
+        .order_by("employee_id", "task__code", "pk")
     )
+    if user.is_it_admin or user.is_superuser:
+        return queryset
+    return queryset.filter(employee_id__in=visible_employee_ids(user))

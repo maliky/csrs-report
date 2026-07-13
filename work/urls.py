@@ -11,6 +11,12 @@ urlpatterns = [
         views.assignment_progress_json,
         name="assignment-progress-json",
     ),
+    path("observable/", views.observable_export_page, name="observable-export"),
+    path(
+        "observable/progression.json",
+        views.observable_progress_export,
+        name="observable-progress-export",
+    ),
     path("taches/<int:pk>/modifier/", views.edit_assignment, name="assignment-edit"),
     path("taches/<int:pk>/progression/", views.update_progress, name="progress-update"),
     path("taches/<int:pk>/commentaires/", views.add_comment, name="comment-add"),

@@ -1,0 +1,106 @@
+#+TITLE: Export JSON des taches et progressions
+#+LANGUAGE: fr
+#+STARTUP: overview
+
+* Routes disponibles
+
+Deux routes repondent a des usages distincts.
+
+- =GET /taches/<id>/progression.json= fournit l'historique d'une seule tache a une session CSRS connectee.
+- =GET /observable/progression.json= fournit toutes les taches que le detenteur d'un jeton temporaire peut actuellement consulter. Cette route est concue pour un chargement direct depuis Observable.
+
+* Chargement global depuis Observable
+
+Apres connexion a CSRS, ouvrir =/observable/=, puis utiliser le bouton *Copier le code Observable*. La page genere un jeton signe valable 15 minutes par defaut. Le jeton est envoye dans l'en-tete =Authorization=, jamais dans l'URL et sans transmettre le cookie de session CSRS.
+
+Le code fourni a cette forme :
+
+#+begin_src js
+csrs = {
+  const response = await fetch("https://csrs.koba.sarl/observable/progression.json", {
+    headers: {
+      Accept: "application/json",
+      Authorization: "Bearer JETON_TEMPORAIRE"
+    }
+  });
+  if (!response.ok) throw new Error(`CSRS ${response.status}`);
+  return response.json();
+}
+#+end_src
+
+Les deux tableaux sont alors disponibles avec :
+
+#+begin_src js
+tasks = csrs.tasks
+#+end_src
+
+#+begin_src js
+progress = csrs.progress
+#+end_src
+
+Le serveur recalcule la hierarchie a chaque requete. Une tache qui n'est plus visible ne reste donc pas accessible jusqu'a l'expiration du jeton. Un compte desactive est refuse immediatement.
+
+* Schema global
+
+La reponse separe les metadonnees, une ligne par affectation, et les series journalieres, plusieurs lignes par affectation :
+
+#+begin_src json
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13T14:30:00+00:00",
+  "task_count": 1,
+  "progress_row_count": 2,
+  "tasks": [
+    {
+      "task_id": 31,
+      "task_code": "FIN-2026-0031",
+      "task_title": "Rapprocher les pieces de caisse",
+      "action_code": "FIN",
+      "employee_id": 12,
+      "status": "active",
+      "start_date": "2026-05-04",
+      "due_date": "2026-05-20",
+      "planned_work_days": 12.0,
+      "completed_on": null
+    }
+  ],
+  "progress": [
+    {
+      "task_id": 31,
+      "start_date": "2026-05-04",
+      "day": "2026-05-04",
+      "due_date": "2026-05-20",
+      "planned_work_days": 12.0,
+      "elapsed_work_days": 0,
+      "remaining_schedule_days": 12.0,
+      "overdue_days": 0.0,
+      "percentage": 0,
+      "observed": false
+    },
+    {
+      "task_id": 31,
+      "start_date": "2026-05-04",
+      "day": "2026-05-05",
+      "due_date": "2026-05-20",
+      "planned_work_days": 12.0,
+      "elapsed_work_days": 1,
+      "remaining_schedule_days": 11.0,
+      "overdue_days": 0.0,
+      "percentage": 15,
+      "observed": true
+    }
+  ]
+}
+#+end_src
+
+=task_id= relie =tasks= et =progress=. =employee_id= permet un regroupement sans exporter le nom du collaborateur. La description, les notes, les observations, les auteurs, les adresses email et les telephones sont exclus.
+
+Une saisie reelle porte =observed: true=. Un jour ouvrable sans saisie reporte la derniere valeur connue avec =observed: false= ; avant la premiere saisie, la valeur est 0 %. Une tache ouverte s'etend jusqu'a la vraie date du jour. Une tache terminee ou cloturee s'arrete a =completed_at=.
+
+* Securite et CORS
+
+L'API globale accepte seulement un jeton signe de courte duree. Elle ne depend pas d'un cookie tiers et repond avec un CORS non authentifie par cookie. Le joker =Access-Control-Allow-Origin: *= s'applique uniquement a cette route : le jeton Bearer constitue l'autorisation et =credentials= ne doit pas etre ajoute au =fetch=.
+
+Les reponses portent =Cache-Control: no-store=. Le jeton ne doit etre ni publie, ni committe, ni conserve dans un notebook public. Sa duree se regle avec =OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS=, qui vaut =900= par defaut.
+
+La route individuelle conserve exactement le schema des lignes de =progress=, mais continue d'utiliser la session CSRS et les permissions de la page de detail.

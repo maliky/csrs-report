@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import json
+from math import ceil
+from typing import TypeVar
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.models import User
 from work.forms import (
@@ -26,6 +33,11 @@ from work.models import (
     TaskProposal,
 )
 from work.notifications import queue_assignment_notification
+from work.observable import (
+    create_export_token,
+    export_token_user_id,
+    observable_dataset,
+)
 from work.services import (
     add_observation,
     accept_proposal,
@@ -56,6 +68,8 @@ from work.services import (
     validate_completion,
     week_start_for,
 )
+
+ResponseT = TypeVar("ResponseT", bound=HttpResponse)
 
 
 def request_user(request: HttpRequest) -> User:
@@ -161,6 +175,84 @@ def assignment_progress_json(request: HttpRequest, pk: int) -> JsonResponse:
     return JsonResponse(
         [row.as_json() for row in daily_progress_rows(assignment)], safe=False
     )
+
+
+def _with_observable_headers(response: ResponseT) -> ResponseT:
+    """Apply non-credentialed CORS and prevent bearer responses from caching."""
+    response["Access-Control-Allow-Origin"] = "*"
+    response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Authorization, Accept"
+    response["Access-Control-Max-Age"] = "600"
+    response["Cache-Control"] = "no-store"
+    response["Pragma"] = "no-cache"
+    response["Cross-Origin-Resource-Policy"] = "cross-origin"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+def _observable_auth_error() -> JsonResponse:
+    """Return one indistinguishable error for absent, expired, or invalid tokens."""
+    response = JsonResponse(
+        {"detail": "Jeton Observable absent, invalide ou expire."}, status=401
+    )
+    response["WWW-Authenticate"] = 'Bearer realm="CSRS Observable"'
+    return _with_observable_headers(response)
+
+
+@login_required
+def observable_export_page(request: HttpRequest) -> HttpResponse:
+    """Issue a temporary token and show copy-ready Observable instructions."""
+    user = request_user(request)
+    token = create_export_token(user)
+    endpoint = request.build_absolute_uri(reverse("observable-progress-export"))
+    snippet = "\n".join(
+        (
+            "csrs = {",
+            f"  const response = await fetch({json.dumps(endpoint)}, {{",
+            "    headers: {",
+            '      Accept: "application/json",',
+            f'      Authorization: "Bearer {token}"',
+            "    }",
+            "  });",
+            "  if (!response.ok) throw new Error(`CSRS ${response.status}`);",
+            "  return response.json();",
+            "}",
+        )
+    )
+    ttl_seconds = settings.OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS
+    response = render(
+        request,
+        "work/observable_export.html",
+        {
+            "endpoint": endpoint,
+            "token": token,
+            "snippet": snippet,
+            "ttl_minutes": max(1, ceil(ttl_seconds / 60)),
+        },
+    )
+    response["Cache-Control"] = "no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@require_http_methods(["GET", "OPTIONS"])
+def observable_progress_export(request: HttpRequest) -> HttpResponse:
+    """Expose every currently visible task through a temporary bearer token."""
+    if request.method == "OPTIONS":
+        return _with_observable_headers(HttpResponse(status=204))
+    authorization = request.headers.get("Authorization", "")
+    scheme, separator, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not token.strip():
+        return _observable_auth_error()
+    try:
+        user_id = export_token_user_id(token.strip())
+    except signing.BadSignature:
+        return _observable_auth_error()
+    user = User.objects.filter(pk=user_id, is_active=True).first()
+    if user is None:
+        return _observable_auth_error()
+    response = JsonResponse(observable_dataset(user).as_json())
+    return _with_observable_headers(response)
 
 
 @login_required

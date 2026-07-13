@@ -115,6 +115,12 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+# Short-lived bearer tokens let Observable read authorized JSON without sharing
+# the CSRS session cookie across domains.
+OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS = int(
+    os.environ.get("OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS", "900")
+)
+
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "mail.koba.sarl")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))

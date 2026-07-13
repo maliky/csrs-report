@@ -2,6 +2,36 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-13 lun.> Export global et temporaire vers Observable
+** Besoin confirme
+
+- Fournir un moyen simple de charger dans Observable toutes les taches que l'utilisateur CSRS a le droit de consulter, et non plus une URL distincte par tache.
+- Ne pas dependre des cookies tiers du navigateur et ne pas affaiblir les permissions de lecture existantes.
+- Conserver le schema journalier confirme pour les graphiques et exclure les observations, notes, auteurs et coordonnees personnelles.
+
+** Decisions d'architecture
+
+- La page authentifiee =/observable/= genere un jeton signe temporaire et fournit un code Observable pret a copier.
+- Observable appelle =/observable/progression.json= avec =Authorization: Bearer <jeton>=. Le jeton n'apparait donc pas dans l'URL et n'est pas transmis comme cookie inter-domaines.
+- La duree est de 900 secondes par defaut et se configure par =OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS=. Le compte doit encore etre actif et sa hierarchie est recalculee a chaque lecture; le jeton ne fige jamais les droits au moment de son emission.
+- Le CORS =Access-Control-Allow-Origin: *= est limite a cette route sans cookie. La reponse refuse le cache avec =Cache-Control: no-store= et autorise le precontrole =Authorization=.
+- La reponse versionnee separe =tasks=, une ligne par affectation, et =progress=, les lignes journalieres reliees par =task_id=. Une tache sans point journalier reste ainsi presente dans =tasks=.
+- =tasks= contient le code, le titre, l'action, l'etat, les dates, la charge et un =employee_id= numerique pour le regroupement. Il ne contient ni nom, ni alias, ni email, ni telephone, ni description.
+- =progress= conserve exactement le schema individuel deja valide : dates, charge, jours ecoules/restants/depasses, pourcentage et =observed=.
+
+** Realisation
+
+- [X] Service fonctionnel type pour construire le jeu de donnees avec prechargement des progressions et visibilite descendante sans limite de profondeur.
+- [X] Jeton signe horodate, rejet des jetons absents, invalides ou expires et rejet immediat d'un compte desactive.
+- [X] Route JSON globale, reponse CORS sans credentials, absence de cache et precontrole =OPTIONS=.
+- [X] Page responsive =/observable/=, lien de navigation, bouton de copie et avertissement contre la publication du jeton.
+- [X] Documentation d'utilisation et schema complet au format Org dans =docs/progression-json.org=.
+- [X] Tests des permissions globales, de la revocation hierarchique, des donnees exclues, du CORS, de l'expiration et du compte desactive.
+
+** Questions restantes
+
+- Aucune question bloquante. Une future demande explicite pourra ajouter des filtres de periode si le volume historique devient trop important; l'export actuel fournit volontairement toutes les taches visibles et leur historique disponible.
+
 * <2026-07-13 lun.> Dates explicites et fidelite des graphiques de progression
 ** Besoin confirme
 
@@ -231,7 +261,7 @@ Cette route est actuellement authentifiee et applique les memes droits que la pa
 ]
 #+end_src
 
-La route ne contient ni note, ni auteur, ni donnee personnelle. Voir aussi =docs/progression-json.md= pour l'utilisation dans Observable.
+La route ne contient ni note, ni auteur, ni donnee personnelle. Voir aussi =docs/progression-json.org= pour l'utilisation dans Observable.
 
 
 * <2026-07-12 dim.> Aide-memoire des comptes d'illustration

@@ -220,3 +220,19 @@ document.querySelectorAll(".legend-toggle").forEach((button) => {
     if (legend) legend.hidden = !expanded;
   });
 });
+
+document.querySelectorAll("[data-copy-target]").forEach((button) => {
+  const target = document.getElementById(button.dataset.copyTarget);
+  const status = document.querySelector("[data-copy-status]");
+  if (!target) return;
+  button.addEventListener("click", async () => {
+    const value = "value" in target ? target.value : target.textContent;
+    try {
+      await navigator.clipboard.writeText(value || "");
+      if (status) status.textContent = `${button.dataset.copyLabel || "Contenu"} copié.`;
+    } catch (_error) {
+      if ("select" in target) target.select();
+      if (status) status.textContent = "Copie automatique impossible. Sélectionnez puis copiez le contenu.";
+    }
+  });
+});
