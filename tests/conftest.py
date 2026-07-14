@@ -20,7 +20,9 @@ from work.services import set_primary_supervisor, week_start_for
 
 @pytest.fixture
 def unit(db) -> OrganizationUnit:
-    return OrganizationUnit.objects.create(code="IT", name="Service IT")
+    return OrganizationUnit.objects.create(
+        code="IT", short_name="IT", long_name="Service informatique"
+    )
 
 
 @pytest.fixture
@@ -85,8 +87,8 @@ def assignment(
         employee=people["employee"],
         manager=people["manager"],
         start_date=monday,
-        due_date=calendar.due_date_for(monday, Decimal("5.00")),
-        estimated_work_days=Decimal("5.00"),
+        due_date=calendar.due_date_for(monday, Decimal("5.0")),
+        estimated_work_days=Decimal("5.0"),
         calendar=calendar,
         status="active",
     )

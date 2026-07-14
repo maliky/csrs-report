@@ -28,6 +28,7 @@ from work.services import (
     record_progress,
     reporting_period,
     team_tree,
+    validate_completion,
     visible_activities,
     week_start_for,
 )
@@ -37,8 +38,8 @@ from work.services import (
 def test_model_rejects_divergent_schedule_and_rounds_fractional_workload(
     assignment: TaskAssignment,
 ) -> None:
-    expected = due_date_for(assignment.start_date, Decimal("2.50"), assignment.calendar)
-    assignment.estimated_work_days = Decimal("2.50")
+    expected = due_date_for(assignment.start_date, Decimal("2.5"), assignment.calendar)
+    assignment.estimated_work_days = Decimal("2.5")
     assignment.due_date = expected
     assignment.full_clean()
     assignment.due_date += timedelta(days=1)
@@ -52,7 +53,7 @@ def test_creation_form_accepts_due_or_workload_and_normalizes_both(
 ) -> None:
     start = week_start_for(timezone.localdate())
     calendar = WorkCalendar.objects.get(is_default=True)
-    due = calendar.due_date_for(start, Decimal("3.00"))
+    due = calendar.due_date_for(start, Decimal("3.0"))
     common = {
         "title": "Classer les justificatifs",
         "description": "Ranger les pieces du mois.",
@@ -67,14 +68,34 @@ def test_creation_form_accepts_due_or_workload_and_normalizes_both(
         calendar=calendar,
     )
     assert from_due.is_valid(), from_due.errors
-    assert from_due.cleaned_data["estimated_work_days"] == Decimal("3.00")
+    assert from_due.cleaned_data["estimated_work_days"] == Decimal("3.0")
     from_workload = AssignmentCreateForm(
-        {**common, "estimated_work_days": "2.50", "schedule_source": "workload"},
+        {**common, "estimated_work_days": "2.5", "schedule_source": "workload"},
         manager=people["manager"],
         calendar=calendar,
     )
     assert from_workload.is_valid(), from_workload.errors
     assert from_workload.cleaned_data["due_date"] == due
+
+    without_action = AssignmentCreateForm(
+        {
+            **common,
+            "action": "",
+            "start_date": start.strftime("%d/%m/%Y"),
+            "estimated_work_days": "2.5",
+            "schedule_source": "workload",
+        },
+        manager=people["manager"],
+        calendar=calendar,
+    )
+    assert without_action.is_valid(), without_action.errors
+    assert without_action.cleaned_data["action"] is None
+
+    unbound = AssignmentCreateForm(manager=people["manager"], calendar=calendar)
+    html = unbound.as_p()
+    assert 'placeholder="jj/mm/aaaa"' in html
+    assert f'value="{start:%d/%m/%Y}"' in html
+    assert 'name="estimated_work_days" value="5"' in html
 
 
 @pytest.mark.django_db
@@ -82,7 +103,7 @@ def test_calendar_version_is_retained_by_existing_assignment(
     assignment: TaskAssignment,
 ) -> None:
     old_calendar = assignment.calendar
-    changed_day = old_calendar.due_date_for(assignment.start_date, Decimal("1.00"))
+    changed_day = old_calendar.due_date_for(assignment.start_date, Decimal("1.0"))
     new_calendar = WorkCalendar.objects.create(
         name="Cote d'Ivoire", version="version suivante"
     )
@@ -92,10 +113,8 @@ def test_calendar_version_is_retained_by_existing_assignment(
         name="Fermeture exceptionnelle",
         is_working_day=False,
     )
-    assert (
-        old_calendar.due_date_for(assignment.start_date, Decimal("1.00")) == changed_day
-    )
-    assert new_calendar.due_date_for(assignment.start_date, Decimal("1.00")) > changed_day
+    assert old_calendar.due_date_for(assignment.start_date, Decimal("1.0")) == changed_day
+    assert new_calendar.due_date_for(assignment.start_date, Decimal("1.0")) > changed_day
     assignment.refresh_from_db()
     assert assignment.calendar == old_calendar
 
@@ -108,6 +127,8 @@ def test_task_codes_are_normalized_and_sequential(
     second = next_task_code(action, 2026)
     assert first == "ACT-TEST-2026-0001"
     assert second == "ACT-TEST-2026-0002"
+    assert next_task_code(None, 2026) == "TACHE-2026-0001"
+    assert next_task_code(None, 2026) == "TACHE-2026-0002"
 
 
 @pytest.mark.django_db
@@ -170,12 +191,71 @@ def test_decreasing_completed_task_reopens_and_notifies_manager(
 
 
 @pytest.mark.django_db
+def test_same_day_correction_uses_locked_completed_state_and_reopens(
+    assignment: TaskAssignment, people: dict[str, User]
+) -> None:
+    """A stale caller cannot leave a sub-100 task tagged as completed."""
+    today = timezone.localdate()
+    record_progress(
+        user=people["employee"],
+        assignment=assignment,
+        entry_date=today,
+        percentage=100,
+        note="Travail annonce comme termine.",
+        blocked=False,
+    )
+    stale_assignment = TaskAssignment.objects.get(pk=assignment.pk)
+    assignment.refresh_from_db()
+    validate_completion(people["manager"], assignment)
+
+    record_progress(
+        user=people["employee"],
+        assignment=stale_assignment,
+        entry_date=today,
+        percentage=85,
+        note="Une verification impose de reprendre le travail.",
+        blocked=False,
+    )
+
+    assignment.refresh_from_db()
+    assert assignment.status == AssignmentStatus.ACTIVE
+    assert assignment.completed_at is None
+    assert assignment.progress_entries.get(entry_date=today).percentage == 85
+    assert visible_activities(assignment).filter(kind=ActivityKind.REOPENED).exists()
+    assert NotificationDelivery.objects.filter(
+        recipient=people["manager"], event_type="task_reopened"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_completion_validation_rechecks_that_current_progress_is_100(
+    assignment: TaskAssignment, people: dict[str, User]
+) -> None:
+    assignment.progress_entries.create(
+        entry_date=timezone.localdate(),
+        percentage=85,
+        author=people["employee"],
+    )
+    TaskAssignment.objects.filter(pk=assignment.pk).update(
+        status=AssignmentStatus.AWAITING_VALIDATION
+    )
+    assignment.refresh_from_db()
+
+    with pytest.raises(ValidationError, match="100 %"):
+        validate_completion(people["manager"], assignment)
+
+    assignment.refresh_from_db()
+    assert assignment.status == AssignmentStatus.AWAITING_VALIDATION
+    assert assignment.completed_at is None
+
+
+@pytest.mark.django_db
 def test_daily_rows_are_real_carried_and_stop_at_completion(
     assignment: TaskAssignment, people: dict[str, User]
 ) -> None:
     monday = assignment.start_date
-    first = assignment.calendar.due_date_for(monday, Decimal("1.00"))
-    third = assignment.calendar.due_date_for(monday, Decimal("3.00"))
+    first = assignment.calendar.due_date_for(monday, Decimal("1.0"))
+    third = assignment.calendar.due_date_for(monday, Decimal("3.0"))
     assignment.progress_entries.create(
         entry_date=first, percentage=25, author=people["employee"]
     )
@@ -184,7 +264,7 @@ def test_daily_rows_are_real_carried_and_stop_at_completion(
     )
     rows = daily_progress_rows(assignment, today=third)
     by_day = {row.day: row for row in rows}
-    second = assignment.calendar.due_date_for(monday, Decimal("2.00"))
+    second = assignment.calendar.due_date_for(monday, Decimal("2.0"))
     assert by_day[monday].percentage == 0
     assert by_day[monday].observed is False
     assert by_day[first].percentage == 25
@@ -261,8 +341,8 @@ def test_progress_json_observed_points_are_exactly_the_recorded_history(
         assignment.start_date, assignment.estimated_work_days
     )
     assignment.save(update_fields=["start_date", "due_date"])
-    first = assignment.calendar.due_date_for(assignment.start_date, Decimal("1.00"))
-    second = assignment.calendar.due_date_for(assignment.start_date, Decimal("3.00"))
+    first = assignment.calendar.due_date_for(assignment.start_date, Decimal("1.0"))
+    second = assignment.calendar.due_date_for(assignment.start_date, Decimal("3.0"))
     assignment.progress_entries.create(
         entry_date=first,
         percentage=15,
@@ -312,11 +392,25 @@ def test_assignment_create_generates_action_code(
         description="Controler les pieces.",
         action=action,
         start_date=start,
-        due_date=calendar.due_date_for(start, Decimal("2.00")),
-        estimated_work_days=Decimal("2.00"),
+        due_date=calendar.due_date_for(start, Decimal("2.0")),
+        estimated_work_days=Decimal("2.0"),
         calendar=calendar,
     )
     assert assignment.task.code == f"{action.code}-{start.year}-0001"
+
+    unclassified = create_assignment_for_user(
+        manager=people["manager"],
+        employee=people["employee"],
+        title="Organiser une activite ponctuelle",
+        description="Aucune classification institutionnelle requise.",
+        action=None,
+        start_date=start,
+        due_date=calendar.due_date_for(start, Decimal("1.5")),
+        estimated_work_days=Decimal("1.5"),
+        calendar=calendar,
+    )
+    assert unclassified.task.action is None
+    assert unclassified.task.code == f"TACHE-{start.year}-0001"
 
 
 def test_month_period_uses_french_month_name() -> None:

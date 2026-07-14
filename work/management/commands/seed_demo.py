@@ -28,7 +28,11 @@ class Command(BaseCommand):
         today = timezone.localdate()
         monday = week_start_for(today)
         unit, _ = OrganizationUnit.objects.get_or_create(
-            code="IT-DEMO", defaults={"name": "Service IT — Demonstration"}
+            code="IT-DEMO",
+            defaults={
+                "short_name": "IT demonstration",
+                "long_name": "Service IT — Demonstration",
+            },
         )
         manager = self.ensure_user("responsable.demo@example.invalid", "Awa", "Manager")
         observer = self.ensure_user(
@@ -76,8 +80,8 @@ class Command(BaseCommand):
                 "start_date": monday,
                 "due_date": WorkCalendar.objects.get(
                     pk=default_work_calendar_id()
-                ).due_date_for(monday, Decimal("3.00")),
-                "estimated_work_days": Decimal("3.00"),
+                ).due_date_for(monday, Decimal("3.0")),
+                "estimated_work_days": Decimal("3.0"),
                 "calendar_id": default_work_calendar_id(),
                 "status": AssignmentStatus.ACTIVE,
             },

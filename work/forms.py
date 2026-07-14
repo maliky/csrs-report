@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
 from typing import Any, cast
 
@@ -27,7 +27,37 @@ from work.services import (
 
 
 class DateInput(forms.DateInput):
-    input_type = "date"
+    """French date input with an unambiguous visible and submitted value."""
+
+    input_type = "text"
+
+    def __init__(self, attrs: dict[str, object] | None = None) -> None:
+        defaults: dict[str, object] = {
+            "placeholder": "jj/mm/aaaa",
+            "inputmode": "numeric",
+            "maxlength": 10,
+            "data-date-input": "",
+        }
+        defaults.update(attrs or {})
+        super().__init__(attrs=defaults, format="%d/%m/%Y")
+
+
+class WorkloadInput(forms.NumberInput):
+    """Render integer or one-decimal workloads without trailing zeroes."""
+
+    def __init__(self, attrs: dict[str, object] | None = None) -> None:
+        defaults: dict[str, object] = {"step": "0.1", "inputmode": "decimal"}
+        defaults.update(attrs or {})
+        super().__init__(attrs=defaults)
+
+    def format_value(self, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        try:
+            normalized = Decimal(str(value)).quantize(Decimal("0.1"))
+        except InvalidOperation:
+            return str(value)
+        return format(normalized.normalize(), "f")
 
 
 def default_calendar() -> WorkCalendar:
@@ -53,6 +83,9 @@ def setup_schedule_fields(form: forms.BaseForm, calendar: WorkCalendar) -> None:
     form.fields["due_date"].widget.attrs["data-schedule-due"] = ""
     form.fields["estimated_work_days"].widget.attrs["data-schedule-workload"] = ""
     form.fields["start_date"].widget.attrs["data-schedule-start"] = ""
+    for field_name in ("start_date", "due_date"):
+        date_field = cast(forms.DateField, form.fields[field_name])
+        date_field.input_formats = ["%d/%m/%Y", "%Y-%m-%d"]
 
 
 def clean_schedule(
@@ -94,18 +127,20 @@ class AssignmentCreateForm(forms.Form):
         label="Description", widget=forms.Textarea(attrs={"rows": 4})
     )
     employee = forms.ModelChoiceField(label="Collaborateur", queryset=User.objects.none())
-    action = forms.ModelChoiceField(
-        label="Action institutionnelle",
-        queryset=InstitutionalAction.objects.filter(active=True),
-        required=True,
-    )
     start_date = forms.DateField(label="Debut", widget=DateInput)
     due_date = forms.DateField(label="Echeance", widget=DateInput, required=False)
     estimated_work_days = forms.DecimalField(
         label="Charge estimee (jours ouvres)",
-        min_value=Decimal("0.01"),
-        decimal_places=2,
+        min_value=Decimal("0.1"),
+        decimal_places=1,
         required=False,
+        widget=WorkloadInput,
+    )
+    action = forms.ModelChoiceField(
+        label="Action institutionnelle (facultative)",
+        queryset=InstitutionalAction.objects.filter(active=True),
+        required=False,
+        help_text="Classification optionnelle dans le plan d'action institutionnel.",
     )
 
     def __init__(
@@ -128,9 +163,9 @@ class AssignmentCreateForm(forms.Form):
         while not self.calendar.is_working_day(monday):
             monday = date.fromordinal(monday.toordinal() + 1)
         self.fields["start_date"].initial = monday
-        self.fields["estimated_work_days"].initial = Decimal("5.00")
+        self.fields["estimated_work_days"].initial = Decimal("5.0")
         self.fields["due_date"].initial = due_date_for(
-            monday, Decimal("5.00"), self.calendar
+            monday, Decimal("5.0"), self.calendar
         )
 
     def clean(self) -> dict[str, object]:
@@ -172,18 +207,20 @@ class AssignmentEditForm(forms.Form):
     description = forms.CharField(
         label="Description", widget=forms.Textarea(attrs={"rows": 4})
     )
-    action = forms.ModelChoiceField(
-        label="Action institutionnelle",
-        queryset=InstitutionalAction.objects.filter(active=True),
-        required=True,
-    )
     start_date = forms.DateField(label="Debut", widget=DateInput)
     due_date = forms.DateField(label="Echeance", widget=DateInput, required=False)
     estimated_work_days = forms.DecimalField(
         label="Charge estimee (jours ouvres)",
-        min_value=Decimal("0.01"),
-        decimal_places=2,
+        min_value=Decimal("0.1"),
+        decimal_places=1,
         required=False,
+        widget=WorkloadInput,
+    )
+    action = forms.ModelChoiceField(
+        label="Action institutionnelle (facultative)",
+        queryset=InstitutionalAction.objects.filter(active=True),
+        required=False,
+        help_text="Classification optionnelle dans le plan d'action institutionnel.",
     )
 
     def __init__(
@@ -214,15 +251,16 @@ class ProposalForm(forms.ModelForm):
         fields = (
             "title",
             "description",
-            "action",
             "start_date",
             "due_date",
             "estimated_work_days",
+            "action",
         )
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "start_date": DateInput(),
             "due_date": DateInput(),
+            "estimated_work_days": WorkloadInput(),
         }
 
     def __init__(
@@ -235,7 +273,10 @@ class ProposalForm(forms.ModelForm):
         self.calendar = calendar or default_calendar()
         self.instance.calendar = self.calendar
         setup_schedule_fields(self, self.calendar)
-        self.fields["action"].required = True
+        self.fields["action"].label = "Action institutionnelle (facultative)"
+        self.fields[
+            "action"
+        ].help_text = "Classification optionnelle dans le plan d'action institutionnel."
 
     def clean(self) -> dict[str, object]:
         cleaned = super().clean() or {}

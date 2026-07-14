@@ -3,14 +3,17 @@
 from django.contrib import admin
 from django.forms import ModelForm
 from django.http import HttpRequest
+from django.core.exceptions import PermissionDenied
 from simple_history.admin import SimpleHistoryAdmin
 
+from accounts.models import User
 from work.models import (
     ActionPlan,
     Holiday,
     InstitutionalAction,
     NotificationDelivery,
     OrganizationUnit,
+    OrganizationUnitLink,
     ProgressEntry,
     ReportingLine,
     StrategicPlan,
@@ -21,7 +24,7 @@ from work.models import (
     WorkCalendar,
     WorkCalendarDay,
 )
-from work.services import set_primary_supervisor
+from work.services import record_progress, set_primary_supervisor
 
 
 @admin.register(ReportingLine)
@@ -80,8 +83,41 @@ class ProgressEntryAdmin(SimpleHistoryAdmin):
     list_display = ("assignment", "entry_date", "percentage", "blocked", "author")
     list_filter = ("blocked", "entry_date")
 
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: ProgressEntry,
+        form: ModelForm,
+        change: bool,
+    ) -> None:
+        """Route administrative corrections through the audited domain service."""
+        del form, change
+        if not isinstance(request.user, User):
+            raise PermissionDenied
+        saved = record_progress(
+            user=request.user,
+            assignment=obj.assignment,
+            entry_date=obj.entry_date,
+            percentage=obj.percentage,
+            note=obj.note,
+            blocked=obj.blocked,
+        )
+        obj.pk = saved.pk
 
-admin.site.register(OrganizationUnit)
+
+@admin.register(OrganizationUnit)
+class OrganizationUnitAdmin(admin.ModelAdmin):
+    list_display = ("code", "short_name", "long_name", "active")
+    list_filter = ("active",)
+    search_fields = ("code", "short_name", "long_name")
+
+
+@admin.register(OrganizationUnitLink)
+class OrganizationUnitLinkAdmin(admin.ModelAdmin):
+    list_display = ("supervisor_service", "collaborator_service")
+    autocomplete_fields = ("supervisor_service", "collaborator_service")
+
+
 admin.site.register(StrategicPlan)
 admin.site.register(ActionPlan)
 admin.site.register(InstitutionalAction)

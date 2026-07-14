@@ -11,6 +11,7 @@ from work.models import (
     ActivityKind,
     InstitutionalAction,
     OrganizationUnit,
+    OrganizationUnitLink,
     ProgressEntry,
     ReportingLine,
     TaskAssignment,
@@ -52,7 +53,7 @@ def test_projection_uses_baseline_then_observed_velocity(
         author=people["employee"],
     )
     initial = remaining_projection(assignment)
-    assert initial.baseline_days == Decimal("4.00")
+    assert initial.baseline_days == Decimal("4.0")
     assert initial.observed_days is None
     ProgressEntry.objects.create(
         assignment=assignment,
@@ -61,8 +62,8 @@ def test_projection_uses_baseline_then_observed_velocity(
         author=people["employee"],
     )
     projected = remaining_projection(assignment)
-    assert projected.baseline_days == Decimal("3.00")
-    assert projected.observed_days == Decimal("6.00")
+    assert projected.baseline_days == Decimal("3.0")
+    assert projected.observed_days == Decimal("6.0")
 
 
 @pytest.mark.django_db
@@ -139,6 +140,37 @@ def test_reporting_line_rejects_hierarchy_cycle(unit: OrganizationUnit) -> None:
     )
     with pytest.raises(ValidationError, match="boucle"):
         reverse.full_clean()
+
+
+@pytest.mark.django_db
+def test_service_links_are_separate_and_reject_hierarchy_cycles(
+    unit: OrganizationUnit,
+) -> None:
+    finance = OrganizationUnit.objects.create(
+        code="FIN-TEST",
+        short_name="Finances",
+        long_name="Service des finances",
+    )
+    accounting = OrganizationUnit.objects.create(
+        code="CPT-TEST",
+        short_name="Comptabilite",
+        long_name="Service de la comptabilite",
+    )
+    OrganizationUnitLink.objects.create(
+        supervisor_service=unit,
+        collaborator_service=finance,
+    )
+    OrganizationUnitLink.objects.create(
+        supervisor_service=finance,
+        collaborator_service=accounting,
+    )
+
+    cycle = OrganizationUnitLink(
+        supervisor_service=accounting,
+        collaborator_service=unit,
+    )
+    with pytest.raises(ValidationError, match="boucle"):
+        cycle.full_clean()
 
 
 @pytest.mark.django_db
@@ -240,8 +272,8 @@ def test_root_user_can_manage_and_validate_personal_assignment(
         employee=root,
         manager=root,
         start_date=timezone.localdate(),
-        due_date=calendar.due_date_for(timezone.localdate(), Decimal("2.00")),
-        estimated_work_days=Decimal("2.00"),
+        due_date=calendar.due_date_for(timezone.localdate(), Decimal("2.0")),
+        estimated_work_days=Decimal("2.0"),
         calendar=calendar,
     )
     assert can_self_assign(root)
@@ -269,9 +301,9 @@ def test_reporting_period_prefers_calendar_month_and_navigates() -> None:
 
 
 def test_workload_breakdown_uses_one_proportional_calculation() -> None:
-    workload = workload_breakdown(Decimal("8.00"), 35)
-    assert workload.completed_days == Decimal("2.80")
-    assert workload.remaining_days == Decimal("5.20")
+    workload = workload_breakdown(Decimal("8.0"), 35)
+    assert workload.completed_days == Decimal("2.8")
+    assert workload.remaining_days == Decimal("5.2")
     assert workload.completed_days + workload.remaining_days == workload.total_days
 
 
@@ -281,9 +313,9 @@ def test_deadline_levels_and_profile_overrun(
 ) -> None:
     assignment.start_date = timezone.localdate() - timedelta(days=14)
     assignment.due_date = assignment.calendar.due_date_for(
-        assignment.start_date, Decimal("5.00")
+        assignment.start_date, Decimal("5.0")
     )
-    assignment.estimated_work_days = Decimal("5.00")
+    assignment.estimated_work_days = Decimal("5.0")
     assignment.save(update_fields=["start_date", "due_date", "estimated_work_days"])
     assignment.progress_entries.create(
         entry_date=timezone.localdate() - timedelta(days=12),

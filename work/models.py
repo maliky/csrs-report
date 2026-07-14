@@ -18,18 +18,82 @@ from simple_history.models import HistoricalRecords
 class OrganizationUnit(models.Model):
     """A service, department, or nested organizational unit."""
 
-    name = models.CharField("nom", max_length=180)
+    long_name = models.CharField("nom long", max_length=180)
+    short_name = models.CharField("nom court", max_length=80)
     code = models.CharField("code", max_length=32, unique=True)
-    parent = models.ForeignKey(
-        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="children"
-    )
     active = models.BooleanField("active", default=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["long_name"]
 
     def __str__(self) -> str:
-        return self.name
+        return self.long_name
+
+
+class OrganizationUnitLink(models.Model):
+    """A directed dependency from a supervising service to a collaborator."""
+
+    supervisor_service = models.ForeignKey(
+        OrganizationUnit,
+        on_delete=models.PROTECT,
+        related_name="collaborator_links",
+    )
+    collaborator_service = models.ForeignKey(
+        OrganizationUnit,
+        on_delete=models.PROTECT,
+        related_name="supervisor_links",
+    )
+
+    class Meta:
+        ordering = [
+            "supervisor_service__code",
+            "collaborator_service__code",
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(supervisor_service=models.F("collaborator_service")),
+                name="organization_unit_link_distinct_services",
+            ),
+            models.UniqueConstraint(
+                fields=["supervisor_service", "collaborator_service"],
+                name="unique_organization_unit_link",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.supervisor_service.code} → {self.collaborator_service.code}"
+
+    def clean(self) -> None:
+        """Reject a directed link that would introduce a service cycle."""
+        super().clean()
+        if not self.supervisor_service_id or not self.collaborator_service_id:
+            return
+        if self.supervisor_service_id == self.collaborator_service_id:
+            raise ValidationError("Un service ne peut pas dependre de lui-meme.")
+        links = OrganizationUnitLink.objects.all()
+        if self.pk:
+            links = links.exclude(pk=self.pk)
+        edges: dict[int, set[int]] = {}
+        for supervisor_id, collaborator_id in links.values_list(
+            "supervisor_service_id", "collaborator_service_id"
+        ):
+            edges.setdefault(supervisor_id, set()).add(collaborator_id)
+        frontier = [self.collaborator_service_id]
+        visited: set[int] = set()
+        while frontier:
+            service_id = frontier.pop()
+            if service_id == self.supervisor_service_id:
+                raise ValidationError(
+                    "Ce lien creerait une boucle dans la hierarchie des services."
+                )
+            if service_id in visited:
+                continue
+            visited.add(service_id)
+            frontier.extend(edges.get(service_id, ()))
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
 
 
 class ReportingLine(models.Model):
@@ -138,7 +202,11 @@ class TaskCodeSequence(models.Model):
     """Transactional counter used to generate task codes per action and year."""
 
     action = models.ForeignKey(
-        InstitutionalAction, on_delete=models.PROTECT, related_name="code_sequences"
+        InstitutionalAction,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="code_sequences",
     )
     year = models.PositiveSmallIntegerField("annee")
     next_value = models.PositiveIntegerField("prochain numero", default=1)
@@ -146,8 +214,15 @@ class TaskCodeSequence(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["action", "year"], name="one_task_sequence_per_action_year"
-            )
+                fields=["action", "year"],
+                condition=Q(action__isnull=False),
+                name="one_task_sequence_per_action_year",
+            ),
+            models.UniqueConstraint(
+                fields=["year"],
+                condition=Q(action__isnull=True),
+                name="one_unclassified_task_sequence_per_year",
+            ),
         ]
 
 
@@ -272,6 +347,8 @@ class Task(models.Model):
     description = models.TextField("description")
     action = models.ForeignKey(
         InstitutionalAction,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="tasks",
     )
@@ -314,8 +391,8 @@ class TaskAssignment(models.Model):
     estimated_work_days = models.DecimalField(
         "charge estimee en jours",
         max_digits=7,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal("0.01"))],
+        decimal_places=1,
+        validators=[MinValueValidator(Decimal("0.1"))],
     )
     status = models.CharField(
         "etat",
@@ -379,7 +456,9 @@ class TaskProposal(models.Model):
     )
     title = models.CharField("nom court", max_length=180)
     description = models.TextField("description")
-    action = models.ForeignKey(InstitutionalAction, on_delete=models.PROTECT)
+    action = models.ForeignKey(
+        InstitutionalAction, null=True, blank=True, on_delete=models.PROTECT
+    )
     calendar = models.ForeignKey(
         WorkCalendar,
         on_delete=models.PROTECT,
@@ -389,7 +468,7 @@ class TaskProposal(models.Model):
     start_date = models.DateField("debut")
     due_date = models.DateField("echeance")
     estimated_work_days = models.DecimalField(
-        "charge estimee en jours", max_digits=7, decimal_places=2
+        "charge estimee en jours", max_digits=7, decimal_places=1
     )
     status = models.CharField(
         max_length=16, choices=ProposalStatus.choices, default=ProposalStatus.SUBMITTED
@@ -470,6 +549,26 @@ class ProgressEntry(models.Model):
 
     def __str__(self) -> str:
         return f"{self.assignment}: {self.percentage}% ({self.entry_date})"
+
+
+class ProgressSeriesCache(models.Model):
+    """Rebuildable JSON projection used only to accelerate chart reads."""
+
+    assignment = models.OneToOneField(
+        TaskAssignment,
+        on_delete=models.CASCADE,
+        related_name="progress_series_cache",
+    )
+    schema_version = models.PositiveSmallIntegerField(default=1)
+    through_date = models.DateField("serie calculee jusqu'au")
+    payload = models.JSONField(default=list)
+    generated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["assignment_id"]
+
+    def __str__(self) -> str:
+        return f"Cache progression {self.assignment_id} au {self.through_date}"
 
 
 class ActivityKind(models.TextChoices):

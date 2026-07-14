@@ -14,7 +14,7 @@ from typing import Iterable, Iterator, TypeAlias, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -165,6 +165,15 @@ class TeamNode:
 
 
 @dataclass(frozen=True)
+class TeamNodeOverview:
+    """Lightweight hierarchy node that never calculates chart series."""
+
+    employee: User
+    task_count: int
+    children: tuple["TeamNodeOverview", ...]
+
+
+@dataclass(frozen=True)
 class WeeklyTrendPoint:
     """Mean employee progress at one week-end within a reporting period."""
 
@@ -222,12 +231,22 @@ class AssignmentSnapshot:
 
     assignment: TaskAssignment
     percentage: int
+    status: str
+    status_label: str
     progress_delta: int
     projection: Projection
     workload: WorkloadBreakdown
     deadline_level: DeadlineLevel
     latest: ProgressEntry | None
     comments: tuple[TaskActivity, ...]
+
+
+@dataclass(frozen=True)
+class ActivityFeedItem:
+    """One visible activity paired with the author's service short name."""
+
+    activity: TaskActivity
+    actor_short_name: str
 
 
 def week_start_for(day: date) -> date:
@@ -317,7 +336,7 @@ def due_date_for(start: date, workload: Decimal, calendar: WorkCalendar) -> date
 
 def workload_for(start: date, due: date, calendar: WorkCalendar) -> Decimal:
     """Calculate the whole working-day duration represented by a due date."""
-    return Decimal(calendar.workdays_between(start, due)).quantize(Decimal("0.01"))
+    return Decimal(calendar.workdays_between(start, due)).quantize(Decimal("0.1"))
 
 
 def iter_calendar_days(start: date, end: date) -> Iterator[date]:
@@ -344,6 +363,16 @@ def daily_progress_rows(
     )
 
 
+def progress_series_end_date(assignment: TaskAssignment, today: date) -> date:
+    """Return the last calendar day represented by an assignment series."""
+    end = (
+        min(today, assignment.completed_at.date())
+        if assignment.completed_at is not None
+        else today
+    )
+    return max(assignment.start_date, end)
+
+
 def daily_progress_rows_from_entries(
     assignment: TaskAssignment,
     progress_entries: Iterable[ProgressEntry],
@@ -364,11 +393,7 @@ def daily_progress_rows_from_entries(
         Calendar-day rows with work status and carried values marked unobserved.
 
     """
-    if assignment.completed_at is not None:
-        end = min(today, assignment.completed_at.date())
-    else:
-        end = today
-    end = max(assignment.start_date, end)
+    end = progress_series_end_date(assignment, today)
     entries = {
         item.entry_date: item
         for item in sorted(
@@ -405,9 +430,9 @@ def daily_progress_rows_from_entries(
                 planned_work_days=assignment.estimated_work_days,
                 elapsed_work_days=elapsed,
                 remaining_schedule_days=max(
-                    Decimal("0.00"), assignment.estimated_work_days - elapsed_decimal
+                    Decimal("0.0"), assignment.estimated_work_days - elapsed_decimal
                 ),
-                overdue_days=max(Decimal("0.00"), elapsed_decimal - due_offset),
+                overdue_days=max(Decimal("0.0"), elapsed_decimal - due_offset),
                 percentage=percentage,
                 observed=entry is not None,
             )
@@ -424,13 +449,34 @@ def current_progress(assignment: TaskAssignment, until: date | None = None) -> i
     return entry.percentage if entry else 0
 
 
+def effective_assignment_status(status: str, percentage: int) -> str:
+    """Return a user-visible status coherent with the latest progression.
+
+    Args:
+        status: Persisted ``TaskAssignment`` status.
+        percentage: Latest progress known for the requested reporting boundary.
+
+    Returns:
+        ``active`` instead of an impossible ``completed`` status below 100 percent.
+
+    """
+    if status == AssignmentStatus.COMPLETED and percentage < 100:
+        return AssignmentStatus.ACTIVE
+    return status
+
+
+def assignment_status_label(status: str) -> str:
+    """Return the French label for a normalized assignment status."""
+    return str(dict(AssignmentStatus.choices)[status])
+
+
 def workload_breakdown(total_days: Decimal, percentage: int) -> WorkloadBreakdown:
     """Split a workload proportionally using one shared calculation."""
     bounded = max(0, min(100, percentage))
     completed = (total_days * Decimal(bounded) / Decimal(100)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
+        Decimal("0.1"), rounding=ROUND_HALF_UP
     )
-    remaining = (total_days - completed).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    remaining = (total_days - completed).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
     return WorkloadBreakdown(total_days, completed, remaining)
 
 
@@ -438,7 +484,7 @@ def deadline_level(
     assignment: TaskAssignment, *, on_day: date, percentage: int
 ) -> DeadlineLevel:
     """Classify deadline urgency using 50, 75 and 90 percent schedule thresholds."""
-    if assignment.status == AssignmentStatus.COMPLETED or percentage == 100:
+    if percentage == 100:
         return DeadlineLevel.COMPLETED
     if on_day > assignment.due_date:
         return DeadlineLevel.OVERDUE
@@ -462,11 +508,18 @@ def deadline_level(
 
 
 def task_progress_series(
-    assignment: TaskAssignment, period: ReportingPeriod
+    assignment: TaskAssignment,
+    period: ReportingPeriod,
+    *,
+    daily_rows: Iterable[DailyProgressRow] | None = None,
 ) -> TaskProgressSeries:
     """Build a task profile from the same real daily series as the JSON route."""
     today = timezone.localdate()
-    rows = daily_progress_rows(assignment, today=today)
+    rows = (
+        tuple(daily_rows)
+        if daily_rows is not None
+        else daily_progress_rows(assignment, today=today)
+    )
     points = [
         ProgressPoint(
             row.elapsed_work_days,
@@ -481,7 +534,7 @@ def task_progress_series(
     current_offset = points[-1].workday_offset if points else 0
     planned = assignment.estimated_work_days
     elapsed = Decimal(current_offset)
-    displayed = max(Decimal(ceil(planned)), elapsed, Decimal("1.00"))
+    displayed = max(Decimal(ceil(planned)), elapsed, Decimal("1.0"))
     latest = (
         assignment.progress_entries.filter(entry_date__lte=effective_end)
         .order_by("-entry_date", "-updated_at")
@@ -494,7 +547,7 @@ def task_progress_series(
         observation_count=sum(point.observed for point in points),
         planned_days=planned,
         displayed_days=displayed,
-        overrun_days=max(Decimal("0.00"), elapsed - Decimal(ceil(planned))),
+        overrun_days=max(Decimal("0.0"), elapsed - Decimal(ceil(planned))),
         percentage=percentage,
         workload=workload_breakdown(planned, percentage),
         action_key=assignment.task.action.code
@@ -521,7 +574,7 @@ def remaining_projection(
     current = entries[-1].percentage if entries else 0
     baseline = (
         assignment.estimated_work_days * Decimal(100 - current) / Decimal(100)
-    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    ).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
     observed: Decimal | None = None
     distinct: list[ProgressEntry] = []
     for entry in entries:
@@ -538,9 +591,9 @@ def remaining_projection(
         if elapsed > 0 and gained > 0 and last.percentage < 100:
             observed = (
                 Decimal(100 - last.percentage) * Decimal(elapsed) / Decimal(gained)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            ).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         elif last.percentage == 100:
-            observed = Decimal("0.00")
+            observed = Decimal("0.0")
     return Projection(current, baseline, observed)
 
 
@@ -710,13 +763,54 @@ def visible_activities(assignment: TaskAssignment) -> QuerySet[TaskActivity]:
     )
 
 
+def activity_feed(assignment: TaskAssignment) -> tuple[ActivityFeedItem, ...]:
+    """Build the dated task feed with one short service label per author.
+
+    Args:
+        assignment: Task assignment whose visible, non-superseded events are read.
+
+    Returns:
+        Reverse-chronological events enriched without changing their audit rows.
+
+    """
+    activities = tuple(visible_activities(assignment).order_by("-occurred_at", "-pk"))
+    actor_ids = {activity.actor_id for activity in activities}
+    lines_by_actor: dict[int, list[ReportingLine]] = {}
+    for line in (
+        ReportingLine.objects.filter(employee_id__in=actor_ids)
+        .select_related("unit")
+        .order_by("-is_primary", "-start_date", "-pk")
+    ):
+        lines_by_actor.setdefault(line.employee_id, []).append(line)
+
+    def short_name(activity: TaskActivity) -> str:
+        event_day = timezone.localtime(activity.occurred_at).date()
+        for line in lines_by_actor.get(activity.actor_id, []):
+            if line.start_date <= event_day and (
+                line.end_date is None or line.end_date >= event_day
+            ):
+                return line.unit.short_name
+        return (
+            activity.actor.login_alias.upper()
+            if activity.actor.login_alias
+            else activity.actor.position or str(activity.actor)
+        )
+
+    return tuple(
+        ActivityFeedItem(activity=activity, actor_short_name=short_name(activity))
+        for activity in activities
+    )
+
+
 @transaction.atomic
-def next_task_code(action: InstitutionalAction, year: int) -> str:
-    """Allocate ``ACTION-YEAR-0001`` safely under concurrent creation."""
+def next_task_code(action: InstitutionalAction | None, year: int) -> str:
+    """Allocate ``ACTION-YEAR-0001`` or ``TACHE-YEAR-0001`` transactionally."""
     sequence, _created = TaskCodeSequence.objects.select_for_update().get_or_create(
         action=action, year=year, defaults={"next_value": 1}
     )
-    normalized_action = slugify(action.code).upper()[:30].rstrip("-")
+    normalized_action = (
+        slugify(action.code).upper()[:30].rstrip("-") if action else "TACHE"
+    )
     value = sequence.next_value
     candidate = f"{normalized_action}-{year}-{value:04d}"
     while Task.objects.filter(code=candidate).exists():
@@ -734,7 +828,7 @@ def create_assignment_for_user(
     employee: User,
     title: str,
     description: str,
-    action: InstitutionalAction,
+    action: InstitutionalAction | None,
     start_date: date,
     due_date: date,
     estimated_work_days: Decimal,
@@ -813,6 +907,11 @@ def record_progress(
     blocked: bool,
 ) -> ProgressEntry:
     """Create or correct one daily progress entry under the correction rules."""
+    assignment = (
+        TaskAssignment.objects.select_for_update()
+        .select_related("employee", "manager", "task")
+        .get(pk=assignment.pk)
+    )
     employee_edit = user == assignment.employee
     manager_edit = can_manage_assignment(user, assignment)
     if not employee_edit and not manager_edit:
@@ -828,6 +927,7 @@ def record_progress(
         raise ValidationError(
             "Une note est obligatoire pour une regression ou un point d'attention."
         )
+    was_completed = assignment.status == AssignmentStatus.COMPLETED
     existing = ProgressEntry.objects.filter(
         assignment=assignment, entry_date=entry_date
     ).first()
@@ -865,7 +965,6 @@ def record_progress(
         progress_entry=entry,
         supersedes=previous_activity,
     )
-    was_completed = assignment.status == AssignmentStatus.COMPLETED
     if was_completed and percentage == 100:
         pass
     elif percentage == 100:
@@ -897,9 +996,16 @@ def record_progress(
 
 @transaction.atomic
 def validate_completion(user: User, assignment: TaskAssignment) -> None:
+    assignment = (
+        TaskAssignment.objects.select_for_update()
+        .select_related("employee", "manager")
+        .get(pk=assignment.pk)
+    )
     ensure_manage(user, assignment)
     if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
         raise ValidationError("Cette tache n'est pas en attente de validation.")
+    if current_progress(assignment) != 100:
+        raise ValidationError("Une tache doit etre realisee a 100 % avant validation.")
     assignment.status = AssignmentStatus.COMPLETED
     assignment.completed_at = timezone.now()
     assignment.save(update_fields=["status", "completed_at"])
@@ -1048,8 +1154,15 @@ def period_assignments(
     return (
         TaskAssignment.objects.filter(employee=employee, start_date__lte=period.end)
         .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
-        .select_related("task", "employee", "manager", "task__action")
-        .prefetch_related("progress_entries", "activities__actor")
+        .select_related(
+            "task",
+            "employee",
+            "manager",
+            "task__action",
+            "calendar",
+            "progress_series_cache",
+        )
+        .prefetch_related("calendar__days", "progress_entries", "activities__actor")
     )
 
 
@@ -1064,6 +1177,7 @@ def assignment_snapshot(
     )
     before = current_progress(assignment, period.start - timedelta(days=1))
     current = latest.percentage if latest else 0
+    status = effective_assignment_status(assignment.status, current)
     comments = tuple(
         visible_activities(assignment)
         .filter(
@@ -1077,6 +1191,8 @@ def assignment_snapshot(
     return AssignmentSnapshot(
         assignment=assignment,
         percentage=current,
+        status=status,
+        status_label=assignment_status_label(status),
         progress_delta=current - before,
         projection=remaining_projection(assignment, period.end),
         workload=workload,
@@ -1093,7 +1209,7 @@ def summarize_employee(employee: User, monday: date) -> EmployeeSummary:
     sunday = monday + timedelta(days=6)
     assignments = list(weekly_assignments(employee, monday))
     if not assignments:
-        zero = Decimal("0.00")
+        zero = Decimal("0.0")
         return EmployeeSummary(employee, 0, zero, zero, zero, zero, 0, 0, 0)
     percentages = [current_progress(item, sunday) for item in assignments]
     projections = [
@@ -1106,7 +1222,7 @@ def summarize_employee(employee: User, monday: date) -> EmployeeSummary:
         .first()
         for item in assignments
     ]
-    remaining_total = sum(projections, Decimal("0.00"))
+    remaining_total = sum(projections, Decimal("0.0"))
 
     def quantize(value: int | float) -> Decimal:
         return Decimal(str(value)).quantize(Decimal("0.01"))
@@ -1117,7 +1233,7 @@ def summarize_employee(employee: User, monday: date) -> EmployeeSummary:
         mean_progress=quantize(mean(percentages)),
         median_progress=quantize(median(percentages)),
         remaining_total=remaining_total,
-        remaining_mean=(remaining_total / len(assignments)).quantize(Decimal("0.01")),
+        remaining_mean=(remaining_total / len(assignments)).quantize(Decimal("0.1")),
         blocked_count=sum(1 for entry in latest_entries if entry and entry.blocked),
         late_count=sum(
             1
@@ -1139,16 +1255,26 @@ def summarize_employee(employee: User, monday: date) -> EmployeeSummary:
     )
 
 
-def summarize_employee_period(employee: User, period: ReportingPeriod) -> EmployeeSummary:
+def summarize_employee_period(
+    employee: User,
+    period: ReportingPeriod,
+    *,
+    assignments: Iterable[TaskAssignment] | None = None,
+    include_task_series: bool = True,
+) -> EmployeeSummary:
     """Aggregate one employee over a week or calendar month."""
-    assignments = list(period_assignments(employee, period))
-    if not assignments:
-        zero = Decimal("0.00")
+    period_items = (
+        list(assignments)
+        if assignments is not None
+        else list(period_assignments(employee, period))
+    )
+    if not period_items:
+        zero = Decimal("0.0")
         return EmployeeSummary(employee, 0, zero, zero, zero, zero, 0, 0, 0, zero, ())
-    snapshots = [assignment_snapshot(item, period) for item in assignments]
+    snapshots = [assignment_snapshot(item, period) for item in period_items]
     percentages = [item.percentage for item in snapshots]
     remaining = [item.workload.remaining_days for item in snapshots]
-    total = sum(remaining, Decimal("0.00"))
+    total = sum(remaining, Decimal("0.0"))
 
     def decimal_mean(values: Iterable[int]) -> Decimal:
         return Decimal(str(mean(values))).quantize(Decimal("0.01"))
@@ -1156,7 +1282,7 @@ def summarize_employee_period(employee: User, period: ReportingPeriod) -> Employ
     trend: list[WeeklyTrendPoint] = []
     cursor = min(period.start + timedelta(days=6), period.end)
     while cursor <= period.end:
-        visible = [item for item in assignments if item.start_date <= cursor]
+        visible = [item for item in period_items if item.start_date <= cursor]
         if visible:
             trend.append(
                 WeeklyTrendPoint(
@@ -1168,14 +1294,18 @@ def summarize_employee_period(employee: User, period: ReportingPeriod) -> Employ
             break
         cursor = min(cursor + timedelta(days=7), period.end)
 
-    series = tuple(task_progress_series(item, period) for item in assignments)
+    series = (
+        tuple(task_progress_series(item, period) for item in period_items)
+        if include_task_series
+        else ()
+    )
     return EmployeeSummary(
         employee=employee,
-        task_count=len(assignments),
+        task_count=len(period_items),
         mean_progress=decimal_mean(percentages),
         median_progress=Decimal(str(median(percentages))).quantize(Decimal("0.01")),
         remaining_total=total,
-        remaining_mean=(total / len(assignments)).quantize(Decimal("0.01")),
+        remaining_mean=(total / len(period_items)).quantize(Decimal("0.1")),
         blocked_count=sum(1 for item in snapshots if item.latest and item.latest.blocked),
         late_count=sum(
             1
@@ -1232,6 +1362,49 @@ def team_tree(manager: User, period: ReportingPeriod) -> tuple[TeamNode, ...]:
     return build(manager.pk, frozenset({manager.pk}))
 
 
+def team_tree_overview(
+    manager: User, period: ReportingPeriod
+) -> tuple[TeamNodeOverview, ...]:
+    """Build hierarchy headers and task counts without reading progress series."""
+    lines = list(
+        active_lines(period.end)
+        .filter(is_primary=True)
+        .select_related("employee")
+        .order_by("employee__position", "employee__email")
+    )
+    edges: dict[int, list[User]] = {}
+    employee_ids: set[int] = set()
+    for line in lines:
+        edges.setdefault(line.supervisor_id, []).append(line.employee)
+        employee_ids.add(line.employee_id)
+    task_counts = {
+        item["employee_id"]: item["task_count"]
+        for item in TaskAssignment.objects.filter(
+            employee_id__in=employee_ids,
+            start_date__lte=period.end,
+        )
+        .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
+        .values("employee_id")
+        .annotate(task_count=Count("pk"))
+    }
+
+    def build(parent_id: int, visited: frozenset[int]) -> tuple[TeamNodeOverview, ...]:
+        nodes: list[TeamNodeOverview] = []
+        for employee in edges.get(parent_id, []):
+            if employee.pk in visited:
+                continue
+            nodes.append(
+                TeamNodeOverview(
+                    employee=employee,
+                    task_count=int(task_counts.get(employee.pk, 0)),
+                    children=build(employee.pk, visited | {employee.pk}),
+                )
+            )
+        return tuple(nodes)
+
+    return build(manager.pk, frozenset({manager.pk}))
+
+
 def direct_employee_summaries(manager: User, monday: date) -> list[EmployeeSummary]:
     """Build one summary row per direct employee, never one table per employee."""
     employees = User.objects.filter(
@@ -1244,7 +1417,12 @@ def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
     """Return all assignments currently visible through the organization graph."""
     queryset = (
         TaskAssignment.objects.select_related(
-            "task", "task__action", "employee", "manager", "calendar"
+            "task",
+            "task__action",
+            "employee",
+            "manager",
+            "calendar",
+            "progress_series_cache",
         )
         .prefetch_related("calendar__days", "progress_entries")
         .order_by("employee_id", "task__code", "pk")
