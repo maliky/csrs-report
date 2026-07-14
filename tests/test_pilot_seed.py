@@ -247,6 +247,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         )
     )
     User.objects.exclude(login_alias__in=retained_aliases).delete()
+    TaskProposal.objects.filter(
+        title="Formaliser le tableau de priorités"
+    ).update(title="Formaliser le tableau de priorites")
     monkeypatch.delenv("CSRS_DEMO_PASSWORD")
     monkeypatch.delenv("CSRS_ADMIN_PASSWORD")
 
@@ -263,6 +266,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     )
     assert TaskAssignment.objects.filter(task__code__startswith="PIL-").count() == 73
     assert TaskProposal.objects.count() == 42
+    assert not TaskProposal.objects.filter(
+        title="Formaliser le tableau de priorites"
+    ).exists()
     assert ProgressSeriesCache.objects.count() == 73
 
 

@@ -280,6 +280,16 @@ PROGRESS_MESSAGES = (
     "Le résultat attendu a été finalisé et transmis",
 )
 
+PILOT_PROPOSAL_TITLES = (
+    "Optimiser le classement des livrables",
+    "Mettre en place un point quotidien",
+    "Formaliser le tableau de priorités",
+)
+
+LEGACY_PROPOSAL_TITLES = {
+    "Formaliser le tableau de priorités": "Formaliser le tableau de priorites",
+}
+
 
 def pilot_service_short_name(user: User) -> str:
     """Return the configured service abbreviation for one pilot user."""
@@ -910,21 +920,21 @@ class Command(BaseCommand):
     ) -> None:
         specs = (
             (
-                "Optimiser le classement des livrables",
+                PILOT_PROPOSAL_TITLES[0],
                 ProposalStatus.ACCEPTED,
                 start + timedelta(weeks=1),
                 accepted_assignment,
                 "",
             ),
             (
-                "Mettre en place un point quotidien",
+                PILOT_PROPOSAL_TITLES[1],
                 ProposalStatus.REJECTED,
                 start + timedelta(weeks=6),
                 None,
                 "Priorité reportée au prochain cycle de planification.",
             ),
             (
-                "Formaliser le tableau de priorités",
+                PILOT_PROPOSAL_TITLES[2],
                 ProposalStatus.SUBMITTED,
                 current + timedelta(days=1),
                 None,
@@ -933,8 +943,12 @@ class Command(BaseCommand):
         )
         for subject, status, created_day, linked, reason in specs:
             title = subject
+            legacy_title = LEGACY_PROPOSAL_TITLES.get(subject)
+            title_filter = Q(title__startswith=subject)
+            if legacy_title:
+                title_filter |= Q(title__startswith=legacy_title)
             proposal = TaskProposal.objects.filter(
-                employee=employee, title__startswith=subject
+                title_filter, employee=employee
             ).first()
             created = proposal is None
             if proposal is None:
@@ -1039,7 +1053,10 @@ class Command(BaseCommand):
             raise CommandError("La repartition des scenarios est incoherente.")
         if assignments.filter(estimated_work_days__lte=Decimal("10.0")).count() != 65:
             raise CommandError("La repartition des charges courtes est incoherente.")
-        proposals = TaskProposal.objects.filter(employee__login_alias__in=aliases)
+        proposals = TaskProposal.objects.filter(
+            employee__login_alias__in=aliases,
+            title__in=PILOT_PROPOSAL_TITLES,
+        )
         if proposals.count() != 42:
             raise CommandError("Le nombre de propositions d'illustration n'est pas 42.")
         if ProgressSeriesCache.objects.filter(assignment__in=assignments).count() != 73:
