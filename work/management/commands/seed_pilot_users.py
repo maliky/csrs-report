@@ -26,6 +26,7 @@ from work.models import (
     OrganizationUnit,
     OrganizationUnitLink,
     ProgressEntry,
+    ProgressSeriesCache,
     ProposalStatus,
     ReportingLine,
     StrategicPlan,
@@ -301,8 +302,36 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--replace-legacy", action="store_true")
         parser.add_argument("--reset-password", action="store_true")
+        parser.add_argument("--refresh-scenarios-only", action="store_true")
 
     def handle(self, *args: object, **options: object) -> None:
+        dry_run = cast(bool, options["dry_run"])
+        refresh_only = cast(bool, options["refresh_scenarios_only"])
+        if refresh_only:
+            if cast(bool, options["replace_legacy"]) or cast(
+                bool, options["reset_password"]
+            ):
+                raise CommandError(
+                    "--refresh-scenarios-only est incompatible avec le remplacement "
+                    "des comptes ou des mots de passe."
+                )
+            users = self._existing_scenario_users()
+            with transaction.atomic():
+                self._ensure_scenarios(users)
+                self._warm_progress_caches()
+                self._assert_scenario_counts(tuple(users))
+                self._assert_session_access(users)
+                if dry_run:
+                    transaction.set_rollback(True)
+            suffix = " (simulation annulee)" if dry_run else ""
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"scenarios actualises: users={len(users)} assignments=73 "
+                    f"proposals=42{suffix}"
+                )
+            )
+            return
+
         demo_password = os.environ.get("CSRS_DEMO_PASSWORD", "")
         admin_password = os.environ.get("CSRS_ADMIN_PASSWORD", "")
         reset_password = cast(bool, options["reset_password"])
@@ -314,7 +343,6 @@ class Command(BaseCommand):
         credentials_required = reset_password or len(existing_aliases) != len(PILOT_USERS)
         if credentials_required or demo_password or admin_password:
             self._validate_passwords(demo_password, admin_password)
-        dry_run = cast(bool, options["dry_run"])
         with transaction.atomic():
             if cast(bool, options["replace_legacy"]):
                 self._delete_legacy_demo()
@@ -341,6 +369,25 @@ class Command(BaseCommand):
                 + suffix
             )
         )
+
+    @staticmethod
+    def _existing_scenario_users() -> dict[str, User]:
+        """Load only accounts required to regenerate the 73 pilot assignments."""
+        aliases = {"dg"}
+        for spec in PILOT_USERS:
+            if spec.manager_alias and spec.has_scenarios:
+                aliases.add(spec.alias)
+                aliases.add(spec.manager_alias)
+        users = {
+            cast(str, user.login_alias): user
+            for user in User.objects.filter(login_alias__in=aliases)
+        }
+        missing = sorted(aliases - users.keys())
+        if missing:
+            raise CommandError(
+                "Comptes requis absents pour les scenarios: " + ", ".join(missing)
+            )
+        return users
 
     @staticmethod
     def _validate_passwords(demo_password: str, admin_password: str) -> None:
@@ -980,6 +1027,11 @@ class Command(BaseCommand):
             raise CommandError(
                 "Le nombre de rattachements d'illustration est incoherent."
             )
+        Command._assert_scenario_counts(tuple(aliases))
+
+    @staticmethod
+    def _assert_scenario_counts(aliases: tuple[str, ...]) -> None:
+        """Verify scenario data independently from optional extension accounts."""
         assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
         if assignments.count() != 73:
             raise CommandError("Le nombre d'affectations d'illustration n'est pas 73.")
@@ -990,6 +1042,8 @@ class Command(BaseCommand):
         proposals = TaskProposal.objects.filter(employee__login_alias__in=aliases)
         if proposals.count() != 42:
             raise CommandError("Le nombre de propositions d'illustration n'est pas 42.")
+        if ProgressSeriesCache.objects.filter(assignment__in=assignments).count() != 73:
+            raise CommandError("Le nombre de caches de progression n'est pas 73.")
         if TaskActivity.objects.filter(assignment__in=assignments).count() < 100:
             raise CommandError("L'historique d'observations est incomplet.")
 

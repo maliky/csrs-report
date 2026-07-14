@@ -40,4 +40,10 @@ Le chargeur de population fictive exige temporairement deux variables distinctes
 
 `./scripts/seed_pilot.sh` demande les deux mots de passe sans les afficher, exécute d'abord une simulation annulée puis le chargement réel. L'option `--dry-run-only` limite le script à la simulation.
 
+Pour actualiser uniquement les 73 scénarios et leurs conversations sur une base où les 16 comptes historiques existent déjà, sans créer les comptes d'extension ni demander ou modifier un mot de passe :
+
+```bash
+docker-compose -p csrs -f compose.yml exec -T web python manage.py seed_pilot_users --refresh-scenarios-only
+```
+
 L'application écoute uniquement sur `127.0.0.1:18005`. Le modèle du vhost HTTPS se trouve dans `deploy/nginx/`. Les sauvegardes validées par `pg_restore --list` sont conservées localement pendant 14 jours dans un dossier ignoré par Git. Aucun secret ni donnée personnelle réelle ne doit être ajouté au dépôt ou aux données de démonstration.

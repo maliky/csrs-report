@@ -240,6 +240,31 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         for assignment in delayed_over_one_week
     )
 
+    retained_aliases = {spec.alias for spec in PILOT_USERS if spec.has_scenarios}
+    password_hashes = dict(
+        User.objects.filter(login_alias__in=retained_aliases).values_list(
+            "login_alias", "password"
+        )
+    )
+    User.objects.exclude(login_alias__in=retained_aliases).delete()
+    monkeypatch.delenv("CSRS_DEMO_PASSWORD")
+    monkeypatch.delenv("CSRS_ADMIN_PASSWORD")
+
+    call_command("seed_pilot_users", refresh_scenarios_only=True, verbosity=0)
+
+    assert User.objects.count() == len(retained_aliases) == 16
+    assert (
+        dict(
+            User.objects.filter(login_alias__in=retained_aliases).values_list(
+                "login_alias", "password"
+            )
+        )
+        == password_hashes
+    )
+    assert TaskAssignment.objects.filter(task__code__startswith="PIL-").count() == 73
+    assert TaskProposal.objects.count() == 42
+    assert ProgressSeriesCache.objects.count() == 73
+
 
 @pytest.mark.django_db
 def test_pilot_hierarchy_matches_revised_tree(monkeypatch) -> None:
