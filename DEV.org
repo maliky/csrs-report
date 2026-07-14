@@ -2,6 +2,300 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-14 mar. 04:44> petits details graphiques
+- une tache close ne se prolonge pas jusqu'a la date du jour.
+- Corriger les fautes d expressions dans les fils de discussion. pas necessaire de reproduire les faute de l ivoirien. utiliser les abbrevation des noms de services dans les textes.
+- Organiser les proposition par semain et par mois. meme navigation que les taches. mais garder les filtres En attente validees rejetees tous ... qui doivent restee appliquee meme si l on change de semaine ou de mois
+- mettre le bouton legende du graphique aussi au niveau des taches
+- dans les observations mettre l'auteur et la date avant le message
+- Pour les pastille cloturee avant achevement meme code couleur que terminee car cloturee est terminee.
+- Dans proposition du dg supprimer le bouton nouvlles proposition.
+- Dans proposition en general, nommer le boutton 'proposer une tache'
+
+nous avons deux types de graphique pour regarder la progression. la courbe et la barre.
+dans mes taches et dans taches utiliser la courbe avec la legende. retirer 4 saisies historiques. Les points pleins sont les saisies réelles; les points creux reportent la dernière valeur connue.' mettre chart-dates avant task-history-chart
+dans mon equipe
+
+- dans equipes supprimer les boutons 'supprimer toutes les taches' et les statics general sur toutes les taches.
+
+* <2026-07-13 lun. 22:41> Donnees d'illustration, equipe et connexion
+** Besoins confirmes
+
+- Les gros retards de plus d'une semaine doivent rester exceptionnels : deux ou trois au maximum dans toute la population.
+- Au moins une tache en gros retard doit finalement atteindre 100 %.
+- Les autres retards sont limites a un ou deux jours ouvres.
+- Une majorite des taches se termine exactement a l'echeance; une tache close ne prolonge jamais sa zone de retard jusqu'a la date du jour.
+- La plupart des taches sont realisables en dix jours ou moins, avec quelques exceptions credibles.
+- Les donnees couvrent les fins anticipees, les clotures hierarchiques, les retards ouverts ou termines et les reouvertures apres echeance.
+- Dans =equipe=, le conteneur =subteam= s'ouvre avec sa branche parente, mais les branches des collaborateurs restent repliees et ne chargent pas leur graphique.
+- Sur la page de connexion, le libelle anglais =Password= devient exactement =mot de passe=.
+
+** Repartition retenue
+
+Un gros retard correspond a plus de cinq jours ouvres apres l'echeance.
+
+| Situation                                            | Nombre |
+|------------------------------------------------------+--------|
+| Terminee exactement a l'echeance                    |     38 |
+| Terminee un ou deux jours ouvres avant               |      8 |
+| Cloturee par le superieur avant achevement           |      5 |
+| Terminee avec un ou deux jours ouvres de retard      |      7 |
+| Active et encore dans les delais                     |      7 |
+| Active avec un ou deux jours ouvres de retard        |      3 |
+| Rouverte apres echeance puis terminee                |      2 |
+| Rouverte apres echeance et encore active             |      1 |
+| Terminee a 100 % avec plus d'une semaine de retard   |      1 |
+| Active avec plus d'une semaine de retard             |      1 |
+| *Total*                                              |     73 |
+
+- 65 taches ont une charge comprise entre 2 et 10 jours.
+- 8 exceptions ont une charge comprise entre 12 et 20 jours.
+
+** Realisation
+
+- [X] Un catalogue fonctionnel type et deterministe construit les dates, charges, jalons, validations, clotures et reouvertures avec le calendrier de travail conserve par la tache.
+- [X] Les historiques contiennent de 2 a 6 progressions datees, avec des profils et des observations personnalises; aucune progression future n'est creee.
+- [X] Le statut, =completed_at=, la derniere progression et les activites =VALIDATED=, =CLOSED= et =REOPENED= restent coherents.
+- [X] L'echeance n'est plus acceptee puis ignoree par le chargeur : elle est toujours derivee de la date de debut, de la charge et du calendrier.
+- [X] Le rechargement detache d'abord les liens internes =supersedes= des activites =PIL-*= avant leur remplacement, sans affaiblir la protection d'audit des donnees normales.
+- [X] Les caches des graphiques sont reconstruits apres la population; les taches closes s'arretent a =completed_at= et seules les taches ouvertes en retard atteignent aujourd'hui.
+- [X] L'ouverture d'une =team-branch= ouvre son =subteam= direct, laisse les branches enfants repliees et ne charge que le profil explicitement ouvert. Le repli du parent referme ses descendants.
+- [X] =AliasAuthenticationForm= affiche =mot de passe= en conservant le champ masque et =autocomplete=current-password=.
+- [X] Aucun modele ni schema de base n'a du etre ajoute pour cette phase.
+
+** Verification et exploitation
+
+- [X] 75 tests serveur reussis, plus Selenium, Ruff, mypy et le controle de derive des migrations.
+- [X] Test de non-regression du rechargement avec une activite corrigee par =supersedes=.
+- [X] Sauvegarde PostgreSQL verifiee : =backups/csrs_20260713T232647Z.dump=.
+- [X] Services =web=, =notifier= et PostgreSQL reconstruits et sains; migrations et collecte des fichiers statiques reussies.
+- [X] Base publique verifiee : 73 affectations, 42 propositions, 73 caches, 38 fins a l'echeance, 65 charges courtes et exactement 2 gros retards.
+- [X] Tableau DG, =/equipe/= et detail de tache verifies en =200=; la tache =PIL-DG-01= est =active= a 50 %.
+- [X] HTTPS sert le libelle =mot de passe= et le JavaScript d'ouverture coordonnee des sous-equipes.
+
+** Limite d'exploitation conservee
+
+La regeneration publique a cible les 73 scenarios sur les 16 comptes deja actifs afin de ne pas modifier leurs mots de passe. Les 29 comptes d'extension de l'organigramme, qui n'ont pas de scenarios, restent a creer lors d'un chargement explicitement autorise avec =CSRS_DEMO_PASSWORD=; aucun mot de passe n'a ete invente ni conserve dans le depot.
+* <2026-07-13 lun. 22:33> Lisibilite des dates, charges, affectation et codes d'action
+** Besoins confirmes
+
+- Dans le detail d'une tache, afficher sur une meme ligne la date de debut, la date du jour et la fin prevue.
+- Afficher sur une seconde ligne la charge initiale, la charge realisee et la charge restante.
+- Supprimer les zeros decimaux inutiles : =24 jours= au lieu de =24,00 jours= et =4,5 jours= au lieu de =4,50 jours=.
+- Limiter partout la precision d'une charge au dixieme de jour; une valeur historique plus precise est arrondie au dixieme.
+- Lors d'une affectation ou d'une proposition, rendre l'action institutionnelle facultative et la placer apres les informations indispensables.
+- Afficher et accepter par defaut les dates de formulaire au format francais =jj/mm/aaaa=.
+- Rappeler la signification et l'origine des codes d'action comme =ACT-PLAN=.
+
+** Realisation de l'interface
+
+- [X] Deux groupes semantiques distincts alignent les trois dates puis les trois charges sur ordinateur; chaque groupe se replie verticalement sur telephone.
+- [X] Le stockage, les formulaires, les calculs de charge, les cartes, les graphiques et le JSON utilisent au maximum un chiffre decimal. Les valeurs entieres sont rendues sans =,0= final.
+- [X] La charge realisee reste une estimation proportionnelle : =charge initiale x progression / 100=. La charge restante est la difference avec la charge initiale; il ne s'agit pas d'un relevé d'heures ou de jours saisis.
+- [X] L'action de =Task= et =TaskProposal= est nullable. Une tache sans action recoit un code transactionnel =TACHE-ANNEE-0001=; une tache classee conserve =ACTION-ANNEE-0001=.
+- [X] Dans les formulaires, l'action facultative vient en dernier avec une aide discrete, sans marque obligatoire.
+- [X] Le champ de date visible utilise =jj/mm/aaaa= et accepte aussi l'ancien format ISO pour la compatibilite des clients existants; la synchronisation date-charge gere les deux formats.
+- [X] La migration =0012_optional_action_and_tenth_day_workload= arrondit les charges courantes et auditees au dixieme, modifie l'echelle en base et invalide les caches de graphiques.
+
+** Origine des codes d'action
+
+La chaine de rattachement est :
+
+#+begin_example
+Plan strategique
+  -> Plan d'action
+       -> Action institutionnelle
+            -> Tache
+#+end_example
+
+=ACT-PLAN= n'est donc pas le code du plan strategique et il n'en est pas derive automatiquement. C'est le code explicite de l'action institutionnelle *Planifier et coordonner*. Dans la population d'illustration, les cinq actions ci-dessous appartiennent au plan d'action =PA-PILOTE — Organisation et performance=, lui-meme rattache au plan strategique *Plan strategique institutionnel 2026-2028*.
+
+| Code action       | Action institutionnelle       |
+|-------------------+-------------------------------|
+| ACT-PLAN          | Planifier et coordonner       |
+| ACT-PRIORITES     | Executer les priorites        |
+| ACT-DOCUMENTATION | Fiabiliser la documentation   |
+| ACT-RESOLUTION    | Lever les points bloquants    |
+| ACT-LIVRABLES     | Finaliser les livrables       |
+
+Le code d'une tache reutilise ensuite ce prefixe, l'annee et une sequence transactionnelle, par exemple =ACT-PLAN-2026-0001=.
+
+** Verification
+
+- [X] Tests du regroupement des dates, des charges entieres ou decimales, de l'action facultative et des deux sequences de codes.
+- [X] 72 tests serveur, Ruff, mypy, controle des migrations et Selenium reussis.
+- [X] Migrations 0011 et 0012 appliquees sur une base existante puis dans le conteneur public; =web=, =notifier= et PostgreSQL actifs.
+- [X] Rendu public verifie sur =PIL-DG-01= : =18 jours=, =15,3 jours= realises et =2,7 jours= restants, sans precision au centieme.
+- [X] Formulaire public verifie avec dates =jj/mm/aaaa=, charge initiale =5= et action facultative.
+
+* <2026-07-13 lun. 22:31> Noms courts des services
+** Besoin confirme
+
+- Conserver le =code= technique stable et le =long_name= existant de chaque service.
+- Utiliser un =short_name= tres compact dans le fil d'activite, par exemple =daf= pour la Direction administrative et financiere.
+- Mettre a jour les lignes existantes de la base, sans regenerer les comptes ni les scenarios d'illustration.
+
+** Proposition retenue
+
+| Code technique | short_name             | long_name                                        |
+|----------------+------------------------+--------------------------------------------------|
+| CSRS-DEMO      | csrs                   | CSRS                                             |
+| DG             | dg                     | Direction generale                               |
+| DAF            | daf                    | Direction administrative et financiere           |
+| DRV            | drv                    | Direction de la valorisation et des expertises    |
+| DRD-DIR        | drd                    | Direction recherche et developpement              |
+| FIN            | finances               | Comptabilite, finances et caisse                  |
+| TSI            | tsi                    | Technologies et systemes d'information           |
+| FOR            | formation              | Formation et renforcement des capacites           |
+| VAL            | valorisation           | Valorisation et partenariats                      |
+| CT             | ct                     | Conseillers techniques                            |
+| RSE            | rse                    | Communication institutionnelle et RSE             |
+| GEI            | gei                    | Genre, equite et inclusion                        |
+| ETH            | ethique                | Ethique                                           |
+| SE             | suivi-evaluation       | Suivi et evaluation                               |
+| CG             | controle-gestion       | Controle de gestion                               |
+| RH             | rh                     | Ressources humaines et moyens generaux            |
+| I2A            | intendance             | Intendance, accueil et assistance                 |
+| ACH            | achats                 | Achats et approvisionnements                      |
+| DOC            | documentation          | Documentation et archives                         |
+| DRD            | recherche              | Coordination de la recherche scientifique         |
+| CLIN           | clinique               | Recherche clinique                                |
+| OBS            | observatoires          | Observatoires                                     |
+| LAB            | laboratoire            | Laboratoire central                               |
+| MIC            | microscopie            | Microscopie                                       |
+| AX-SAN         | sante                  | Axe sante                                         |
+| AX-ENV         | environnement          | Axe environnement                                 |
+| AX-SEC         | securite-alimentaire   | Axe securite alimentaire                          |
+| AX-SOC         | sciences-sociales      | Axe sciences sociales                             |
+| GLP            | glp                    | Bonnes pratiques de laboratoire                   |
+| PAT            | patrimoine             | Patrimoine et logistique                          |
+| STA            | stations               | Stations, bureaux et logements                    |
+| UAR            | appui-recherche        | Unite d'appui a la recherche                      |
+| UGT            | ressources-techniques  | Gestion technique des ressources                  |
+| CAP            | capitalisation         | Capitalisation et valorisation                    |
+| AX-BIO         | biodiversite           | Axe biodiversite                                  |
+| AX-AGR         | agriculture            | Axe agriculture et nutrition                      |
+| MG             | moyens-generaux        | Moyens generaux                                   |
+
+** Realisation
+
+- [X] La population versionnee utilise cette correspondance pour toute future initialisation.
+- [X] La migration =0011_compact_service_short_names= met a jour par =code= les services deja presents et laisse tout code local inconnu intact.
+- [X] Le retour de migration restaure le nom long comme nom court, conformement a l'etat cree par la migration 0010.
+- [X] Tests cibles reussis, migration appliquee au conteneur public et correspondances =dg=, =daf=, =finances=, =tsi=, =formation= et =valorisation= verifiees en base.
+
+* <2026-07-13 lun. 22:29> Export Observable reserve au developpement
+** Besoin confirme
+
+- Le lien =Observable= ne doit etre visible que pour le compte technique =dev=.
+- Masquer le lien ne suffit pas : la page et l'API doivent appliquer la meme autorisation cote serveur.
+
+** Realisation
+
+- [X] Le lien de navigation est rendu seulement pour le superutilisateur; =dev= est l'unique superutilisateur de la population d'illustration.
+- [X] La page =/observable/= renvoie =403= pour tout compte authentifie non developpeur.
+- [X] L'API refuse aussi un jeton signe appartenant a un compte inactif ou qui n'est plus superutilisateur.
+- [X] La documentation Org precise que =dev= est le seul compte autorise a generer et utiliser le jeton global.
+
+** Verification
+
+- [X] Tests cibles du lien, de la page, de la revocation du droit et de l'export global.
+- [X] Suite serveur et reconstruction du service web reussies; DG ne voit pas le lien et recoit =403=, tandis que =dev= voit le lien et recoit =200=.
+
+* <2026-07-13 lun. 22:05> Services, hierarchie et verification de l'interface
+** Etat existant verifie
+
+- La table Django =work_organizationunit= existait deja avec un =code=, un =name= et un =parent= direct. Les noms existants sont conserves; =name= est seulement renomme =long_name=.
+- La hierarchie des personnes reste portee par =ReportingLine=. Elle est distincte de la dependance entre services demandee ici.
+- Le conteneur public actif utilisait encore l'ancienne image : les branches d'equipe y etaient ouvertes par defaut et le graphique detaille n'utilisait pas encore le nouveau moteur calendaire commun.
+
+** Besoins confirmes
+
+- Conserver les services dans une table avec code, nom court et nom long.
+- Conserver les dependances hierarchiques dans une table de liens separee. Le lien =DG -> DAF= signifie que DAF est un service collaborateur de DG.
+- Conserver tous les noms de services deja choisis.
+- Dans le fil d'activite, commencer par date, heure, =short_name= du service, =Progression/Observation=, pourcentage eventuel, puis message.
+- Afficher les metadonnees et le message sur une ligne en grand ecran, puis les empiler uniquement sur telephone.
+- Sur le graphique d'une tache, l'axe X represente les dates calendaires. Les branches de personnes et de sous-equipes sont repliees au chargement.
+
+** Schema de donnees realise
+
+| Table Django                  | Champ                  | Role                                                        |
+|-------------------------------+------------------------+-------------------------------------------------------------|
+| =OrganizationUnit=           | =code=                 | Code stable et unique du service                            |
+| =OrganizationUnit=           | =short_name=           | Nom court utilise dans les interfaces compactes             |
+| =OrganizationUnit=           | =long_name=            | Nom existant du service, conserve sans remplacement         |
+| =OrganizationUnit=           | =active=               | Disponibilite administrative                                |
+| =OrganizationUnitLink=       | =supervisor_service=   | Service responsable a gauche de la relation                 |
+| =OrganizationUnitLink=       | =collaborator_service= | Service collaborateur a droite de la relation               |
+
+| Service responsable | Service collaborateur | Lecture                         |
+|---------------------+------------------------+---------------------------------|
+| DG                  | DAF                    | DAF collabore sous DG           |
+| DG                  | DRV                    | DRV collabore sous DG           |
+
+- [X] Unicite d'un lien et interdiction d'un lien d'un service vers lui-meme au niveau base.
+- [X] Detection applicative des cycles directs ou indirects avant sauvegarde.
+- [X] Migration reproductible des anciens =parent_id= vers la nouvelle table de liens, avec restauration inverse du premier parent en cas de retour de migration.
+- [X] Administration Django adaptee pour rechercher les trois noms et modifier les liens avec autocompletion.
+- [X] Population d'illustration adaptee sans changer les noms longs existants.
+
+** Interface et invariant d'etat
+
+- [X] Fil d'activite enrichi par le nom court du service de l'auteur, avec repli sur son alias lorsqu'aucun rattachement n'existe.
+- [X] Ordre : date, heure, =short_name=, =Progression/Observation=, pourcentage, message.
+- [X] Presentation sur une ligne en grand ecran et empilee sur telephone.
+- [X] Une progression inferieure a 100 % neutralise toujours le libelle et le style =Terminee=, y compris pour une ancienne ligne incoherente.
+- [X] Service de progression verrouille sur l'etat courant; validation refusee si la progression courante n'est pas exactement 100 %.
+- [X] Migration de reparation de toutes les taches terminees sous 100 %, avec evenement visible de remise en cours et invalidation du cache graphique.
+
+** Verification et exploitation
+
+- [X] Tests cibles des liens de services, cycles, fil d'activite, etat a 85 %, reparation des donnees et exports JSON.
+- [X] Suite serveur reussie : 71 tests; Selenium reussi sur le chargement paresseux, les sous-equipes repliees et le rendu D3.
+- [X] Conteneurs =web= et =notifier= reconstruits, migrations 0009 et 0010 appliquees, puis HTML public verifie sans branche =details= ouverte ni graphique d'equipe precalcule.
+
+* <2026-07-13 lun.> Equipe repliee, graphiques paresseux et cache persistant
+** Besoins confirmes
+
+- Dans =/equipe/=, toutes les personnes et toutes les sous-equipes sont repliees au chargement initial.
+- Les indicateurs detailles, les historiques et les graphiques d'une personne ne sont calcules qu'a l'ouverture de sa branche.
+- Les donnees derivees des graphiques sont conservees en base pour accelerer les lectures suivantes, sans remplacer =ProgressEntry= comme source canonique et auditable.
+- Une info-bulle de graphique doit toujours rester au-dessus des profils et details qui suivent.
+- Le langage visuel du prototype fourni dans =tmp/graphics.tgz= doit etre applique aux graphiques compacts d'equipe et au graphique detaille d'une tache.
+- Le contenu de =tmp/= reste local et exclu de Git.
+
+** Decisions d'architecture et d'interface
+
+- =ProgressSeriesCache= conserve, pour chaque =TaskAssignment=, un JSON versionne, sa date de fin et sa date de generation. Il s'agit d'une projection entierement reconstructible; aucune observation, note ou identite n'y est ajoutee.
+- Toute sauvegarde ou suppression d'une progression, toute modification d'une affectation et toute modification d'un jour du calendrier invalident la projection concernee. Une tache ouverte est egalement reconstruite lorsque la date courante depasse la date couverte par son cache.
+- La page d'equipe initiale ne charge que l'organigramme et le nombre de taches. La route authentifiee =/equipe/<id>/progressions.json= applique la visibilite hierarchique existante et renvoie le profil seulement apres ouverture.
+- Les graphiques detaille et compact partagent le meme moteur D3 et la meme serie journaliere. La courbe est en escalier, les points pleins sont observes, les points creux sont reportes, les jours non ouvres forment des bandes grises comprimees et le retard ouvert reste rose.
+- L'info-bulle est un element unique rattache directement au =body=, en position fixe avec un plan d'empilement eleve. Elle ne peut donc plus etre masquee par le detail de la tache suivante ni par le debordement d'une branche.
+- Le code de reference a ete extrait dans =tmp/graphics-reference/= et inspecte. Seules ses conventions utiles ont ete adaptees; son runtime Observable et ses fichiers generes ne sont pas integres a l'application.
+
+** Realisation
+
+- [X] Migration =0008_progressseriescache= et service fonctionnel type de lecture, validation, reconstruction et prechauffage du cache.
+- [X] Invalidation transactionnelle raccordee aux progressions, affectations et calendriers.
+- [X] Commande =python manage.py rebuild_progress_caches=, avec filtres =--assignment= et remise a zero =--clear=.
+- [X] Chargeur d'illustration adapte pour preconstruire les 73 caches apres regeneration de leurs historiques.
+- [X] Organigramme initial sans lecture de =ProgressEntry= ni de =ProgressSeriesCache=; personnes et sous-equipes sans attribut =open=.
+- [X] Chargement JSON a la premiere ouverture, message d'attente, reprise sur erreur et absence de nouveau calcul lors des ouvertures suivantes.
+- [X] Moteur D3 commun, axe calendaire pondere, jours non ouvres, courbe en escalier, points observes/reportes, reperes debut/aujourd'hui/fin prevue et navigation clavier.
+- [X] Detail des profils affiche dans le flux normal de la page; info-bulle globale verifiee en position fixe et au-dessus des contenus suivants.
+- [X] =tmp/= confirme ignore par Git; aucun fichier de l'archive extraite n'est suivi.
+
+** Verification
+
+- [X] Ruff, mypy et controle de derive des migrations reussis.
+- [X] 65 tests serveur reussis, dont cache reutilise, invalidations, changement de jour, tache terminee, commande de prechauffage, permissions et absence de requete d'historique au chargement initial.
+- [X] Selenium reussi : aucun SVG d'equipe avant ouverture, sous-equipe repliee, rendu D3 apres ouverture, info-bulle visible au-dessus de la page et graphiques detaille/compact utilisables.
+
+** Questions restantes
+
+- Aucune question bloquante. Le cache se remplit automatiquement a la lecture; la commande de prechauffage reste disponible apres une importation volumineuse ou une evolution future du schema JSON.
+
 * <2026-07-13 lun.> Jours ouvres et non ouvres dans les JSON
 ** Besoin confirme
 
@@ -38,7 +332,7 @@
 - [X] Service fonctionnel type pour construire le jeu de donnees avec prechargement des progressions et visibilite descendante sans limite de profondeur.
 - [X] Jeton signe horodate, rejet des jetons absents, invalides ou expires et rejet immediat d'un compte desactive.
 - [X] Route JSON globale, reponse CORS sans credentials, absence de cache et precontrole =OPTIONS=.
-- [X] Page responsive =/observable/=, lien de navigation, bouton de copie et avertissement contre la publication du jeton.
+- [X] Page responsive =/observable/=, lien de navigation reserve a =dev=, bouton de copie et avertissement contre la publication du jeton.
 - [X] Documentation d'utilisation et schema complet au format Org dans =docs/progression-json.org=.
 - [X] Tests des permissions globales, de la revocation hierarchique, des donnees exclues, du CORS, de l'expiration et du compte desactive.
 
