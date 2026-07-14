@@ -45,7 +45,10 @@ dans mon equipe
 - [X] 78 tests serveur reussis, dont les periodes de proposition, le JSON de barres, l'ordre des observations, les couleurs d'etat et les scenarios pilotes.
 - [X] Selenium verifie les courbes de cartes, les barres chargees a l'ouverture, l'absence des agregats, l'infobulle au premier plan, le responsive et l'arret d'une tache terminee a sa date de fin.
 - [X] Ruff, mypy, =git diff --check= et =makemigrations --check --dry-run= reussis; aucune migration supplementaire n'est necessaire.
-- [X] Aucun service, Nginx ou contenu utilisateur de la base publique n'a ete modifie dans cette phase.
+- [X] Sauvegarde PostgreSQL verifiee avant actualisation : =backups/csrs_20260714T054221Z.dump=.
+- [X] Les conteneurs =web= et =notifier= ont ete reconstruits; migrations, fichiers statiques, Gunicorn et HTTPS sont sains. Nginx n'a pas ete modifie ni recharge.
+- [X] L'option =--refresh-scenarios-only= actualise les 73 affectations, 42 propositions, conversations et caches avec les comptes historiques requis, sans creer les comptes d'extension ni lire ou modifier un mot de passe.
+- [X] Le rapprochement accepte les anciens titres sans accent et les normalise sans doublon; les deux tentatives bloquees ont ete annulees integralement par leur transaction.
 
 * <2026-07-13 lun. 22:41> Donnees d'illustration, equipe et connexion
 ** Besoins confirmes
