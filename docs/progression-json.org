@@ -7,11 +7,11 @@
 Deux routes repondent a des usages distincts.
 
 - =GET /taches/<id>/progression.json= fournit l'historique d'une seule tache a une session CSRS connectee.
-- =GET /observable/progression.json= fournit toutes les taches que le detenteur d'un jeton temporaire peut actuellement consulter. Cette route est concue pour un chargement direct depuis Observable.
+- =GET /observable/progression.json= fournit toutes les taches au seul compte technique =dev=, au moyen d'un jeton temporaire. Cette route est concue pour un chargement direct depuis Observable.
 
 * Chargement global depuis Observable
 
-Apres connexion a CSRS, ouvrir =/observable/=, puis utiliser le bouton *Copier le code Observable*. La page genere un jeton signe valable 15 minutes par defaut. Le jeton est envoye dans l'en-tete =Authorization=, jamais dans l'URL et sans transmettre le cookie de session CSRS.
+Apres connexion a CSRS avec le compte technique =dev=, ouvrir =/observable/=, puis utiliser le bouton *Copier le code Observable*. Le lien et cette page ne sont pas disponibles pour les comptes metier. La page genere un jeton signe valable 15 minutes par defaut. Le jeton est envoye dans l'en-tete =Authorization=, jamais dans l'URL et sans transmettre le cookie de session CSRS.
 
 Le code fourni a cette forme :
 
@@ -38,7 +38,7 @@ tasks = csrs.tasks
 progress = csrs.progress
 #+end_src
 
-Le serveur recalcule la hierarchie a chaque requete. Une tache qui n'est plus visible ne reste donc pas accessible jusqu'a l'expiration du jeton. Un compte desactive est refuse immediatement.
+Le serveur reverifie a chaque requete que le detenteur du jeton est encore actif et superutilisateur. La suppression de ce droit ou la desactivation de =dev= invalide donc immediatement un jeton deja emis.
 
 * Schema global
 
@@ -95,6 +95,8 @@ La reponse separe les metadonnees, une ligne par affectation, et les series jour
 }
 #+end_src
 
+=action_code= vaut =null= lorsqu'une tache n'est pas rattachee a une action institutionnelle. Les champs de charge sont limites au dixieme de jour; une charge entiere reste serialisee comme un nombre JSON, par exemple =12.0=, et une charge fractionnaire comme =12.3=.
+
 =task_id= relie =tasks= et =progress=. =employee_id= permet un regroupement sans exporter le nom du collaborateur. La description, les notes, les observations, les auteurs, les adresses email et les telephones sont exclus.
 
 Chaque date calendaire apparait dans =progress=. Par exemple, la fete nationale du calendrier ivoirien est explicitement non ouvree :
@@ -112,7 +114,7 @@ Une saisie reelle porte =observed: true=. Un jour sans saisie reporte la dernier
 
 * Securite et CORS
 
-L'API globale accepte seulement un jeton signe de courte duree. Elle ne depend pas d'un cookie tiers et repond avec un CORS non authentifie par cookie. Le joker =Access-Control-Allow-Origin: *= s'applique uniquement a cette route : le jeton Bearer constitue l'autorisation et =credentials= ne doit pas etre ajoute au =fetch=.
+L'API globale accepte seulement un jeton signe de courte duree emis pour le compte technique =dev=. Elle ne depend pas d'un cookie tiers et repond avec un CORS non authentifie par cookie. Le joker =Access-Control-Allow-Origin: *= s'applique uniquement a cette route : le jeton Bearer constitue l'autorisation et =credentials= ne doit pas etre ajoute au =fetch=.
 
 Les reponses portent =Cache-Control: no-store=. Le jeton ne doit etre ni publie, ni committe, ni conserve dans un notebook public. Sa duree se regle avec =OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS=, qui vaut =900= par defaut.
 

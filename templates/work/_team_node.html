@@ -1,32 +1,32 @@
-{% load l10n %}
-<details class="team-branch" open>
+<details
+  class="team-branch"
+  data-team-profile-url="{% url 'team-member-progress-json' node.employee.pk %}?{{ period.query }}"
+  data-team-employee-url="{% url 'employee-detail' node.employee.pk %}?{{ period.query }}"
+>
   <summary>
-    <span><strong>{{ node.summary.employee }}</strong><small>{{ node.summary.employee.position }}</small></span>
-    <span>{{ node.summary.task_count }} tâche{{ node.summary.task_count|pluralize }}</span>
+    <span>
+      <strong>{{ node.employee }}</strong>
+      <small>{{ node.employee.position }}</small>
+    </span>
+    <span>{{ node.task_count }} tâche{{ node.task_count|pluralize }}</span>
   </summary>
   <div class="team-node-content">
-    <div class="team-node-heading">
-      <a href="{% url 'employee-detail' node.summary.employee.pk %}?{{ period.query }}">Voir les tâches de {{ node.summary.employee }}</a>
-      <dl class="stacked-stats">
-        <div><dt>Moyenne</dt><dd>{{ node.summary.mean_progress }} %</dd></div>
-        <div><dt>Médiane</dt><dd>{{ node.summary.median_progress }} %</dd></div>
-        <div><dt>Reste cumulé</dt><dd>{{ node.summary.remaining_total }} j</dd></div>
-        <div><dt>Reste moyen</dt><dd>{{ node.summary.remaining_mean }} j</dd></div>
-      </dl>
+    <div class="team-profile-content" data-team-profile-content>
+      <p class="team-profile-status" data-team-profile-status role="status">
+        Les indicateurs et graphiques seront chargés à l’ouverture.
+      </p>
     </div>
-    <div class="task-profiles">
-    <h3>Profil des tâches</h3>
-    {% for series in node.summary.task_series %}
-      <article class="task-profile task-profile-{{ series.deadline_level }}">
-        <button type="button" class="task-profile-toggle" aria-expanded="false">
-          <span class="task-profile-title">{{ series.assignment.task.title }}</span>
-          <span class="task-profile-chart" data-planned="{{ series.planned_days|unlocalize }}" data-displayed="{{ series.displayed_days|unlocalize }}" data-action="{{ series.action_key }}" data-percentage="{{ series.percentage }}" data-start="{{ series.assignment.start_date|date:'Y-m-d' }}" data-today="{{ series.today|date:'Y-m-d' }}" data-due="{{ series.assignment.due_date|date:'Y-m-d' }}" data-open="{% if series.assignment.status != 'completed' and series.assignment.status != 'closed_early' %}true{% else %}false{% endif %}" role="img" aria-label="{{ series.assignment.task.title }}, {{ series.percentage }} pour cent, {{ series.observation_count }} saisies historiques, début {{ series.assignment.start_date|date:'d/m/Y' }}, aujourd’hui {{ series.today|date:'d/m/Y' }}, fin prévue {{ series.assignment.due_date|date:'d/m/Y' }}">{% for point in series.points %}<i data-x="{{ point.workday_offset }}" data-y="{{ point.percentage }}" data-date="{{ point.entry_date|date:'Y-m-d' }}" data-observed="{{ point.observed|yesno:'true,false' }}"></i>{% endfor %}<span class="chart-fallback">{{ series.percentage }} % · {{ series.observation_count }} saisie{{ series.observation_count|pluralize }}</span></span>
-          <span class="task-markers" aria-label="Alertes">{% if series.blocked %}<b class="marker marker-blocked" title="Point d’attention">●</b>{% endif %}{% if series.late %}<b class="marker marker-late" title="Retard">▲</b>{% endif %}{% if series.missing_update %}<b class="marker marker-missing" title="Absence de mise à jour">○</b>{% endif %}</span>
-        </button>
-        <div class="task-profile-details" hidden><p><strong>{{ series.percentage }} %</strong> réalisé · {{ series.workload.remaining_days }} j restants · {{ series.planned_days }} j initialement</p><p>{{ series.observation_count }} saisie{{ series.observation_count|pluralize }} · Début {{ series.assignment.start_date|date:'d/m/Y' }} · Aujourd’hui {{ series.today|date:'d/m/Y' }} · Fin prévue {{ series.assignment.due_date|date:'d/m/Y' }}</p><a href="{% url 'assignment-detail' series.assignment.pk %}">Ouvrir la tâche</a></div>
-      </article>
-    {% empty %}<p>Aucune tâche sur cette période.</p>{% endfor %}
-    </div>
-    {% if node.children %}<div class="subteam"><h3>Sous-équipe</h3>{% for child in node.children %}{% include "work/_team_node.html" with node=child period=period %}{% endfor %}</div>{% endif %}
+    {% if node.children %}
+      <details class="subteam">
+        <summary>
+          Sous-équipe — {{ node.children|length }} collaborateur{{ node.children|length|pluralize }}
+        </summary>
+        <div class="subteam-content">
+          {% for child in node.children %}
+            {% include "work/_team_node.html" with node=child period=period %}
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
   </div>
 </details>

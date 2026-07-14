@@ -3,7 +3,7 @@
 {% block content %}
 <p><a href="{% url 'dashboard' %}">← Retour aux tâches</a></p>
 <div class="page-heading">
-  <div><span class="status status-{{ assignment.status }}">{{ assignment.get_status_display }}</span><h1>{{ assignment.task.title }}</h1></div>
+  <div><span class="status status-{{ display_status }}">{{ display_status_label }}</span><h1>{{ assignment.task.title }}</h1></div>
   <div><p>Échéance <strong>{{ assignment.due_date|date:"d/m/Y" }}</strong></p>{% if can_manage %}<a href="{% url 'assignment-edit' assignment.pk %}">Modifier la tâche</a>{% endif %}</div>
 </div>
 <section class="panel">
@@ -13,12 +13,12 @@
        data-planned="{{ assignment.estimated_work_days }}"
        data-action="{{ assignment.task.action.code }}"
        data-start="{{ assignment.start_date|date:'Y-m-d' }}"
-       data-open="{% if assignment.status != 'completed' and assignment.status != 'closed_early' %}true{% else %}false{% endif %}"
+       data-open="{% if display_is_open %}true{% else %}false{% endif %}"
        data-today="{{ today|date:'Y-m-d' }}"
        data-due="{{ assignment.due_date|date:'Y-m-d' }}"
        role="img"
+       tabindex="0"
        aria-label="Évolution historique de {{ assignment.task.title }}, du {{ assignment.start_date|date:'d/m/Y' }} au {{ assignment.due_date|date:'d/m/Y' }}, aujourd’hui {{ today|date:'d/m/Y' }}">
-    {% for row in progress_rows %}<i data-x="{{ row.elapsed_work_days }}" data-y="{{ row.percentage }}" data-date="{{ row.day|date:'Y-m-d' }}" data-observed="{{ row.observed|yesno:'true,false' }}"></i>{% endfor %}
     <p class="chart-fallback">Progression actuelle : {{ initial_progress }} %.</p>
   </div>
   <dl class="chart-dates" aria-label="Repères du graphique">
@@ -32,15 +32,19 @@
   <section class="panel">
     <h2>Détails</h2>
     <p>{{ assignment.task.description|linebreaksbr }}</p>
-    <dl class="facts">
-      <div><dt>Collaborateur</dt><dd>{{ assignment.employee }}</dd></div>
-      <div><dt>Responsable</dt><dd>{{ assignment.manager }}</dd></div>
+    <dl class="facts facts-inline facts-dates" aria-label="Dates de la tâche">
       <div><dt>Date de début</dt><dd>{{ assignment.start_date|date:"d/m/Y" }}</dd></div>
       <div><dt>Date du jour</dt><dd>{{ today|date:"d/m/Y" }}</dd></div>
       <div><dt>Fin prévue</dt><dd>{{ assignment.due_date|date:"d/m/Y" }}</dd></div>
-      <div><dt>Charge initiale</dt><dd>{{ assignment.estimated_work_days }} jours</dd></div>
-      <div><dt>Charge réalisée</dt><dd>{{ workload.completed_days }} jours</dd></div>
-      <div><dt>Charge restante</dt><dd>{{ workload.remaining_days }} jours</dd></div>
+    </dl>
+    <dl class="facts facts-inline facts-workload" aria-label="Charges de la tâche">
+      <div><dt>Charge initiale</dt><dd>{{ assignment.estimated_work_days|floatformat:"-1" }} jours</dd></div>
+      <div><dt>Charge réalisée</dt><dd>{{ workload.completed_days|floatformat:"-1" }} jours</dd></div>
+      <div><dt>Charge restante</dt><dd>{{ workload.remaining_days|floatformat:"-1" }} jours</dd></div>
+    </dl>
+    <dl class="facts">
+      <div><dt>Collaborateur</dt><dd>{{ assignment.employee }}</dd></div>
+      <div><dt>Responsable</dt><dd>{{ assignment.manager }}</dd></div>
       {% if assignment.task.action %}<div><dt>Action</dt><dd>{{ assignment.task.action }}</dd></div>{% endif %}
     </dl>
   </section>
@@ -70,7 +74,7 @@
     <button class="button" type="submit">{% if self_managed %}Poursuivre ma tâche{% else %}Demander une reprise{% endif %}</button>
   </form>
   {% endif %}
-  {% if assignment.status != 'completed' and assignment.status != 'closed_early' %}
+  {% if display_is_open %}
   <form method="post" action="{% url 'assignment-action' assignment.pk %}" class="stacked-form compact">
     {% csrf_token %}<input type="hidden" name="action" value="close">{{ reason_form.as_div }}
     <button class="button button-danger" type="submit">{% if self_managed %}Clôturer ma tâche avant achèvement{% else %}Clôturer avant achèvement{% endif %}</button>
@@ -80,8 +84,9 @@
 {% endif %}
 <section class="panel comments">
   <h2>Fil d’activité</h2>
-  {% for activity in activities %}
-    <article class="activity activity-{{ activity.kind }}"><p>{{ activity.message|linebreaksbr }}</p><footer>{{ activity.get_kind_display }} · {{ activity.actor }} · {{ activity.occurred_at|date:"d/m/Y H:i" }}{% if activity.percentage_after is not None %} · {{ activity.percentage_after }} %{% endif %}</footer></article>
+  {% for item in activities %}{% with activity=item.activity %}
+    <article class="activity activity-{{ activity.kind }}"><header class="activity-meta"><time datetime="{{ activity.occurred_at|date:'c' }}">{{ activity.occurred_at|date:"d/m/Y" }} · {{ activity.occurred_at|date:"H:i" }}</time> · {{ item.actor_short_name }} · {{ activity.get_kind_display }}{% if activity.percentage_after is not None %} · {{ activity.percentage_after }} %{% endif %}</header><p>{{ activity.message|linebreaksbr }}</p></article>
+  {% endwith %}
   {% empty %}<p>Aucune activité.</p>{% endfor %}
   {% if can_comment %}
   <form method="post" action="{% url 'comment-add' assignment.pk %}" class="stacked-form">

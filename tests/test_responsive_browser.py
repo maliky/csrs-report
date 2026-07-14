@@ -6,6 +6,7 @@ import pytest
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
 from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -15,12 +16,14 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from work.models import (
     ActionPlan,
+    ActivityKind,
     InstitutionalAction,
     OrganizationUnit,
     ProgressEntry,
     ReportingLine,
     StrategicPlan,
     Task,
+    TaskActivity,
     TaskAssignment,
     WorkCalendar,
     default_work_calendar_id,
@@ -65,8 +68,8 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             employee=self.user,
             manager=self.user,
             start_date=personal_start,
-            due_date=calendar.due_date_for(personal_start, Decimal("2.00")),
-            estimated_work_days=Decimal("2.00"),
+            due_date=calendar.due_date_for(personal_start, Decimal("2.0")),
+            estimated_work_days=Decimal("2.0"),
             calendar=calendar,
             status="active",
         )
@@ -76,11 +79,30 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             percentage=60,
             author=self.user,
         )
+        TaskActivity.objects.create(
+            assignment=self.assignment,
+            actor=self.user,
+            kind=ActivityKind.PROGRESS,
+            message="Controle de la mise en page du fil.",
+            percentage_after=60,
+        )
         member = User.objects.create_user("member@example.test")
-        unit = OrganizationUnit.objects.create(code="BROWSER", name="Equipe navigateur")
+        unit = OrganizationUnit.objects.create(
+            code="BROWSER",
+            short_name="Equipe navigateur",
+            long_name="Equipe utilisee par la verification navigateur",
+        )
         ReportingLine.objects.create(
             employee=member,
             supervisor=self.user,
+            unit=unit,
+            start_date=timezone.localdate(),
+            is_primary=True,
+        )
+        subordinate = User.objects.create_user("subordinate@example.test")
+        ReportingLine.objects.create(
+            employee=subordinate,
+            supervisor=member,
             unit=unit,
             start_date=timezone.localdate(),
             is_primary=True,
@@ -98,8 +120,8 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             employee=member,
             manager=self.user,
             start_date=team_start,
-            due_date=calendar.due_date_for(team_start, Decimal("5.00")),
-            estimated_work_days=Decimal("5.00"),
+            due_date=calendar.due_date_for(team_start, Decimal("5.0")),
+            estimated_work_days=Decimal("5.0"),
             calendar=calendar,
             status="active",
         )
@@ -133,13 +155,57 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".workload-chart svg"))
             )
+            assert not driver.find_elements(By.LINK_TEXT, "Observable")
+            driver.get(f"{self.live_server_url}/taches/nouvelle/")
+            start_input = driver.find_element(By.NAME, "start_date")
+            due_input = driver.find_element(By.NAME, "due_date")
+            workload_input = driver.find_element(By.NAME, "estimated_work_days")
+            action_input = driver.find_element(By.NAME, "action")
+            assert start_input.get_attribute("type") == "text"
+            assert len(start_input.get_attribute("value").split("/")) == 3
+            assert workload_input.get_attribute("value") == "5"
+            assert not action_input.get_attribute("required")
+            workload_input.clear()
+            workload_input.send_keys("2.5")
+            assert len(due_input.get_attribute("value").split("/")) == 3
             driver.get(f"{self.live_server_url}/equipe/")
+            assert not driver.find_elements(By.CSS_SELECTOR, "details[open]")
+            assert not driver.find_elements(By.CSS_SELECTOR, ".task-profile-chart svg")
+            top_branch = driver.find_element(By.CSS_SELECTOR, ".team-tree > .team-branch")
+            top_branch.find_element(By.CSS_SELECTOR, ":scope > summary").click()
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".task-profile-chart svg")
                 )
             )
+            assert driver.find_element(
+                By.CSS_SELECTOR, ".team-tree > .team-branch .subteam"
+            ).get_attribute("open")
+            child_branch = driver.find_element(
+                By.CSS_SELECTOR, ".team-tree > .team-branch .team-branch"
+            )
+            assert not child_branch.get_attribute("open")
+            child_branch.find_element(By.CSS_SELECTOR, ":scope > summary").click()
+            assert child_branch.get_attribute("open")
+            top_branch.find_element(By.CSS_SELECTOR, ":scope > summary").click()
+            assert not child_branch.get_attribute("open")
+            top_branch.find_element(By.CSS_SELECTOR, ":scope > summary").click()
+            assert driver.find_element(
+                By.CSS_SELECTOR, ".team-tree > .team-branch .subteam"
+            ).get_attribute("open")
+            assert not child_branch.get_attribute("open")
             assert driver.find_element(By.CSS_SELECTOR, ".chart-overrun-zone")
+            pointer_layer = driver.find_element(
+                By.CSS_SELECTOR, ".task-profile-chart .chart-pointer-layer"
+            )
+            ActionChains(driver).move_to_element(pointer_layer).perform()
+            tooltip = WebDriverWait(driver, 5).until(
+                EC.visibility_of_element_located(
+                    (By.CSS_SELECTOR, "body > .progress-chart-tooltip")
+                )
+            )
+            assert tooltip.value_of_css_property("position") == "fixed"
+            assert int(tooltip.value_of_css_property("z-index")) >= 10000
             toggle = driver.find_element(By.CSS_SELECTOR, ".task-profile-toggle")
             toggle.click()
             assert toggle.get_attribute("aria-expanded") == "true"
@@ -177,5 +243,9 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             assert "progress-regression" in form.get_attribute("class")
             assert "réduite de 20 points" in driver.page_source
             assert driver.find_element(By.NAME, "note").get_attribute("required")
+            activity = driver.find_element(By.CSS_SELECTOR, ".comments .activity")
+            assert activity.value_of_css_property("flex-direction") == "row"
+            driver.set_window_size(390, 800)
+            assert activity.value_of_css_property("flex-direction") == "column"
         finally:
             driver.quit()

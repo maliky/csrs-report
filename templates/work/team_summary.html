@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-heading"><h1>Synthèse de l’équipe</h1><a class="button" href="{% url 'assignment-create' %}">Affecter une tâche</a></div>
 {% include "work/_period_nav.html" %}
-<div class="chart-legend-control"><button type="button" class="legend-toggle" aria-expanded="false" aria-controls="team-legend">? <span>Comprendre les graphiques</span></button><div id="team-legend" class="chart-legend" hidden><p><span class="marker marker-blocked">●</span> point d’attention · <span class="marker marker-late">▲</span> retard · <span class="marker marker-missing">○</span> absence de mise à jour</p><p>L’axe horizontal représente les jours ouvrés; l’axe vertical la réalisation. La zone rouge après le repère indique un dépassement de la charge prévue.</p></div></div>
+<div class="chart-legend-control"><button type="button" class="legend-toggle" aria-expanded="false" aria-controls="team-legend">? <span>Comprendre les graphiques</span></button><div id="team-legend" class="chart-legend" hidden><p><span class="marker marker-blocked">●</span> point d’attention · <span class="marker marker-late">▲</span> retard · <span class="marker marker-missing">○</span> absence de mise à jour</p><p>Les points pleins sont des saisies réelles. Les bandes grises représentent les jours non ouvrés comprimés. La zone rose après l’échéance indique un retard sur une tâche ouverte.</p></div></div>
 <div class="team-tree">
 {% for node in nodes %}{% include "work/_team_node.html" with node=node period=period %}{% empty %}<p class="empty-state">Aucun collaborateur actif.</p>{% endfor %}
 </div>

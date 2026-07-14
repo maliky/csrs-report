@@ -1,11 +1,39 @@
 "use strict";
 
 const palette = ["#006b54", "#285b9b", "#7a4e9d", "#a14f1f", "#297783", "#765f18"];
+const nonWorkingDayWeight = 0.25;
 
 function colorFor(key) {
   let hash = 0;
   for (const character of key) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
   return palette[Math.abs(hash) % palette.length];
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  const parts = text.includes("/") ? text.split("/").map(Number) : text.split("-").map(Number);
+  const [year, month, day] = text.includes("/") ? [parts[2], parts[1], parts[0]] : parts;
+  if (![year, month, day].every(Number.isFinite)) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function isoDate(value) {
+  return value.toISOString().slice(0, 10);
+}
+
+function inputDate(value) {
+  return `${String(value.getUTCDate()).padStart(2, "0")}/${String(value.getUTCMonth() + 1).padStart(2, "0")}/${value.getUTCFullYear()}`;
+}
+
+function formatNumber(value) {
+  return Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+}
+
+function formatDate(value) {
+  const parsed = parseDate(value);
+  if (!parsed) return String(value || "");
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(parsed);
 }
 
 document.querySelectorAll("[data-progress]").forEach((slider) => {
@@ -47,81 +75,334 @@ function renderWorkloadChart(element) {
   svg.append("g").attr("transform", "translate(0,40)").attr("class", "workload-axis").call(d3.axisBottom(x).tickValues([0, total]).tickFormat((value) => `${value} j`));
 }
 
-function renderTaskProfile(element) {
+document.querySelectorAll(".workload-chart").forEach(renderWorkloadChart);
+
+function normalizeProgressRows(rows) {
+  return rows.map((row) => ({
+    taskId: Number(row.task_id),
+    date: parseDate(row.day),
+    dayText: row.day,
+    startDate: parseDate(row.start_date),
+    dueDate: parseDate(row.due_date),
+    isWorkingDay: row.is_working_day === true || row.is_working_day === 1 || row.is_working_day === "true",
+    plannedWorkDays: Number(row.planned_work_days),
+    elapsedWorkDays: Number(row.elapsed_work_days),
+    remainingScheduleDays: Number(row.remaining_schedule_days),
+    overdueDays: Number(row.overdue_days),
+    percentage: Math.max(0, Math.min(100, Number(row.percentage))),
+    observed: row.observed === true || row.observed === 1 || row.observed === "true",
+  })).filter((row) => row.date instanceof Date && !Number.isNaN(row.date.valueOf()) && Number.isFinite(row.percentage)).sort((left, right) => left.date - right.date);
+}
+
+let tooltipElement = null;
+
+function chartTooltip() {
+  if (tooltipElement) return tooltipElement;
+  tooltipElement = document.createElement("div");
+  tooltipElement.className = "progress-chart-tooltip";
+  tooltipElement.setAttribute("role", "status");
+  tooltipElement.setAttribute("aria-live", "polite");
+  tooltipElement.hidden = true;
+  document.body.append(tooltipElement);
+  return tooltipElement;
+}
+
+function positionTooltip(clientX, clientY) {
+  const tooltip = chartTooltip();
+  const gap = 14;
+  const bounds = tooltip.getBoundingClientRect();
+  let left = clientX + gap;
+  let top = clientY - bounds.height - gap;
+  if (left + bounds.width > window.innerWidth - 8) left = clientX - bounds.width - gap;
+  if (top < 8) top = clientY + gap;
+  tooltip.style.left = `${Math.max(8, left)}px`;
+  tooltip.style.top = `${Math.min(window.innerHeight - bounds.height - 8, Math.max(8, top))}px`;
+}
+
+function showProgressTooltip(point, clientX, clientY) {
+  const tooltip = chartTooltip();
+  const dateLabel = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(point.date);
+  const lines = [
+    dateLabel,
+    point.isWorkingDay ? "Jour ouvré" : "Jour non ouvré",
+    `Jour calendrier : ${point.calendarDay}`,
+    `Jours ouvrés écoulés : ${point.elapsedWorkDays}`,
+    `Progression connue : ${point.percentage} %`,
+    `Retard : ${formatNumber(point.overdueDays)} j ouvré${point.overdueDays > 1 ? "s" : ""}`,
+    point.observed ? "Saisie réelle ce jour" : "Dernière valeur reportée",
+  ];
+  tooltip.replaceChildren(...lines.map((line, index) => {
+    const item = document.createElement("div");
+    item.textContent = line;
+    if (index === 0) item.className = "progress-tooltip-title";
+    return item;
+  }));
+  tooltip.hidden = false;
+  positionTooltip(clientX, clientY);
+}
+
+function hideProgressTooltip() {
+  if (tooltipElement) tooltipElement.hidden = true;
+}
+
+function weightedCalendar(rows, start, end) {
+  const explicit = new Map(rows.map((row) => [row.dayText, row.isWorkingDay]));
+  const dates = d3.utcDay.range(d3.utcDay.floor(start), d3.utcDay.offset(d3.utcDay.floor(end), 1));
+  let total = 0;
+  const segments = dates.map((date) => {
+    const key = d3.utcFormat("%Y-%m-%d")(date);
+    const working = explicit.has(key) ? explicit.get(key) : date.getUTCDay() !== 0 && date.getUTCDay() !== 6;
+    const weight = working ? 1 : nonWorkingDayWeight;
+    const segment = { date, working, u0: total, u1: total + weight };
+    total += weight;
+    return segment;
+  });
+  return { segments, total: Math.max(total, 1) };
+}
+
+function renderProgressChart(element, rawRows, { variant = "compact" } = {}) {
   if (!window.d3) return;
-  const planned = Number(element.dataset.planned);
-  const percentage = Number(element.dataset.percentage);
-  const open = element.dataset.open === "true";
-  const points = Array.from(element.querySelectorAll("[data-x]")).map((point) => ({ date: parseDate(point.dataset.date), y: Number(point.dataset.y), observed: point.dataset.observed !== "false" })).filter((point) => point.date instanceof Date && !Number.isNaN(point.date.valueOf()));
-  if (!points.length) return;
-  const start = parseDate(element.dataset.start);
-  const today = parseDate(element.dataset.today);
-  const due = parseDate(element.dataset.due);
-  if (!start || !today || !due) return;
-  const end = new Date(Math.max(today.valueOf(), due.valueOf(), points[points.length - 1].date.valueOf()));
-  const width = Math.max(250, element.clientWidth || 300);
-  const height = 106;
-  const margin = { top: 31, right: 12, bottom: 22, left: 27 };
-  const x = d3.scaleUtc().domain([start, end]).range([margin.left, width - margin.right]);
-  const y = d3.scaleLinear().domain([0, 100]).range([height - margin.bottom, margin.top]);
+  const rows = normalizeProgressRows(rawRows);
+  if (!rows.length) return;
+  element.querySelectorAll("svg").forEach((svg) => svg.remove());
+  const start = parseDate(element.dataset.start) || rows[0].startDate;
+  const today = parseDate(element.dataset.today) || rows.at(-1).date;
+  const due = parseDate(element.dataset.due) || rows[0].dueDate;
+  const last = rows.at(-1).date;
+  const end = new Date(Math.max(today.valueOf(), due.valueOf(), last.valueOf()));
+  const compact = variant === "compact";
+  const width = Math.max(compact ? 270 : 640, element.clientWidth || (compact ? 320 : 860));
+  const height = compact ? 128 : 330;
+  const margin = compact ? { top: 27, right: 10, bottom: 25, left: 30 } : { top: 42, right: 22, bottom: 48, left: 48 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const calendar = weightedCalendar(rows, start, end);
+  const unitScale = d3.scaleLinear().domain([0, calendar.total]).range([0, innerWidth]);
+  const segmentByDay = new Map(calendar.segments.map((segment) => [isoDate(segment.date), segment]));
+  const xDate = (date) => {
+    const segment = segmentByDay.get(isoDate(date));
+    if (!segment) return date <= start ? 0 : innerWidth;
+    return unitScale((segment.u0 + segment.u1) / 2);
+  };
+  const y = d3.scaleLinear().domain([0, 100]).range([innerHeight, 0]);
   const color = colorFor(element.dataset.action || "sans-action");
   const svg = d3.select(element).insert("svg", ":first-child").attr("viewBox", `0 0 ${width} ${height}`).attr("aria-hidden", "true");
-  if (open && today > due) svg.append("rect").attr("x", x(due)).attr("y", margin.top).attr("width", x(today) - x(due)).attr("height", height - margin.top - margin.bottom).attr("class", "chart-overrun-zone");
-  [25, 50, 75].forEach((value) => svg.append("line").attr("x1", margin.left).attr("x2", width - margin.right).attr("y1", y(value)).attr("y2", y(value)).attr("class", "chart-guide"));
-  renderDateMarkers(svg, x, { start, today, due }, margin.top, height - margin.bottom);
-  const line = d3.line().x((point) => x(point.date)).y((point) => y(point.y)).curve(d3.curveMonotoneX);
-  svg.append("path").datum(points).attr("d", line).attr("fill", "none").attr("stroke", color).attr("stroke-opacity", 0.35 + percentage / 155).attr("class", "chart-progress-line");
-  const circles = svg.selectAll(".chart-point").data(points).enter().append("circle").attr("cx", (point) => x(point.date)).attr("cy", (point) => y(point.y)).attr("r", (_point, index) => index === points.length - 1 ? 4 : 2.2).attr("fill", (point) => point.observed ? color : "white").attr("stroke", color).attr("fill-opacity", (point) => point.observed ? 0.3 + point.y / 145 : 1).attr("class", (point) => point.observed ? "chart-point chart-point-observed" : "chart-point chart-point-carried");
-  addPointTitles(circles);
-  svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`).attr("class", "profile-axis").call(d3.axisBottom(x).tickValues(uniqueDates([start, today, due])).tickFormat(d3.utcFormat("%d/%m")));
-  svg.append("g").attr("transform", `translate(${margin.left},0)`).attr("class", "profile-axis").call(d3.axisLeft(y).tickValues([25, 50, 75]).tickFormat((value) => `${value}%`));
-}
+  const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  const open = element.dataset.open === "true";
 
-document.querySelectorAll(".workload-chart").forEach(renderWorkloadChart);
-document.querySelectorAll(".task-profile-chart").forEach(renderTaskProfile);
+  if (open && today > due && rows.at(-1).percentage < 100) {
+    chart.append("rect").attr("x", xDate(due)).attr("y", 0).attr("width", Math.max(0, xDate(today) - xDate(due))).attr("height", innerHeight).attr("class", "chart-overrun-zone");
+  }
+  chart.append("g").attr("class", "chart-non-working-days").selectAll("rect").data(calendar.segments.filter((segment) => !segment.working)).join("rect").attr("x", (segment) => unitScale(segment.u0)).attr("y", 0).attr("width", (segment) => Math.max(1, unitScale(segment.u1) - unitScale(segment.u0))).attr("height", innerHeight);
+  [0, 25, 50, 75, 100].forEach((value) => chart.append("line").attr("x1", 0).attr("x2", innerWidth).attr("y1", y(value)).attr("y2", y(value)).attr("class", "chart-guide"));
 
-function parseDate(value) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (![year, month, day].every(Number.isFinite)) return null;
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function uniqueDates(values) {
-  const seen = new Set();
-  return values.filter((value) => {
-    const key = value.valueOf();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).sort((left, right) => left - right);
-}
-
-function renderDateMarkers(svg, x, dates, top, bottom) {
-  const format = d3.utcFormat("%d/%m/%Y");
-  const markers = [
-    { date: dates.start, label: "Début", className: "chart-start-line", row: 10 },
-    { date: dates.today, label: "Aujourd’hui", className: "chart-today-line", row: 25 },
-    { date: dates.due, label: "Fin prévue", className: "chart-due-line", row: 10 },
+  const markerData = [
+    { date: start, label: "Début", className: "chart-start-line" },
+    { date: today, label: "Aujourd’hui", className: "chart-today-line" },
+    { date: due, label: "Fin prévue", className: "chart-due-line" },
   ];
-  markers.forEach((marker) => {
-    const position = x(marker.date);
-    const domain = x.range();
-    const ratio = (position - domain[0]) / Math.max(1, domain[1] - domain[0]);
-    const anchor = ratio < 0.2 ? "start" : ratio > 0.8 ? "end" : "middle";
-    svg.append("line").attr("x1", position).attr("x2", position).attr("y1", top).attr("y2", bottom).attr("class", marker.className);
-    svg.append("text").attr("x", position).attr("y", marker.row).attr("text-anchor", anchor).attr("class", `chart-marker-label ${marker.className}-label`).text(`${marker.label} ${format(marker.date)}`);
+  markerData.forEach((marker, index) => {
+    const position = xDate(marker.date);
+    chart.append("line").attr("x1", position).attr("x2", position).attr("y1", 0).attr("y2", innerHeight).attr("class", marker.className);
+    if (!compact) chart.append("text").attr("x", position).attr("y", -10 - (index % 2) * 14).attr("text-anchor", position < innerWidth * 0.18 ? "start" : position > innerWidth * 0.82 ? "end" : "middle").attr("class", `chart-marker-label ${marker.className}-label`).text(`${marker.label} ${d3.utcFormat("%d/%m/%Y")(marker.date)}`);
   });
+
+  const area = d3.area().x((point) => xDate(point.date)).y0(y(0)).y1((point) => y(point.percentage)).curve(d3.curveStepAfter);
+  const line = d3.line().x((point) => xDate(point.date)).y((point) => y(point.percentage)).curve(d3.curveStepAfter);
+  if (!compact) chart.append("path").datum(rows).attr("d", area).attr("class", "chart-progress-area").attr("fill", color);
+  chart.append("path").datum(rows).attr("d", line).attr("fill", "none").attr("stroke", color).attr("class", "chart-progress-line");
+  chart.selectAll("circle.chart-point").data(rows).join("circle").attr("class", (point) => point.observed ? "chart-point chart-point-observed" : "chart-point chart-point-carried").attr("cx", (point) => xDate(point.date)).attr("cy", (point) => y(point.percentage)).attr("r", (point) => point.observed ? (compact ? 3.2 : 4.2) : (compact ? 2.1 : 3)).attr("fill", (point) => point.observed ? color : "white").attr("stroke", color);
+
+  const maxLabels = Math.max(2, Math.floor(innerWidth / (compact ? 72 : 84)));
+  const step = Math.max(1, Math.ceil(calendar.segments.length / maxLabels));
+  const tickSegments = calendar.segments.filter((_segment, index) => index % step === 0 || index === calendar.segments.length - 1);
+  const axis = chart.append("g").attr("transform", `translate(0,${innerHeight})`).attr("class", "profile-axis");
+  axis.append("line").attr("x1", 0).attr("x2", innerWidth).attr("stroke", "currentColor");
+  axis.selectAll("line.day-tick").data(calendar.segments).join("line").attr("class", "day-tick").attr("x1", (segment) => xDate(segment.date)).attr("x2", (segment) => xDate(segment.date)).attr("y1", 0).attr("y2", (segment) => segment.working ? 6 : 3);
+  axis.selectAll("text.day-label").data(tickSegments).join("text").attr("class", "day-label").attr("x", (segment) => xDate(segment.date)).attr("y", 18).attr("text-anchor", "middle").text((segment) => d3.utcFormat("%d/%m")(segment.date));
+  if (!compact) chart.append("g").attr("class", "profile-axis").call(d3.axisLeft(y).tickValues([0, 25, 50, 75, 100]).tickFormat((value) => `${value}%`).tickSize(0)).call((group) => group.select(".domain").remove());
+
+  const focusLine = chart.append("line").attr("y1", 0).attr("y2", innerHeight).attr("class", "chart-focus-line").style("display", "none");
+  const focusPoint = chart.append("circle").attr("r", compact ? 4 : 5.5).attr("fill", "white").attr("stroke", color).attr("stroke-width", 2).style("display", "none");
+  const rowByDay = new Map(rows.map((row) => [row.dayText, row]));
+  const selectPoint = (segment, clientX, clientY) => {
+    let point = rowByDay.get(isoDate(segment.date));
+    if (!point) {
+      point = rows[Math.max(0, d3.bisector((row) => row.date).right(rows, segment.date) - 1)];
+    }
+    const enriched = { ...point, date: segment.date, isWorkingDay: segment.working, calendarDay: d3.utcDay.count(start, segment.date) };
+    const x = xDate(segment.date);
+    focusLine.attr("x1", x).attr("x2", x).style("display", null);
+    focusPoint.attr("cx", x).attr("cy", y(point.percentage)).style("display", null);
+    showProgressTooltip(enriched, clientX, clientY);
+  };
+  const segmentEnds = calendar.segments.map((segment) => unitScale(segment.u1));
+  const overlay = chart.append("rect").attr("width", innerWidth).attr("height", innerHeight).attr("fill", "transparent").attr("class", "chart-pointer-layer");
+  overlay.on("pointermove", function (event) {
+    const [pointerX] = d3.pointer(event, this);
+    const index = Math.min(calendar.segments.length - 1, d3.bisectRight(segmentEnds, Math.max(0, Math.min(innerWidth - 0.001, pointerX))));
+    selectPoint(calendar.segments[index], event.clientX, event.clientY);
+  }).on("pointerleave", () => {
+    focusLine.style("display", "none");
+    focusPoint.style("display", "none");
+    hideProgressTooltip();
+  });
+
+  element.tabIndex = element.tabIndex >= 0 ? element.tabIndex : 0;
+  let keyboardIndex = Math.max(0, calendar.segments.length - 1);
+  const keyboardPoint = () => {
+    const rect = element.getBoundingClientRect();
+    const segment = calendar.segments[keyboardIndex];
+    const clientX = rect.left + margin.left / width * rect.width + xDate(segment.date) / width * rect.width;
+    const clientY = rect.top + rect.height / 2;
+    selectPoint(segment, clientX, clientY);
+  };
+  element.onfocus = keyboardPoint;
+  element.onkeydown = (event) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      keyboardIndex = Math.max(0, Math.min(calendar.segments.length - 1, keyboardIndex + (event.key === "ArrowLeft" ? -1 : 1)));
+      keyboardPoint();
+    } else if (event.key === "Escape") {
+      hideProgressTooltip();
+    }
+  };
+  element.onblur = hideProgressTooltip;
+  element.dataset.chartRendered = "true";
 }
 
-function addPointTitles(circles) {
-  const format = d3.utcFormat("%d/%m/%Y");
-  circles.append("title").text((point) => `${format(point.date)} — ${point.y} % — ${point.observed ? "saisie historique" : "valeur reportée"}`);
+async function renderTaskHistory(element) {
+  if (!window.d3 || !element.dataset.progressUrl) return;
+  try {
+    const response = await fetch(element.dataset.progressUrl, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderProgressChart(element, await response.json(), { variant: "full" });
+  } catch (_error) {
+    element.classList.add("chart-load-error");
+  }
 }
 
-function isoDate(value) {
-  return value.toISOString().slice(0, 10);
+document.querySelectorAll(".task-history-chart").forEach(renderTaskHistory);
+
+function createElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
 }
+
+function statItem(label, value) {
+  const wrapper = createElement("div");
+  wrapper.append(createElement("dt", "", label), createElement("dd", "", value));
+  return wrapper;
+}
+
+function marker(label, className, symbol) {
+  const item = createElement("b", `marker ${className}`, symbol);
+  item.title = label;
+  return item;
+}
+
+function taskProfile(task) {
+  const article = createElement("article", `task-profile task-profile-${task.deadline_level}`);
+  const row = createElement("div", "task-profile-row");
+  const button = createElement("button", "task-profile-toggle");
+  button.type = "button";
+  button.setAttribute("aria-expanded", "false");
+  button.append(createElement("span", "task-profile-title", task.task_title));
+  const markers = createElement("span", "task-markers");
+  markers.setAttribute("aria-label", "Alertes");
+  if (task.blocked) markers.append(marker("Point d’attention", "marker-blocked", "●"));
+  if (task.late) markers.append(marker("Retard", "marker-late", "▲"));
+  if (task.missing_update) markers.append(marker("Absence de mise à jour", "marker-missing", "○"));
+  button.append(markers);
+  const chart = createElement("div", "task-profile-chart");
+  chart.dataset.action = task.action_code;
+  chart.dataset.start = task.start_date;
+  chart.dataset.today = task.today;
+  chart.dataset.due = task.due_date;
+  chart.dataset.open = task.is_open ? "true" : "false";
+  chart.setAttribute("role", "img");
+  chart.setAttribute("aria-label", `${task.task_title}, ${task.percentage} pour cent, ${task.observation_count} saisies historiques`);
+  row.append(button, chart);
+  const details = createElement("div", "task-profile-details");
+  details.hidden = true;
+  details.append(
+    createElement("p", "", `${task.percentage} % réalisé · ${formatNumber(task.remaining_work_days)} j restants · ${formatNumber(task.planned_work_days)} j initialement`),
+    createElement("p", "", `${task.observation_count} saisie${task.observation_count > 1 ? "s" : ""} · Début ${formatDate(task.start_date)} · Aujourd’hui ${formatDate(task.today)} · Fin prévue ${formatDate(task.due_date)}`),
+  );
+  const link = createElement("a", "", "Ouvrir la tâche");
+  link.href = task.detail_url;
+  details.append(link);
+  button.addEventListener("click", () => {
+    const expanded = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", expanded ? "true" : "false");
+    details.hidden = !expanded;
+  });
+  article.append(row, details);
+  requestAnimationFrame(() => renderProgressChart(chart, task.progress, { variant: "compact" }));
+  return article;
+}
+
+function renderEmployeeProfile(branch, payload) {
+  const target = branch.querySelector(":scope > .team-node-content > [data-team-profile-content]");
+  if (!target) return;
+  const heading = createElement("div", "team-node-heading");
+  const link = createElement("a", "", "Voir toutes les tâches");
+  link.href = branch.dataset.teamEmployeeUrl;
+  const stats = createElement("dl", "stacked-stats");
+  stats.append(
+    statItem("Moyenne", `${formatNumber(payload.summary.mean_progress)} %`),
+    statItem("Médiane", `${formatNumber(payload.summary.median_progress)} %`),
+    statItem("Reste cumulé", `${formatNumber(payload.summary.remaining_total)} j`),
+    statItem("Reste moyen", `${formatNumber(payload.summary.remaining_mean)} j`),
+  );
+  heading.append(link, stats);
+  const profiles = createElement("div", "task-profiles");
+  profiles.append(createElement("h3", "", "Profil des tâches"));
+  if (payload.tasks.length) payload.tasks.forEach((task) => profiles.append(taskProfile(task)));
+  else profiles.append(createElement("p", "", "Aucune tâche sur cette période."));
+  target.replaceChildren(heading, profiles);
+}
+
+async function loadTeamBranch(branch) {
+  if (branch.dataset.teamLoadState === "loaded" || branch.dataset.teamLoadState === "loading") return;
+  const target = branch.querySelector(":scope > .team-node-content > [data-team-profile-content]");
+  const status = target ? target.querySelector("[data-team-profile-status]") : null;
+  branch.dataset.teamLoadState = "loading";
+  if (status) status.textContent = "Chargement des indicateurs et graphiques…";
+  try {
+    const response = await fetch(branch.dataset.teamProfileUrl, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderEmployeeProfile(branch, await response.json());
+    branch.dataset.teamLoadState = "loaded";
+  } catch (_error) {
+    branch.dataset.teamLoadState = "error";
+    if (!target) return;
+    const message = createElement("p", "team-profile-status", "Chargement impossible.");
+    message.setAttribute("role", "alert");
+    const retry = createElement("button", "button", "Réessayer");
+    retry.type = "button";
+    retry.addEventListener("click", () => loadTeamBranch(branch));
+    target.replaceChildren(message, retry);
+  }
+}
+
+document.querySelectorAll(".team-branch").forEach((branch) => {
+  branch.dataset.teamLoadState = "idle";
+  const subteam = branch.querySelector(":scope > .team-node-content > .subteam");
+  branch.addEventListener("toggle", () => {
+    if (branch.open) {
+      if (subteam) subteam.open = true;
+      loadTeamBranch(branch);
+      return;
+    }
+    if (subteam) subteam.open = false;
+    branch.querySelectorAll(".team-branch[open]").forEach((descendant) => {
+      descendant.open = false;
+    });
+  });
+});
 
 document.querySelectorAll("[data-schedule-form]").forEach((form) => {
   const start = form.querySelector("[data-schedule-start]");
@@ -141,7 +422,7 @@ document.querySelectorAll("[data-schedule-form]").forEach((form) => {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
       if (working(cursor)) remaining -= 1;
     }
-    due.value = isoDate(cursor);
+    due.value = inputDate(cursor);
   };
   const calculateWorkload = () => {
     if (!start.value || !due.value) return;
@@ -152,64 +433,11 @@ document.querySelectorAll("[data-schedule-form]").forEach((form) => {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
       if (working(cursor)) days += 1;
     }
-    workload.value = days > 0 ? days.toFixed(2) : "";
+    workload.value = days > 0 ? String(days) : "";
   };
   start.addEventListener("change", () => { source.value = "due"; due.value ? calculateWorkload() : calculateDue(); });
   due.addEventListener("change", () => { source.value = "due"; calculateWorkload(); });
   workload.addEventListener("input", () => { source.value = "workload"; calculateDue(); });
-});
-
-async function renderTaskHistory(element) {
-  if (!window.d3) return;
-  let points = Array.from(element.querySelectorAll("[data-x]")).map((point) => ({
-    date: parseDate(point.dataset.date), y: Number(point.dataset.y), observed: point.dataset.observed === "true",
-  }));
-  if (element.dataset.progressUrl) {
-    try {
-      const response = await fetch(element.dataset.progressUrl, { headers: { Accept: "application/json" } });
-      if (response.ok) {
-        const rows = await response.json();
-        points = rows.map((row) => ({ date: parseDate(row.day), y: Number(row.percentage), observed: Boolean(row.observed) }));
-      }
-    } catch (_error) { /* The embedded, server-authorized series remains usable. */ }
-  }
-  points = points.filter((point) => point.date instanceof Date && !Number.isNaN(point.date.valueOf()));
-  if (!points.length) return;
-  const start = parseDate(element.dataset.start);
-  const today = parseDate(element.dataset.today);
-  const due = parseDate(element.dataset.due);
-  if (!start || !today || !due) return;
-  const lastDate = points[points.length - 1].date;
-  const end = new Date(Math.max(today.valueOf(), due.valueOf(), lastDate.valueOf()));
-  const width = Math.max(300, element.clientWidth || 620);
-  const height = 250;
-  const margin = { top: 38, right: 18, bottom: 38, left: 42 };
-  const x = d3.scaleUtc().domain([start, end]).range([margin.left, width - margin.right]);
-  const y = d3.scaleLinear().domain([0, 100]).range([height - margin.bottom, margin.top]);
-  const color = colorFor(element.dataset.action || "sans-action");
-  const svg = d3.select(element).insert("svg", ":first-child").attr("viewBox", `0 0 ${width} ${height}`).attr("aria-hidden", "true");
-  [25, 50, 75].forEach((value) => svg.append("line").attr("x1", margin.left).attr("x2", width - margin.right).attr("y1", y(value)).attr("y2", y(value)).attr("class", "chart-guide"));
-  if (element.dataset.open === "true" && today > due) svg.append("rect").attr("x", x(due)).attr("y", margin.top).attr("width", x(today) - x(due)).attr("height", height - margin.top - margin.bottom).attr("class", "chart-overrun-zone");
-  renderDateMarkers(svg, x, { start, today, due }, margin.top, height - margin.bottom);
-  const line = d3.line().x((point) => x(point.date)).y((point) => y(point.y)).curve(d3.curveMonotoneX);
-  svg.append("path").datum(points).attr("d", line).attr("fill", "none").attr("stroke", color).attr("class", "history-progress-line");
-  const circles = svg.selectAll(".history-point").data(points).enter().append("circle").attr("cx", (point) => x(point.date)).attr("cy", (point) => y(point.y)).attr("r", (point) => point.observed ? 3.4 : 2.4).attr("fill", (point) => point.observed ? color : "white").attr("stroke", color).attr("class", (point) => point.observed ? "history-point observed" : "history-point carried");
-  addPointTitles(circles);
-  svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`).attr("class", "profile-axis").call(d3.axisBottom(x).ticks(Math.min(7, points.length)).tickFormat(d3.utcFormat("%d/%m")));
-  svg.append("g").attr("transform", `translate(${margin.left},0)`).attr("class", "profile-axis").call(d3.axisLeft(y).tickValues([0, 25, 50, 75, 100]).tickFormat((value) => `${value}%`));
-}
-
-document.querySelectorAll(".task-history-chart").forEach(renderTaskHistory);
-
-document.querySelectorAll(".task-profile-toggle").forEach((button) => {
-  const profile = button.closest(".task-profile");
-  const details = profile ? profile.querySelector(".task-profile-details") : null;
-  const setExpanded = (expanded) => {
-    button.setAttribute("aria-expanded", expanded ? "true" : "false");
-    if (details) details.hidden = !expanded;
-  };
-  button.addEventListener("click", () => setExpanded(button.getAttribute("aria-expanded") !== "true"));
-  profile.addEventListener("focusout", () => setTimeout(() => { if (!profile.contains(document.activeElement)) setExpanded(false); }, 0));
 });
 
 document.querySelectorAll(".legend-toggle").forEach((button) => {

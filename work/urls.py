@@ -28,5 +28,10 @@ urlpatterns = [
         "propositions/<int:pk>/decision/", views.decide_proposal, name="proposal-decide"
     ),
     path("equipe/", views.team_summary, name="team-summary"),
+    path(
+        "equipe/<int:employee_id>/progressions.json",
+        views.team_member_progress_json,
+        name="team-member-progress-json",
+    ),
     path("equipe/<int:employee_id>/", views.employee_detail, name="employee-detail"),
 ]

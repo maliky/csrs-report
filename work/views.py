@@ -34,12 +34,15 @@ from work.models import (
 )
 from work.notifications import queue_assignment_notification
 from work.observable import (
+    can_use_observable,
     create_export_token,
     export_token_user_id,
     observable_dataset,
 )
+from work.progress_cache import cached_daily_progress_rows
 from work.services import (
     add_observation,
+    activity_feed,
     accept_proposal,
     can_comment_assignment,
     can_manage_assignment,
@@ -47,7 +50,7 @@ from work.services import (
     can_view_employee,
     close_early,
     create_assignment_for_user,
-    daily_progress_rows,
+    effective_assignment_status,
     adjacent_period,
     assignment_snapshot,
     can_self_assign,
@@ -58,16 +61,17 @@ from work.services import (
     record_progress,
     ReportingPeriod,
     reporting_period,
+    assignment_status_label,
     reject_completion,
     reject_proposal,
     remaining_projection,
-    team_tree,
+    team_tree_overview,
     update_assignment_schedule,
-    visible_activities,
     workload_breakdown,
     validate_completion,
     week_start_for,
 )
+from work.team_profiles import employee_profile_dataset
 
 ResponseT = TypeVar("ResponseT", bound=HttpResponse)
 
@@ -131,7 +135,7 @@ def assignment_detail(request: HttpRequest, pk: int) -> HttpResponse:
         raise Http404
     latest = assignment.progress_entries.order_by("-entry_date").first()
     initial_progress = latest.percentage if latest else 0
-    progress_rows = daily_progress_rows(assignment)
+    display_status = effective_assignment_status(assignment.status, initial_progress)
     self_managed = is_self_managed_assignment(user, assignment)
     can_manage = can_manage_assignment(user, assignment)
     progress_form = ProgressForm(
@@ -154,10 +158,12 @@ def assignment_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "can_update_progress": assignment.status != "closed_early"
             and (user == assignment.employee or can_manage),
             "initial_progress": initial_progress,
+            "display_status": display_status,
+            "display_status_label": assignment_status_label(display_status),
+            "display_is_open": display_status not in ("completed", "closed_early"),
             "self_managed": self_managed,
-            "activities": visible_activities(assignment).order_by("-occurred_at", "-pk"),
-            "progress_rows": progress_rows,
-            "progress_observation_count": sum(row.observed for row in progress_rows),
+            "activities": activity_feed(assignment),
+            "progress_observation_count": assignment.progress_entries.count(),
             "today": timezone.localdate(),
         },
     )
@@ -175,7 +181,7 @@ def assignment_progress_json(request: HttpRequest, pk: int) -> JsonResponse:
     if not can_view_assignment(request_user(request), assignment):
         raise Http404
     return JsonResponse(
-        [row.as_json() for row in daily_progress_rows(assignment)], safe=False
+        [row.as_json() for row in cached_daily_progress_rows(assignment)], safe=False
     )
 
 
@@ -203,8 +209,10 @@ def _observable_auth_error() -> JsonResponse:
 
 @login_required
 def observable_export_page(request: HttpRequest) -> HttpResponse:
-    """Issue a temporary token and show copy-ready Observable instructions."""
+    """Issue an Observable token only to the technical developer account."""
     user = request_user(request)
+    if not can_use_observable(user):
+        raise PermissionDenied
     token = create_export_token(user)
     endpoint = request.build_absolute_uri(reverse("observable-progress-export"))
     snippet = "\n".join(
@@ -250,8 +258,8 @@ def observable_progress_export(request: HttpRequest) -> HttpResponse:
         user_id = export_token_user_id(token.strip())
     except signing.BadSignature:
         return _observable_auth_error()
-    user = User.objects.filter(pk=user_id, is_active=True).first()
-    if user is None:
+    user = User.objects.filter(pk=user_id).first()
+    if user is None or not can_use_observable(user):
         return _observable_auth_error()
     response = JsonResponse(observable_dataset(user).as_json())
     return _with_observable_headers(response)
@@ -339,8 +347,6 @@ def create_assignment(request: HttpRequest) -> HttpResponse:
         if not isinstance(employee, User):
             raise PermissionDenied
         action = form.cleaned_data["action"]
-        if action is None:
-            raise PermissionDenied
         assignment = create_assignment_for_user(
             manager=manager,
             employee=employee,
@@ -406,7 +412,7 @@ def team_summary(request: HttpRequest) -> HttpResponse:
     manager = request_user(request)
     navigation = period_context(request)
     period = navigation["period"]
-    nodes = team_tree(manager, period)
+    nodes = team_tree_overview(manager, period)
     return render(
         request,
         "work/team_summary.html",
@@ -415,6 +421,17 @@ def team_summary(request: HttpRequest) -> HttpResponse:
             **navigation,
         },
     )
+
+
+@login_required
+def team_member_progress_json(request: HttpRequest, employee_id: int) -> JsonResponse:
+    """Load one authorized employee profile only when its branch is opened."""
+    user = request_user(request)
+    employee = get_object_or_404(User, pk=employee_id)
+    if not can_view_employee(user, employee):
+        raise Http404
+    period = selected_period(request)
+    return JsonResponse(employee_profile_dataset(employee, period).as_json())
 
 
 @login_required

@@ -10,7 +10,6 @@ from django.utils import timezone
 from accounts.models import User
 from work.models import (
     InstitutionalAction,
-    ReportingLine,
     Task,
     TaskAssignment,
     WorkCalendar,
@@ -25,7 +24,7 @@ def create_assignment(
     employee: User,
     manager: User,
     action: InstitutionalAction,
-    workload: Decimal = Decimal("2.00"),
+    workload: Decimal = Decimal("2.0"),
 ) -> TaskAssignment:
     """Create a coherent assignment for export permission tests."""
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
@@ -50,17 +49,25 @@ def create_assignment(
 
 
 @pytest.mark.django_db
-def test_observable_page_requires_login_and_provides_copy_ready_code(
+def test_observable_page_and_navigation_link_are_reserved_for_developer(
     client, people: dict[str, User]
 ) -> None:
     url = reverse("observable-export")
     assert client.get(url).status_code == 302
 
     client.force_login(people["manager"])
+    assert client.get(url).status_code == 403
+    assert url not in client.get(reverse("dashboard")).content.decode()
+
+    developer = User.objects.create_superuser(
+        "dev@example.test", "DevSecret9!", login_alias="dev"
+    )
+    client.force_login(developer)
     response = client.get(url)
     content = response.content.decode()
 
     assert response.status_code == 200
+    assert url in client.get(reverse("dashboard")).content.decode()
     assert "Un export pour toutes les tâches visibles" in content
     assert reverse("observable-progress-export") in content
     assert "Authorization" in content
@@ -85,7 +92,7 @@ def test_observable_preflight_allows_noncredentialed_authorization(client) -> No
 
 
 @pytest.mark.django_db
-def test_observable_export_contains_all_and_only_visible_tasks(
+def test_observable_export_contains_all_tasks_for_developer(
     client,
     assignment: TaskAssignment,
     people: dict[str, User],
@@ -98,6 +105,12 @@ def test_observable_export_contains_all_and_only_visible_tasks(
         note="Cette note ne doit jamais sortir.",
         author=people["employee"],
     )
+    TaskAssignment.objects.filter(pk=assignment.pk).update(
+        status="completed",
+        completed_at=timezone.now(),
+    )
+    assignment.task.action = None
+    assignment.task.save(update_fields=["action", "updated_at"])
     manager_assignment = create_assignment(
         code="OBS-MANAGER",
         employee=people["manager"],
@@ -110,7 +123,10 @@ def test_observable_export_contains_all_and_only_visible_tasks(
         manager=people["outsider"],
         action=action,
     )
-    token = create_export_token(people["manager"])
+    developer = User.objects.create_superuser(
+        "dev@example.test", "DevSecret9!", login_alias="dev"
+    )
+    token = create_export_token(developer)
 
     response = client.get(
         reverse("observable-progress-export"),
@@ -123,12 +139,18 @@ def test_observable_export_contains_all_and_only_visible_tasks(
     assert response.headers["Access-Control-Allow-Origin"] == "*"
     assert response.headers["Cache-Control"] == "no-store"
     assert payload["schema_version"] == 1
-    assert payload["task_count"] == 2
+    assert payload["task_count"] == 3
     assert {task["task_id"] for task in payload["tasks"]} == {
         assignment.pk,
         manager_assignment.pk,
+        outsider_assignment.pk,
     }
-    assert outsider_assignment.pk not in {task["task_id"] for task in payload["tasks"]}
+    exported_assignment = next(
+        task for task in payload["tasks"] if task["task_id"] == assignment.pk
+    )
+    assert exported_assignment["status"] == "active"
+    assert exported_assignment["action_code"] is None
+    assert exported_assignment["completed_on"] is None
     assert set(payload["progress"][0]) == {
         "task_id",
         "start_date",
@@ -161,22 +183,20 @@ def test_observable_export_contains_all_and_only_visible_tasks(
 
 
 @pytest.mark.django_db
-def test_observable_token_rechecks_current_hierarchy(
-    client, assignment: TaskAssignment, people: dict[str, User]
-) -> None:
-    token = create_export_token(people["manager"])
-    line = ReportingLine.objects.get(
-        supervisor=people["manager"], employee=people["employee"], is_primary=True
+def test_observable_token_rechecks_current_developer_permission(client) -> None:
+    developer = User.objects.create_superuser(
+        "dev@example.test", "DevSecret9!", login_alias="dev"
     )
-    line.delete()
+    token = create_export_token(developer)
+    developer.is_superuser = False
+    developer.save(update_fields=["is_superuser"])
 
     response = client.get(
         reverse("observable-progress-export"),
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
 
-    assert response.status_code == 200
-    assert assignment.pk not in {task["task_id"] for task in response.json()["tasks"]}
+    assert response.status_code == 401
 
 
 @pytest.mark.django_db
@@ -192,11 +212,19 @@ def test_observable_export_rejects_missing_invalid_expired_and_inactive_tokens(
         assert response.status_code == 401
         assert response.headers["Access-Control-Allow-Origin"] == "*"
 
-    token = create_export_token(people["manager"])
+    developer = User.objects.create_superuser(
+        "dev@example.test", "DevSecret9!", login_alias="dev"
+    )
+    token = create_export_token(developer)
     with override_settings(OBSERVABLE_EXPORT_TOKEN_MAX_AGE_SECONDS=-1):
         assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}").status_code == 401
 
-    fresh_token = create_export_token(people["manager"])
-    people["manager"].is_active = False
-    people["manager"].save(update_fields=["is_active"])
+    ordinary_token = create_export_token(people["manager"])
+    assert (
+        client.get(url, HTTP_AUTHORIZATION=f"Bearer {ordinary_token}").status_code == 401
+    )
+
+    fresh_token = create_export_token(developer)
+    developer.is_active = False
+    developer.save(update_fields=["is_active"])
     assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {fresh_token}").status_code == 401
