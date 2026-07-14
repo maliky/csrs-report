@@ -8,7 +8,10 @@ import pytest
 from accounts.models import User
 from work.models import (
     NotificationDelivery,
+    OrganizationUnit,
+    OrganizationUnitLink,
     ProgressEntry,
+    ProgressSeriesCache,
     ProposalStatus,
     ReportingLine,
     Task,
@@ -16,7 +19,11 @@ from work.models import (
     TaskAssignment,
     TaskProposal,
 )
-from work.management.commands.seed_pilot_users import PILOT_USERS
+from work.management.commands.seed_pilot_users import (
+    PILOT_USERS,
+    UNIT_SHORT_NAMES,
+    UNIT_SPECS,
+)
 
 
 @pytest.mark.django_db
@@ -47,12 +54,71 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     )
     assert User.objects.count() == len(PILOT_USERS)
     assert not User.objects.filter(email__endswith="@example.invalid").exists()
+    pilot_unit_codes = [code for code, _name, _parent in UNIT_SPECS]
+    assert OrganizationUnit.objects.filter(code__in=pilot_unit_codes).count() == len(
+        UNIT_SPECS
+    )
+    assert (
+        OrganizationUnitLink.objects.filter(
+            supervisor_service__code__in=pilot_unit_codes,
+            collaborator_service__code__in=pilot_unit_codes,
+        ).count()
+        == len(UNIT_SPECS) - 1
+    )
+    daf = OrganizationUnit.objects.get(code="DAF")
+    assert daf.long_name == "Direction administrative et financiere"
+    assert daf.short_name == "daf"
+    assert (
+        dict(
+            OrganizationUnit.objects.filter(code__in=pilot_unit_codes).values_list(
+                "code", "short_name"
+            )
+        )
+        == UNIT_SHORT_NAMES
+    )
+    assert (
+        OrganizationUnitLink.objects.filter(
+            supervisor_service__code="DG",
+            collaborator_service__code__in=("DAF", "DRV"),
+        ).count()
+        == 2
+    )
     assert (
         ReportingLine.objects.filter(is_primary=True, end_date__isnull=True).count()
         == len(PILOT_USERS) - 2
     )
     assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
     assert assignments.count() == 73
+    assert assignments.filter(estimated_work_days__lte=10).count() == 65
+    assert assignments.filter(estimated_work_days__gt=10).count() == 8
+    assert (
+        assignments.filter(
+            status="completed", completed_at__date=models.F("due_date")
+        ).count()
+        == 38
+    )
+    assert (
+        assignments.filter(
+            status="completed", completed_at__date__lt=models.F("due_date")
+        ).count()
+        == 8
+    )
+    assert assignments.filter(status="closed_early").count() == 5
+    assert (
+        assignments.filter(
+            status="completed", completed_at__date__gt=models.F("due_date")
+        ).count()
+        == 10
+    )
+    assert (
+        assignments.filter(status="active", due_date__gte=timezone.localdate()).count()
+        == 7
+    )
+    assert (
+        assignments.filter(status="active", due_date__lt=timezone.localdate()).count()
+        == 5
+    )
+    assert ProgressSeriesCache.objects.filter(assignment__in=assignments).count() == 73
     progress_count = ProgressEntry.objects.filter(assignment__in=assignments).count()
     long_running = assignments.filter(task__code__endswith="-01").exclude(
         task__code__startswith="PIL-DG-"
@@ -69,6 +135,19 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     assert TaskProposal.objects.count() == 42
     assert TaskActivity.objects.filter(assignment__in=assignments).count() >= 100
     assert NotificationDelivery.objects.count() == 0
+
+    original_activity = TaskActivity.objects.filter(
+        assignment__in=assignments, kind="progress"
+    ).first()
+    assert original_activity is not None
+    TaskActivity.objects.create(
+        assignment=original_activity.assignment,
+        kind="progress",
+        actor=original_activity.actor,
+        message="Correction remplacee lors du prochain chargement.",
+        percentage_after=original_activity.percentage_after,
+        supersedes=original_activity,
+    )
 
     call_command("seed_pilot_users", verbosity=0)
     assert User.objects.count() == len(PILOT_USERS)
@@ -122,11 +201,41 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     )
     assert len(messages) == len(set(messages))
     assert TaskActivity.objects.filter(kind="reopened").exists()
+    assert (
+        TaskActivity.objects.filter(assignment__in=assignments, kind="reopened")
+        .values("assignment_id")
+        .distinct()
+        .count()
+        == 3
+    )
     assert TaskActivity.objects.filter(kind="validated").exists()
     assert assignments.filter(status="active", due_date__lt=timezone.localdate()).exists()
     assert assignments.filter(
         status="completed", completed_at__date__lt=models.F("due_date")
     ).exists()
+    delayed_over_one_week = [
+        assignment
+        for assignment in assignments.select_related("calendar")
+        if assignment.due_date
+        < (
+            assignment.completed_at.date()
+            if assignment.completed_at
+            else timezone.localdate()
+        )
+        and assignment.calendar.workdays_between(
+            assignment.due_date,
+            assignment.completed_at.date()
+            if assignment.completed_at
+            else timezone.localdate(),
+        )
+        > 5
+    ]
+    assert len(delayed_over_one_week) == 2
+    assert any(
+        assignment.status == "completed"
+        and assignment.progress_entries.order_by("-entry_date").first().percentage == 100
+        for assignment in delayed_over_one_week
+    )
 
 
 @pytest.mark.django_db

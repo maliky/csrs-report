@@ -55,3 +55,6 @@ def test_alias_is_normalized_and_unique_without_case_ambiguity() -> None:
 def test_login_page_labels_both_accepted_identifiers(client) -> None:
     content = client.get(reverse("login")).content.decode()
     assert "Email ou identifiant" in content
+    assert "mot de passe" in content
+    assert 'name="password"' in content
+    assert 'type="password"' in content

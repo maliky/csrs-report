@@ -24,6 +24,7 @@ from work.models import (
     InstitutionalAction,
     NotificationDelivery,
     OrganizationUnit,
+    OrganizationUnitLink,
     ProgressEntry,
     ProposalStatus,
     ReportingLine,
@@ -32,7 +33,18 @@ from work.models import (
     TaskActivity,
     TaskAssignment,
     TaskProposal,
+    WorkCalendar,
+    default_work_calendar_id,
 )
+from work.pilot_scenarios import (
+    EXPECTED_SCENARIO_COUNTS,
+    IsWorkingDay,
+    PilotScenario,
+    ScenarioKind,
+    build_pilot_scenario,
+    scenario_counts,
+)
+from work.progress_cache import rebuild_progress_caches
 from work.services import set_primary_supervisor, week_start_for
 
 
@@ -189,42 +201,83 @@ UNIT_SPECS = (
     ("MG", "Moyens generaux", "RH"),
 )
 
+UNIT_SHORT_NAMES = {
+    "CSRS-DEMO": "csrs",
+    "DG": "dg",
+    "DAF": "daf",
+    "DRV": "drv",
+    "DRD-DIR": "drd",
+    "FIN": "finances",
+    "TSI": "tsi",
+    "FOR": "formation",
+    "VAL": "valorisation",
+    "CT": "ct",
+    "RSE": "rse",
+    "GEI": "gei",
+    "ETH": "ethique",
+    "SE": "suivi-evaluation",
+    "CG": "controle-gestion",
+    "RH": "rh",
+    "I2A": "intendance",
+    "ACH": "achats",
+    "DOC": "documentation",
+    "DRD": "recherche",
+    "CLIN": "clinique",
+    "OBS": "observatoires",
+    "LAB": "laboratoire",
+    "MIC": "microscopie",
+    "AX-SAN": "sante",
+    "AX-ENV": "environnement",
+    "AX-SEC": "securite-alimentaire",
+    "AX-SOC": "sciences-sociales",
+    "GLP": "glp",
+    "PAT": "patrimoine",
+    "STA": "stations",
+    "UAR": "appui-recherche",
+    "UGT": "ressources-techniques",
+    "CAP": "capitalisation",
+    "AX-BIO": "biodiversite",
+    "AX-AGR": "agriculture",
+    "MG": "moyens-generaux",
+}
+
 LEGACY_EMAILS = (
     "responsable.demo@example.invalid",
     "observateur.demo@example.invalid",
     "employe.demo@example.invalid",
 )
 
-ProgressHistoryItem = tuple[int, int, bool, str]
+TASK_SUBJECTS = (
+    "Consolider le programme mensuel",
+    "Finaliser les priorites de la quinzaine",
+    "Mettre a jour le registre des engagements",
+    "Verifier les pieces du dossier prioritaire",
+    "Preparer la reunion de coordination",
+    "Organiser la revue des livrables",
+    "Actualiser le calendrier operationnel",
+    "Rapprocher les indicateurs du service",
+    "Finaliser la note de synthese",
+    "Classer les justificatifs du trimestre",
+    "Resoudre les points restes en attente",
+    "Preparer le bilan de la periode",
+    "Mettre a jour le dossier de reference",
+    "Documenter les decisions de coordination",
+    "Verifier la conformite des livrables",
+    "Planifier les prochaines interventions",
+    "Consolider les demandes des collaborateurs",
+    "Finaliser le compte rendu de suivi",
+    "Mettre en ordre les documents partages",
+    "Preparer le point avec la direction",
+)
 
-
-def vary_progress_history(
-    history: tuple[ProgressHistoryItem, ...], *, variant: int
-) -> tuple[ProgressHistoryItem, ...]:
-    """Return a deterministic, credible variant of a progression history.
-
-    Args:
-        history: Base dated percentages for one task scenario.
-        variant: Stable employee index used to vary dates and intermediate values.
-
-    Returns:
-        A new history with the same scenario shape. Final 100 percent observations
-        remain final, while dates and other percentages vary by small increments.
-
-    """
-    day_shift = variant % 4
-    percentage_shift = ((variant // 4) - 1) * 5
-    return tuple(
-        (
-            offset + day_shift,
-            percentage
-            if percentage == 100
-            else max(0, min(95, percentage + percentage_shift)),
-            blocked,
-            note,
-        )
-        for offset, percentage, blocked, note in history
-    )
+PROGRESS_MESSAGES = (
+    "Le cadrage et les responsabilites ont ete confirmes",
+    "Les informations utiles ont ete rassemblees et controlees",
+    "Une premiere version exploitable a ete produite",
+    "Les retours des personnes concernees ont ete integres",
+    "Les derniers ecarts ont ete traites",
+    "Le resultat attendu a ete finalise et transmis",
+)
 
 
 class Command(BaseCommand):
@@ -259,6 +312,7 @@ class Command(BaseCommand):
             )
             self._ensure_hierarchy(users, units)
             self._ensure_scenarios(users)
+            self._warm_progress_caches()
             self._assert_counts()
             if demo_password and admin_password:
                 self._assert_authentication(users, demo_password, admin_password)
@@ -311,13 +365,23 @@ class Command(BaseCommand):
     @staticmethod
     def _ensure_units() -> dict[str, OrganizationUnit]:
         units: dict[str, OrganizationUnit] = {}
-        for code, name, parent_code in UNIT_SPECS:
-            parent = units.get(parent_code) if parent_code else None
+        for code, long_name, _parent_code in UNIT_SPECS:
             unit, _ = OrganizationUnit.objects.update_or_create(
                 code=code,
-                defaults={"name": name, "parent": parent, "active": True},
+                defaults={
+                    "short_name": UNIT_SHORT_NAMES[code],
+                    "long_name": long_name,
+                    "active": True,
+                },
             )
             units[code] = unit
+        for code, _long_name, supervisor_code in UNIT_SPECS:
+            if supervisor_code is None:
+                continue
+            OrganizationUnitLink.objects.get_or_create(
+                supervisor_service=units[supervisor_code],
+                collaborator_service=units[code],
+            )
         return units
 
     @staticmethod
@@ -369,10 +433,23 @@ class Command(BaseCommand):
                 line.save(update_fields=["start_date"])
 
     def _ensure_scenarios(self, users: dict[str, User]) -> None:
-        current = week_start_for(timezone.localdate())
+        today = timezone.localdate()
+        current = week_start_for(today)
         start = current - timedelta(weeks=11)
         actions = self._ensure_action_plan(start)
-        TaskActivity.objects.filter(assignment__task__code__startswith="PIL-").delete()
+        calendar = WorkCalendar.objects.prefetch_related("days").get(
+            pk=default_work_calendar_id()
+        )
+        overrides = {item.day: item.is_working_day for item in calendar.days.all()}
+
+        def is_working_day(day: date) -> bool:
+            return overrides.get(day, day.weekday() < 5)
+
+        activities = TaskActivity.objects.filter(
+            assignment__task__code__startswith="PIL-"
+        )
+        activities.filter(supersedes__isnull=False).update(supersedes=None)
+        activities.delete()
         ProgressEntry.objects.filter(assignment__task__code__startswith="PIL-").delete()
         subordinate_specs = [
             spec for spec in PILOT_USERS if spec.manager_alias and spec.has_scenarios
@@ -386,16 +463,30 @@ class Command(BaseCommand):
                     employee=employee,
                     manager=manager,
                     action=actions[slot - 1],
-                    start=start,
-                    current=current,
-                    profile_variant=profile_variant,
+                    scenario=build_pilot_scenario(
+                        profile_variant * 5 + slot - 1,
+                        today=today,
+                        is_working_day=is_working_day,
+                    ),
+                    scenario_index=profile_variant * 5 + slot - 1,
+                    calendar=calendar,
                 )
                 for slot in range(1, 6)
             ]
             self._ensure_proposals(
                 employee, manager, actions[0], assignments[2], start, current
             )
-        self._ensure_dg_tasks(users["dg"], actions, start, current)
+        self._ensure_dg_tasks(users["dg"], actions, today, calendar, is_working_day)
+
+    @staticmethod
+    def _warm_progress_caches() -> None:
+        """Persist derived graph rows after all canonical pilot history is loaded."""
+        assignments = (
+            TaskAssignment.objects.filter(task__code__startswith="PIL-")
+            .select_related("calendar")
+            .prefetch_related("calendar__days", "progress_entries")
+        )
+        rebuild_progress_caches(assignments)
 
     @staticmethod
     def _ensure_action_plan(monday: date) -> tuple[InstitutionalAction, ...]:
@@ -447,17 +538,26 @@ class Command(BaseCommand):
         manager: User,
         action: InstitutionalAction,
         description: str,
-        start_date: date,
-        due_date: date,
-        status: str,
-        work_days: Decimal,
-    ) -> tuple[TaskAssignment, bool]:
-        from work.models import WorkCalendar, default_work_calendar_id
-
-        calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
-        normalized_due = calendar.due_date_for(start_date, work_days)
+        scenario: PilotScenario,
+        calendar: WorkCalendar,
+    ) -> TaskAssignment:
+        normalized_due = calendar.due_date_for(scenario.start_date, scenario.workload)
+        if normalized_due != scenario.due_date:
+            raise CommandError(
+                f"Echeance incoherente pour {code}: {normalized_due} != "
+                f"{scenario.due_date}."
+            )
+        status = cls._scenario_status(scenario)
         completed_at = (
-            cls._at(normalized_due, 16) if status == AssignmentStatus.COMPLETED else None
+            cls._at(scenario.completion_date, 16)
+            if scenario.completion_date is not None
+            else None
+        )
+        closed_reason = (
+            "Le responsable a cloture la tache avant achevement apres avoir "
+            "reoriente la priorite."
+            if scenario.kind == ScenarioKind.CLOSED_EARLY
+            else ""
         )
         task, _ = Task.objects.update_or_create(
             code=code,
@@ -468,20 +568,35 @@ class Command(BaseCommand):
                 "created_by": manager,
             },
         )
-        assignment, created = TaskAssignment.objects.update_or_create(
+        assignment, _created = TaskAssignment.objects.update_or_create(
             task=task,
             employee=employee,
             defaults={
                 "manager": manager,
-                "start_date": start_date,
+                "start_date": scenario.start_date,
                 "due_date": normalized_due,
-                "estimated_work_days": work_days,
+                "estimated_work_days": scenario.workload,
                 "calendar": calendar,
                 "status": status,
+                "closed_reason": closed_reason,
                 "completed_at": completed_at,
             },
         )
-        return assignment, created
+        return assignment
+
+    @staticmethod
+    def _scenario_status(scenario: PilotScenario) -> str:
+        if scenario.kind == ScenarioKind.CLOSED_EARLY:
+            return AssignmentStatus.CLOSED_EARLY
+        if scenario.kind in (
+            ScenarioKind.ON_TIME,
+            ScenarioKind.EARLY_COMPLETED,
+            ScenarioKind.SLIGHT_LATE_COMPLETED,
+            ScenarioKind.REOPENED_COMPLETED,
+            ScenarioKind.BIG_LATE_COMPLETED,
+        ):
+            return AssignmentStatus.COMPLETED
+        return AssignmentStatus.ACTIVE
 
     def _ensure_activity_task(
         self,
@@ -490,164 +605,183 @@ class Command(BaseCommand):
         employee: User,
         manager: User,
         action: InstitutionalAction,
-        start: date,
-        current: date,
-        profile_variant: int,
+        scenario: PilotScenario,
+        scenario_index: int,
+        calendar: WorkCalendar,
     ) -> TaskAssignment:
         """Create one role-based activity and its dated progress history."""
         alias = cast(str, employee.login_alias)
-        subjects = (
-            "Consolider le programme trimestriel",
-            "Finaliser les priorites de la quinzaine",
-            "Mettre a jour le dossier de reference",
-            "Lever les points bloquants du service",
-            "Rattraper les livrables en retard",
-        )
-        starts = (
-            start,
-            current - timedelta(weeks=1),
-            start + timedelta(weeks=2),
-            start + timedelta(weeks=5),
-            start + timedelta(weeks=7),
-        )
-        dues = (
-            current + timedelta(weeks=2),
-            current + timedelta(days=11),
-            start + timedelta(weeks=4, days=4),
-            start + timedelta(weeks=7, days=4),
-            start + timedelta(weeks=9, days=4),
-        )
-        statuses = (
-            AssignmentStatus.ACTIVE,
-            AssignmentStatus.ACTIVE,
-            AssignmentStatus.COMPLETED,
-            AssignmentStatus.COMPLETED,
-            AssignmentStatus.ACTIVE,
-        )
-        work = ("65.00", "14.00", "20.00", "20.00", "10.00")
-        assignment, _created = self._task(
+        title = TASK_SUBJECTS[scenario_index % len(TASK_SUBJECTS)]
+        assignment = self._task(
             code=f"PIL-{alias.upper()}-{slot:02d}",
-            title=subjects[slot - 1],
+            title=title,
             description=(
-                f"Coordonner les travaux relevant de {employee.position.lower()}, "
-                "documenter les resultats obtenus et signaler rapidement les difficultes."
+                f"Produire un resultat verifiable relevant de "
+                f"{employee.position.lower()}, conserver les justificatifs utiles et "
+                "partager les points d'attention avec le responsable."
             ),
             employee=employee,
             manager=manager,
             action=action,
-            start_date=starts[slot - 1],
-            due_date=dues[slot - 1],
-            status=statuses[slot - 1],
-            work_days=Decimal(work[slot - 1]),
+            scenario=scenario,
+            calendar=calendar,
         )
-        histories: tuple[tuple[int, int, bool, str], ...]
-        if slot == 1:
-            histories = tuple(
-                (week * 7 + 1, value, False, note)
-                for week, (value, note) in enumerate(
-                    zip(
-                        (5, 15, 25, 35, 45, 55, 65, 75, 80),
-                        (
-                            "Cadrage partage avec les personnes concernees.",
-                            "Premier lot d'informations consolide.",
-                            "Donnees principales verifiees.",
-                            "Points de coordination traites.",
-                            "Version intermediaire transmise.",
-                            "Retours integres dans le dossier.",
-                            "Controle interne en cours.",
-                            "Derniers ajustements engages.",
-                            "Livrable presque finalise.",
-                        ),
-                        strict=True,
-                    )
-                )
+        self._materialize_scenario(assignment, employee, manager, scenario)
+        self._ensure_conversation(assignment, employee, manager, scenario, scenario_index)
+        return assignment
+
+    def _materialize_scenario(
+        self,
+        assignment: TaskAssignment,
+        employee: User,
+        manager: User,
+        scenario: PilotScenario,
+    ) -> None:
+        """Persist progress and lifecycle events from one immutable narrative."""
+        previous = 0
+        for stage_index, milestone in enumerate(scenario.milestones):
+            note = self._progress_message(
+                assignment,
+                employee,
+                stage_index,
+                milestone.percentage,
+                previous,
+                milestone.blocked,
             )
-        elif slot == 2:
-            histories = (
-                (1, 25, False, "Priorites confirmees pour la quinzaine."),
-                (3, 25, False, "Progression stable pendant la collecte des validations."),
-                (4, 45, False, "Premiers livrables disponibles pour revue."),
-            )
-        elif slot == 3:
-            histories = (
-                (1, 20, False, "Dossier ouvert et pieces rassemblees."),
-                (8, 65, False, "Contenu relu avec le responsable."),
-                (17, 100, False, "Dossier final transmis et classe."),
-            )
-        elif slot == 4:
-            histories = (
-                (1, 15, True, "Acces a une information necessaire indisponible."),
-                (8, 35, True, "Solution temporaire identifiee avec le responsable."),
-                (15, 75, False, "Acces retabli et travaux repris."),
-                (18, 100, False, "Point bloque resolu et resultat livre."),
-            )
-        else:
-            histories = (
-                (
-                    (1, 40, False, "Premiere remise preparee."),
-                    (8, 100, False, "Livrable remis et valide."),
-                    (15, 75, False, "Une anomalie constatee impose une reprise."),
-                    (22, 85, False, "Correction appliquee; dernier controle en cours."),
-                )
-                if alias == "jardinier"
-                else (
-                    (1, 10, False, "Rattrapage organise par ordre de priorite."),
-                    (8, 35, False, "Deux livrables sur cinq termines."),
-                    (
-                        15,
-                        30,
-                        False,
-                        "Une verification a impose la reprise d'un livrable.",
-                    ),
-                    (22, 55, False, "Reprise terminee et calendrier actualise."),
-                )
-            )
-        if not (slot == 5 and alias == "jardinier"):
-            histories = vary_progress_history(histories, variant=profile_variant)
-        for offset, percentage, blocked, note in histories:
             self._ensure_progress(
                 assignment,
                 employee,
-                starts[slot - 1] + timedelta(days=offset),
-                percentage,
-                blocked,
-                f"{note} Dossier {assignment.task.title.lower()} — {employee.position.lower()}.",
+                milestone.day,
+                milestone.percentage,
+                milestone.blocked,
+                note,
+                previous,
             )
-        if slot == 5 and alias == "jardinier":
+            previous = milestone.percentage
+
+        for validation_index, validation_day in enumerate(scenario.validation_dates):
+            repeated_validation = len(scenario.validation_dates) > 1
+            label = (
+                "Premiere validation"
+                if repeated_validation and validation_index == 0
+                else "Validation finale"
+                if repeated_validation
+                else "Achevement"
+            )
             TaskActivity.objects.create(
                 assignment=assignment,
                 kind=ActivityKind.VALIDATED,
                 actor=manager,
-                occurred_at=self._at(starts[slot - 1] + timedelta(days=8), 16),
-                message="Achevement valide apres controle du programme d'entretien.",
+                occurred_at=self._at(validation_day, 16),
+                message=(
+                    f"{label} de {assignment.task.title.lower()} apres controle "
+                    f"du resultat produit par {employee.position.lower()}."
+                ),
                 percentage_before=100,
                 percentage_after=100,
+            )
+
+        if scenario.reopen_date is not None:
+            reopened_percentage = next(
+                item.percentage
+                for item in scenario.milestones
+                if item.day == scenario.reopen_date
             )
             TaskActivity.objects.create(
                 assignment=assignment,
                 kind=ActivityKind.REOPENED,
                 actor=employee,
-                occurred_at=self._at(starts[slot - 1] + timedelta(days=15), 9),
-                message="Tache rouverte a 75 % : une zone doit etre reprise apres le controle.",
+                occurred_at=self._at(scenario.reopen_date, 12),
+                message=(
+                    f"{assignment.task.title} rouverte apres le controle : une "
+                    f"correction precise reste a mener pour {employee.position.lower()}."
+                ),
                 percentage_before=100,
-                percentage_after=75,
+                percentage_after=reopened_percentage,
             )
-        if slot in (1, 2, 4, 5):
-            self._ensure_observation(
-                assignment,
-                employee,
-                f"Pour {assignment.task.title.lower()}, j'ai regroupe les pieces liees a {employee.position.lower()}; je poursuis comme convenu.",
-                starts[slot - 1] + timedelta(days=2),
-                10,
+
+        if scenario.close_date is not None:
+            percentage = scenario.milestones[-1].percentage
+            TaskActivity.objects.create(
+                assignment=assignment,
+                kind=ActivityKind.CLOSED,
+                actor=manager,
+                occurred_at=self._at(scenario.close_date, 16),
+                message=(
+                    f"{assignment.task.title} cloturee par le responsable avant "
+                    "achevement : la priorite a ete reorientee et le travail produit "
+                    f"reste conserve pour {employee.position.lower()}."
+                ),
+                percentage_before=percentage,
+                percentage_after=percentage,
             )
+
+    @staticmethod
+    def _progress_message(
+        assignment: TaskAssignment,
+        employee: User,
+        stage_index: int,
+        percentage: int,
+        previous: int,
+        blocked: bool,
+    ) -> str:
+        if percentage < previous:
+            event = "Une reprise ciblee a ete ouverte apres le controle"
+        elif blocked:
+            event = "Un acces necessaire manque encore et le responsable est informe"
+        else:
+            event = PROGRESS_MESSAGES[min(stage_index, len(PROGRESS_MESSAGES) - 1)]
+        return (
+            f"{event} pour {assignment.task.title.lower()}, dans le cadre de "
+            f"{employee.position.lower()}."
+        )
+
+    def _ensure_conversation(
+        self,
+        assignment: TaskAssignment,
+        employee: User,
+        manager: User,
+        scenario: PilotScenario,
+        scenario_index: int,
+    ) -> None:
+        first_day = scenario.milestones[0].day
+        response_day = scenario.milestones[min(1, len(scenario.milestones) - 1)].day
+        last_day = scenario.milestones[-1].day
+        self._ensure_observation(
+            assignment,
+            employee,
+            (
+                f"Pour {assignment.task.title.lower()}, les pieces utiles sont "
+                f"regroupees et le prochain point est fixe avec "
+                f"{employee.position.lower()}."
+            ),
+            first_day,
+            9,
+        )
+        if scenario_index % 3:
             self._ensure_observation(
                 assignment,
                 manager,
-                f"Bien recu pour {assignment.task.title.lower()} et le volet {employee.position.lower()}. Garde les justificatifs et signale-moi tout ecart, stp.",
-                starts[slot - 1] + timedelta(days=3),
+                (
+                    f"Le point sur {assignment.task.title.lower()} est bien recu; "
+                    f"les justificatifs de {employee.position.lower()} sont a "
+                    "conserver et tout ecart de calendrier doit etre signale."
+                ),
+                response_day,
                 15,
             )
-        return assignment
+        if scenario_index % 5 == 0:
+            self._ensure_observation(
+                assignment,
+                employee,
+                (
+                    f"Le dossier de {assignment.task.title.lower()} tient maintenant "
+                    f"compte du retour sur {employee.position.lower()} et des pieces "
+                    "complementaires."
+                ),
+                last_day,
+                14,
+            )
 
     def _ensure_progress(
         self,
@@ -657,6 +791,7 @@ class Command(BaseCommand):
         percentage: int,
         blocked: bool,
         note: str,
+        previous: int,
     ) -> None:
         entry, _created = ProgressEntry.objects.update_or_create(
             assignment=assignment,
@@ -677,9 +812,6 @@ class Command(BaseCommand):
             entry.history.model.objects.filter(history_id=historical.history_id).update(
                 history_date=stamp
             )
-        if percentage == 100 and assignment.status == AssignmentStatus.COMPLETED:
-            TaskAssignment.objects.filter(pk=assignment.pk).update(completed_at=stamp)
-            assignment.completed_at = stamp
         TaskActivity.objects.create(
             assignment=assignment,
             kind=ActivityKind.PROGRESS,
@@ -687,18 +819,19 @@ class Command(BaseCommand):
             actor=author,
             occurred_at=stamp,
             message=note,
+            percentage_before=previous,
             percentage_after=percentage,
         )
 
     def _ensure_observation(
         self, assignment: TaskAssignment, author: User, body: str, day: date, hour: int
     ) -> None:
-        TaskActivity.objects.get_or_create(
+        TaskActivity.objects.create(
             assignment=assignment,
             kind=ActivityKind.COMMENT,
             actor=author,
             message=body,
-            defaults={"occurred_at": self._at(day, hour)},
+            occurred_at=self._at(day, hour),
         )
 
     def _ensure_proposals(
@@ -740,8 +873,6 @@ class Command(BaseCommand):
             ).first()
             created = proposal is None
             if proposal is None:
-                from work.models import WorkCalendar, default_work_calendar_id
-
                 calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
                 proposal = TaskProposal.objects.create(
                     employee=employee,
@@ -749,8 +880,8 @@ class Command(BaseCommand):
                     description="Organiser le travail, produire un resultat verifiable et partager les points d'attention.",
                     action=action,
                     start_date=created_day,
-                    due_date=calendar.due_date_for(created_day, Decimal("4.00")),
-                    estimated_work_days=Decimal("4.00"),
+                    due_date=calendar.due_date_for(created_day, Decimal("4.0")),
+                    estimated_work_days=Decimal("4.0"),
                     calendar=calendar,
                 )
             created_stamp = self._at(created_day, 9)
@@ -785,65 +916,34 @@ class Command(BaseCommand):
         self,
         dg: User,
         actions: tuple[InstitutionalAction, ...],
-        start: date,
-        current: date,
+        today: date,
+        calendar: WorkCalendar,
+        is_working_day: IsWorkingDay,
     ) -> None:
         specs = (
-            (
-                "Suivre les engagements de la direction",
-                start,
-                current + timedelta(weeks=2),
-                AssignmentStatus.ACTIVE,
-                "65.00",
-                (10, 35, 60, 80),
-            ),
-            (
-                "Arbitrer les priorites institutionnelles",
-                current - timedelta(weeks=1),
-                current + timedelta(days=11),
-                AssignmentStatus.ACTIVE,
-                "14.00",
-                (20, 45),
-            ),
-            (
-                "Valider la note d'orientation trimestrielle",
-                start + timedelta(weeks=3),
-                start + timedelta(weeks=5),
-                AssignmentStatus.COMPLETED,
-                "20.00",
-                (25, 70, 100),
-            ),
+            ("Suivre les engagements de la direction", 71),
+            ("Arbitrer les priorites institutionnelles", 70),
+            ("Valider la note d'orientation trimestrielle", 72),
         )
-        for slot, (title, task_start, due, status, work, values) in enumerate(specs, 1):
-            assignment, _created = self._task(
+        for slot, (title, scenario_index) in enumerate(specs, 1):
+            scenario = build_pilot_scenario(
+                scenario_index, today=today, is_working_day=is_working_day
+            )
+            assignment = self._task(
                 code=f"PIL-DG-{slot:02d}",
                 title=title,
-                description="Examiner les informations consolidees, consigner les arbitrages et suivre leur execution.",
+                description=(
+                    "Examiner les informations consolidees, consigner les arbitrages "
+                    "et suivre leur execution avec les directions concernees."
+                ),
                 employee=dg,
                 manager=dg,
                 action=actions[(slot - 1) % len(actions)],
-                start_date=task_start,
-                due_date=due,
-                status=status,
-                work_days=Decimal(work),
+                scenario=scenario,
+                calendar=calendar,
             )
-            for step, value in enumerate(values):
-                day = task_start + timedelta(days=step * 7 + 1)
-                self._ensure_progress(
-                    assignment,
-                    dg,
-                    day,
-                    value,
-                    False,
-                    f"Point de direction a {value} % pour {title.lower()}; les prochaines actions sont confirmees.",
-                )
-            self._ensure_observation(
-                assignment,
-                dg,
-                f"Les arbitrages concernant {title.lower()} sont consignes dans le dossier de suivi.",
-                task_start + timedelta(days=2),
-                16,
-            )
+            self._materialize_scenario(assignment, dg, dg, scenario)
+            self._ensure_conversation(assignment, dg, dg, scenario, scenario_index)
 
     @staticmethod
     def _assert_counts() -> None:
@@ -862,6 +962,10 @@ class Command(BaseCommand):
         assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
         if assignments.count() != 73:
             raise CommandError("Le nombre d'affectations d'illustration n'est pas 73.")
+        if scenario_counts() != EXPECTED_SCENARIO_COUNTS:
+            raise CommandError("La repartition des scenarios est incoherente.")
+        if assignments.filter(estimated_work_days__lte=Decimal("10.0")).count() != 65:
+            raise CommandError("La repartition des charges courtes est incoherente.")
         proposals = TaskProposal.objects.filter(employee__login_alias__in=aliases)
         if proposals.count() != 42:
             raise CommandError("Le nombre de propositions d'illustration n'est pas 42.")

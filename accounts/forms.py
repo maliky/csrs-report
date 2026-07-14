@@ -37,3 +37,8 @@ class AliasAuthenticationForm(AuthenticationForm):
     """Label the credential field according to both accepted identifiers."""
 
     username = forms.CharField(label="Email ou identifiant", max_length=254)
+    password = forms.CharField(
+        label="mot de passe",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+    )
