@@ -200,6 +200,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         )
     )
     assert len(messages) == len(set(messages))
+    assert any("(formation)" in message for message in messages)
+    assert not any("Direction administrative et financiere" in message for message in messages)
+    assert not any(" a ete " in message or " apres " in message for message in messages)
     assert TaskActivity.objects.filter(kind="reopened").exists()
     assert (
         TaskActivity.objects.filter(assignment__in=assignments, kind="reopened")

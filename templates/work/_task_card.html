@@ -5,10 +5,21 @@
     <span class="status status-{{ card.status }}">{{ card.status_label }}</span>
     <strong>{{ card.percentage }} % réalisé</strong>
   </div>
-  <div class="workload-chart" data-total="{{ card.workload.total_days|unlocalize }}" data-completed="{{ card.workload.completed_days|unlocalize }}" data-remaining="{{ card.workload.remaining_days|unlocalize }}" role="img" aria-label="Charge totale {{ card.workload.total_days|floatformat:'-1' }} jours, {{ card.workload.completed_days|floatformat:'-1' }} jours réalisés, {{ card.workload.remaining_days|floatformat:'-1' }} jours restants">
-    <p class="workload-summary"><span>{{ card.workload.completed_days|floatformat:"-1" }} j réalisés</span><span>{{ card.workload.remaining_days|floatformat:"-1" }} j restants</span><strong>{{ card.workload.total_days|floatformat:"-1" }} j au total</strong></p>
+  <div class="task-history-chart task-card-history-chart"
+       data-progress-url="{% url 'assignment-progress-json' card.assignment.pk %}"
+       data-chart-variant="compact"
+       data-action="{% if card.assignment.task.action %}{{ card.assignment.task.action.code }}{% else %}sans-action{% endif %}"
+       data-start="{{ card.assignment.start_date|date:'Y-m-d' }}"
+       data-open="{% if card.status == 'completed' or card.status == 'closed_early' %}false{% else %}true{% endif %}"
+       data-today="{{ today|date:'Y-m-d' }}"
+       data-due="{{ card.assignment.due_date|date:'Y-m-d' }}"
+       role="img"
+       tabindex="0"
+       aria-label="Évolution historique de {{ card.assignment.task.title }}">
+    <p class="chart-fallback">Progression actuelle : {{ card.percentage }} %.</p>
   </div>
+  <p class="workload-summary"><span>{{ card.workload.completed_days|floatformat:"-1" }} j réalisés</span><span>{{ card.workload.remaining_days|floatformat:"-1" }} j restants</span><strong>{{ card.workload.total_days|floatformat:"-1" }} j au total</strong></p>
   <p class="task-deadline deadline-{{ card.deadline_level }}"><strong>Échéance</strong> {{ card.assignment.due_date|date:"d/m/Y" }}</p>
   {% if card.latest and card.latest.blocked %}<p class="task-alert"><span aria-hidden="true">●</span> Point d’attention signalé</p>{% endif %}
-  {% if card.comments %}<details class="observation-preview"><summary>Observations ({{ card.comments|length }})</summary>{% for observation in card.comments %}<article><p>{{ observation.message }}</p><small>{{ observation.actor }} · {{ observation.occurred_at|date:'d/m/Y' }}</small></article>{% endfor %}</details>{% endif %}
+  {% if card.comments %}<details class="observation-preview"><summary>Observations ({{ card.comments|length }})</summary>{% for observation in card.comments %}<article><small>{{ observation.actor }} · <time datetime="{{ observation.occurred_at|date:'c' }}">{{ observation.occurred_at|date:'d/m/Y' }} · {{ observation.occurred_at|date:'H:i' }}</time></small><p>{{ observation.message }}</p></article>{% endfor %}</details>{% endif %}
 </article>

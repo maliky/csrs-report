@@ -891,7 +891,7 @@ def update_assignment_schedule(
             assignment=assignment,
             kind=ActivityKind.SCHEDULE,
             actor=user,
-            message="Planification mise a jour.",
+            message="Planification mise à jour.",
             details={"before": old, "after": new},
         )
 
@@ -917,7 +917,7 @@ def record_progress(
     if not employee_edit and not manager_edit:
         raise PermissionDenied("Vous ne pouvez pas modifier cette progression.")
     if assignment.status == AssignmentStatus.CLOSED_EARLY:
-        raise ValidationError("Une tache cloturee ne peut plus recevoir de progression.")
+        raise ValidationError("Une tâche clôturée ne peut plus recevoir de progression.")
     if employee_edit and entry_date != timezone.localdate():
         raise PermissionDenied("Une saisie passee doit etre corrigee par le responsable.")
     if not (user.is_it_admin or user.is_superuser) and percentage % 5:
@@ -954,7 +954,7 @@ def record_progress(
             blocked=blocked,
             author=user,
         )
-    activity_message = note.strip() or f"Progression enregistree a {percentage} %."
+    activity_message = note.strip() or f"Progression enregistrée à {percentage} %."
     TaskActivity.objects.create(
         assignment=assignment,
         kind=ActivityKind.PROGRESS,
@@ -978,7 +978,7 @@ def record_progress(
             kind=ActivityKind.REOPENED,
             actor=user,
             message=(
-                f"Tache rouverte de {previous} % a {percentage} %. {note.strip()}"
+                f"Tâche rouverte de {previous} % à {percentage} %. {note.strip()}"
             ).strip(),
             percentage_before=previous,
             percentage_after=percentage,
@@ -1003,9 +1003,9 @@ def validate_completion(user: User, assignment: TaskAssignment) -> None:
     )
     ensure_manage(user, assignment)
     if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
-        raise ValidationError("Cette tache n'est pas en attente de validation.")
+        raise ValidationError("Cette tâche n’est pas en attente de validation.")
     if current_progress(assignment) != 100:
-        raise ValidationError("Une tache doit etre realisee a 100 % avant validation.")
+        raise ValidationError("Une tâche doit être réalisée à 100 % avant validation.")
     assignment.status = AssignmentStatus.COMPLETED
     assignment.completed_at = timezone.now()
     assignment.save(update_fields=["status", "completed_at"])
@@ -1013,7 +1013,7 @@ def validate_completion(user: User, assignment: TaskAssignment) -> None:
         assignment=assignment,
         kind=ActivityKind.VALIDATED,
         actor=user,
-        message="Achevement valide.",
+        message="Achèvement validé.",
         percentage_before=100,
         percentage_after=100,
     )
@@ -1064,7 +1064,7 @@ def add_observation(
 ) -> TaskActivity:
     """Append a general observation under direct-participant permissions."""
     if not can_comment_assignment(user, assignment):
-        raise PermissionDenied("Vous ne pouvez pas commenter cette tache.")
+        raise PermissionDenied("Vous ne pouvez pas commenter cette tâche.")
     cleaned = message.strip()
     if not cleaned:
         raise ValidationError("Une observation est obligatoire.")
@@ -1148,20 +1148,29 @@ def weekly_assignments(employee: User, monday: date) -> QuerySet[TaskAssignment]
 
 
 def period_assignments(
-    employee: User, period: ReportingPeriod
+    employee: User,
+    period: ReportingPeriod,
+    *,
+    include_progress_cache: bool = True,
 ) -> QuerySet[TaskAssignment]:
-    """Return assignments that overlap an inclusive reporting period."""
+    """Return assignments that overlap an inclusive reporting period.
+
+    Args:
+        employee: Person whose assigned work is requested.
+        period: Inclusive week or month to display.
+        include_progress_cache: Join cached daily rows for curve consumers.
+
+    Returns:
+        Assignments with the relations required by cards and team profiles.
+
+    """
+    related = ["task", "employee", "manager", "task__action", "calendar"]
+    if include_progress_cache:
+        related.append("progress_series_cache")
     return (
         TaskAssignment.objects.filter(employee=employee, start_date__lte=period.end)
         .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
-        .select_related(
-            "task",
-            "employee",
-            "manager",
-            "task__action",
-            "calendar",
-            "progress_series_cache",
-        )
+        .select_related(*related)
         .prefetch_related("calendar__days", "progress_entries", "activities__actor")
     )
 

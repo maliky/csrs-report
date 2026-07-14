@@ -117,6 +117,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "cards": cards,
             "has_team": has_team,
             "can_self_assign": can_self_assign(user),
+            "today": timezone.localdate(),
             **navigation,
         },
     )
@@ -163,7 +164,6 @@ def assignment_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "display_is_open": display_status not in ("completed", "closed_early"),
             "self_managed": self_managed,
             "activities": activity_feed(assignment),
-            "progress_observation_count": assignment.progress_entries.count(),
             "today": timezone.localdate(),
         },
     )
@@ -447,7 +447,12 @@ def employee_detail(request: HttpRequest, employee_id: int) -> HttpResponse:
     return render(
         request,
         "work/employee_detail.html",
-        {"employee": employee, "cards": cards, **navigation},
+        {
+            "employee": employee,
+            "cards": cards,
+            "today": timezone.localdate(),
+            **navigation,
+        },
     )
 
 
@@ -455,25 +460,36 @@ def employee_detail(request: HttpRequest, employee_id: int) -> HttpResponse:
 def proposal_list(request: HttpRequest) -> HttpResponse:
     """Show proposal history to its author and direct primary manager."""
     user = request_user(request)
-    status = request.GET.get("status", "all")
+    navigation = period_context(request)
+    period = navigation["period"]
+    requested_status = request.GET.get("status", "all")
     valid_statuses = {choice for choice, _label in ProposalStatus.choices}
-    own = TaskProposal.objects.filter(employee=user)
+    status = requested_status if requested_status in valid_statuses else "all"
+    period_filter = {
+        "start_date__lte": period.end,
+        "due_date__gte": period.start,
+    }
+    own = TaskProposal.objects.filter(employee=user, **period_filter)
     employee_ids = user.supervised_lines.filter(
         is_primary=True, end_date__isnull=True
     ).values_list("employee_id", flat=True)
-    team = TaskProposal.objects.filter(employee_id__in=employee_ids)
+    team = TaskProposal.objects.filter(employee_id__in=employee_ids, **period_filter)
     if status in valid_statuses:
         own = own.filter(status=status)
         team = team.filter(status=status)
     common = ("employee", "action", "reviewed_by", "accepted_assignment")
+    ordering = ("-start_date", "-created_at")
     return render(
         request,
         "work/proposal_list.html",
         {
-            "own_proposals": own.select_related(*common),
-            "team_proposals": team.select_related(*common),
+            "own_proposals": own.select_related(*common).order_by(*ordering),
+            "team_proposals": team.select_related(*common).order_by(*ordering),
             "selected_status": status,
+            "status_filter_query": f"&status={status}",
             "has_team": employee_ids.exists(),
+            "can_self_assign": can_self_assign(user),
+            **navigation,
         },
     )
 

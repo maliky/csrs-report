@@ -1,4 +1,6 @@
+from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 import re
 
 import pytest
@@ -20,6 +22,11 @@ from work.models import (
     default_work_calendar_id,
 )
 from work.services import week_start_for
+
+
+def test_terminal_status_badges_share_the_same_color() -> None:
+    css = (Path(__file__).parents[1] / "static/css/app.css").read_text()
+    assert ".status-completed,.status-closed_early{color:#285b9b}" in css
 
 
 @pytest.mark.django_db
@@ -178,7 +185,10 @@ def test_assignment_detail_shows_start_today_and_due_in_chart_and_facts(
     assert "Charge initiale</dt><dd>5 jours" in content
     assert "Charge réalisée</dt><dd>0,8 jours" in content
     assert "Charge restante</dt><dd>4,2 jours" in content
-    assert "saisie historique" in content
+    assert "Les points pleins sont des saisies réelles" in content
+    assert content.index('class="chart-dates"') < content.index(
+        'class="task-history-chart"'
+    )
 
 
 @pytest.mark.django_db
@@ -286,6 +296,64 @@ def test_month_view_and_proposal_visibility_are_scoped(
 
 
 @pytest.mark.django_db
+def test_proposal_period_and_status_filters_are_combined_and_preserved(
+    client, people: dict[str, User], action: InstitutionalAction
+) -> None:
+    monday = week_start_for(timezone.localdate())
+    calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
+    overlapping = TaskProposal.objects.create(
+        employee=people["employee"],
+        title="Proposition de la semaine",
+        description="Chevauche le début de la semaine",
+        action=action,
+        start_date=monday - timedelta(days=2),
+        due_date=monday + timedelta(days=1),
+        estimated_work_days=Decimal("2.0"),
+        calendar=calendar,
+    )
+    old_start = monday - timedelta(days=21)
+    TaskProposal.objects.create(
+        employee=people["employee"],
+        title="Proposition ancienne",
+        description="Hors de la période",
+        action=action,
+        start_date=old_start,
+        due_date=calendar.due_date_for(old_start, Decimal("2.0")),
+        estimated_work_days=Decimal("2.0"),
+        calendar=calendar,
+    )
+    client.force_login(people["employee"])
+
+    content = client.get(
+        reverse("proposal-list"),
+        {"week": monday.isoformat(), "status": ProposalStatus.SUBMITTED},
+    ).content.decode()
+
+    assert overlapping.title in content
+    assert "Proposition ancienne" not in content
+    assert f"week={monday:%Y-%m-%d}&amp;status=accepted" in content
+    previous = monday - timedelta(days=7)
+    assert f"week={previous:%Y-%m-%d}&amp;status=submitted" in content
+    assert f"month={monday:%Y-%m}&amp;status=submitted" in content
+
+
+@pytest.mark.django_db
+def test_proposal_button_is_hidden_for_root_and_renamed_for_employee(
+    client, people: dict[str, User]
+) -> None:
+    root = User.objects.create_user("dg-proposals@example.test")
+    client.force_login(root)
+    root_content = client.get(reverse("proposal-list")).content.decode()
+    assert "Proposer une tâche" not in root_content
+    assert "Nouvelle proposition" not in root_content
+
+    client.force_login(people["employee"])
+    employee_content = client.get(reverse("proposal-list")).content.decode()
+    assert "Proposer une tâche" in employee_content
+    assert "Nouvelle proposition" not in employee_content
+
+
+@pytest.mark.django_db
 def test_old_proposal_queue_redirects_to_pending_filter(client, people) -> None:
     client.force_login(people["manager"])
     response = client.get(reverse("proposal-queue"))
@@ -294,7 +362,7 @@ def test_old_proposal_queue_redirects_to_pending_filter(client, people) -> None:
 
 
 @pytest.mark.django_db
-def test_dashboard_has_compact_workload_and_all_period_observations(
+def test_dashboard_has_compact_curve_and_all_period_observations(
     client, assignment: TaskAssignment, people: dict[str, User]
 ) -> None:
     for index in range(3):
@@ -306,11 +374,16 @@ def test_dashboard_has_compact_workload_and_all_period_observations(
         )
     client.force_login(people["employee"])
     content = client.get(reverse("dashboard")).content.decode()
-    assert 'class="workload-chart"' in content
+    assert 'class="task-history-chart task-card-history-chart"' in content
+    assert 'data-chart-variant="compact"' in content
+    assert "Comprendre les graphiques" in content
     assert "j réalisés" in content
     assert "Observations (3)" in content
     for index in range(3):
         assert f"Observation generale {index}" in content
+    assert content.index(str(people["employee"])) < content.index(
+        "Observation generale 0"
+    )
     assert " points)" not in content
 
 
@@ -330,12 +403,14 @@ def test_team_member_profile_is_loaded_by_authorized_json_route(
     payload = response.json()
 
     assert response.status_code == 200
-    assert payload["summary"]["task_count"] == 1
+    assert "summary" not in payload
     assert payload["tasks"][0]["task_id"] == assignment.pk
     assert payload["tasks"][0]["percentage"] == 45
-    assert payload["tasks"][0]["observation_count"] == 1
-    assert payload["tasks"][0]["progress"][-1]["day"] == str(timezone.localdate())
-    assert ProgressSeriesCache.objects.filter(assignment=assignment).exists()
+    assert payload["tasks"][0]["planned_work_days"] == 5.0
+    assert payload["tasks"][0]["completed_work_days"] == 2.3
+    assert payload["tasks"][0]["remaining_work_days"] == 2.7
+    assert "progress" not in payload["tasks"][0]
+    assert not ProgressSeriesCache.objects.filter(assignment=assignment).exists()
 
     client.force_login(people["outsider"])
     assert (

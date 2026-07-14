@@ -8,6 +8,12 @@
 </div>
 <section class="panel">
   <h2>Historique de progression</h2>
+  {% include "work/_chart_legend.html" with legend_id="task-chart-legend" legend_variant="progress" %}
+  <dl class="chart-dates" aria-label="Repères du graphique">
+    <div class="chart-date-start"><dt>Début</dt><dd>{{ assignment.start_date|date:"d/m/Y" }}</dd></div>
+    <div class="chart-date-today"><dt>Aujourd’hui</dt><dd>{{ today|date:"d/m/Y" }}</dd></div>
+    <div class="chart-date-due"><dt>Fin prévue</dt><dd>{{ assignment.due_date|date:"d/m/Y" }}</dd></div>
+  </dl>
   <div class="task-history-chart"
        data-progress-url="{% url 'assignment-progress-json' assignment.pk %}"
        data-planned="{{ assignment.estimated_work_days }}"
@@ -21,12 +27,7 @@
        aria-label="Évolution historique de {{ assignment.task.title }}, du {{ assignment.start_date|date:'d/m/Y' }} au {{ assignment.due_date|date:'d/m/Y' }}, aujourd’hui {{ today|date:'d/m/Y' }}">
     <p class="chart-fallback">Progression actuelle : {{ initial_progress }} %.</p>
   </div>
-  <dl class="chart-dates" aria-label="Repères du graphique">
-    <div class="chart-date-start"><dt>Début</dt><dd>{{ assignment.start_date|date:"d/m/Y" }}</dd></div>
-    <div class="chart-date-today"><dt>Aujourd’hui</dt><dd>{{ today|date:"d/m/Y" }}</dd></div>
-    <div class="chart-date-due"><dt>Fin prévue</dt><dd>{{ assignment.due_date|date:"d/m/Y" }}</dd></div>
-  </dl>
-  <p class="chart-caption">{{ progress_observation_count }} saisie{{ progress_observation_count|pluralize }} historique{{ progress_observation_count|pluralize }}. Les points pleins sont les saisies réelles; les points creux reportent la dernière valeur connue.</p>
+  <p class="chart-caption">Les points pleins sont des saisies réelles ; les points creux reportent la dernière valeur connue.</p>
 </section>
 <div class="detail-grid">
   <section class="panel">

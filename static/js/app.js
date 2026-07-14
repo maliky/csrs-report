@@ -64,6 +64,7 @@ function renderWorkloadChart(element) {
   const total = Number(element.dataset.total);
   const completed = Number(element.dataset.completed);
   if (!Number.isFinite(total) || total <= 0) return;
+  element.querySelectorAll("svg").forEach((svg) => svg.remove());
   const width = Math.max(220, element.clientWidth || 280);
   const height = 66;
   const margin = { top: 18, right: 8, bottom: 20, left: 8 };
@@ -169,7 +170,11 @@ function renderProgressChart(element, rawRows, { variant = "compact" } = {}) {
   const today = parseDate(element.dataset.today) || rows.at(-1).date;
   const due = parseDate(element.dataset.due) || rows[0].dueDate;
   const last = rows.at(-1).date;
-  const end = new Date(Math.max(today.valueOf(), due.valueOf(), last.valueOf()));
+  const open = element.dataset.open === "true";
+  const end = open
+    ? new Date(Math.max(today.valueOf(), due.valueOf(), last.valueOf()))
+    : last;
+  element.dataset.chartEnd = isoDate(end);
   const compact = variant === "compact";
   const width = Math.max(compact ? 270 : 640, element.clientWidth || (compact ? 320 : 860));
   const height = compact ? 128 : 330;
@@ -188,8 +193,6 @@ function renderProgressChart(element, rawRows, { variant = "compact" } = {}) {
   const color = colorFor(element.dataset.action || "sans-action");
   const svg = d3.select(element).insert("svg", ":first-child").attr("viewBox", `0 0 ${width} ${height}`).attr("aria-hidden", "true");
   const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-  const open = element.dataset.open === "true";
-
   if (open && today > due && rows.at(-1).percentage < 100) {
     chart.append("rect").attr("x", xDate(due)).attr("y", 0).attr("width", Math.max(0, xDate(today) - xDate(due))).attr("height", innerHeight).attr("class", "chart-overrun-zone");
   }
@@ -201,7 +204,7 @@ function renderProgressChart(element, rawRows, { variant = "compact" } = {}) {
     { date: today, label: "Aujourd’hui", className: "chart-today-line" },
     { date: due, label: "Fin prévue", className: "chart-due-line" },
   ];
-  markerData.forEach((marker, index) => {
+  markerData.filter((marker) => marker.date >= start && marker.date <= end).forEach((marker, index) => {
     const position = xDate(marker.date);
     chart.append("line").attr("x1", position).attr("x2", position).attr("y1", 0).attr("y2", innerHeight).attr("class", marker.className);
     if (!compact) chart.append("text").attr("x", position).attr("y", -10 - (index % 2) * 14).attr("text-anchor", position < innerWidth * 0.18 ? "start" : position > innerWidth * 0.82 ? "end" : "middle").attr("class", `chart-marker-label ${marker.className}-label`).text(`${marker.label} ${d3.utcFormat("%d/%m/%Y")(marker.date)}`);
@@ -276,7 +279,9 @@ async function renderTaskHistory(element) {
   try {
     const response = await fetch(element.dataset.progressUrl, { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    renderProgressChart(element, await response.json(), { variant: "full" });
+    renderProgressChart(element, await response.json(), {
+      variant: element.dataset.chartVariant === "compact" ? "compact" : "full",
+    });
   } catch (_error) {
     element.classList.add("chart-load-error");
   }
@@ -289,12 +294,6 @@ function createElement(tag, className, text) {
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
-}
-
-function statItem(label, value) {
-  const wrapper = createElement("div");
-  wrapper.append(createElement("dt", "", label), createElement("dd", "", value));
-  return wrapper;
 }
 
 function marker(label, className, symbol) {
@@ -316,20 +315,18 @@ function taskProfile(task) {
   if (task.late) markers.append(marker("Retard", "marker-late", "▲"));
   if (task.missing_update) markers.append(marker("Absence de mise à jour", "marker-missing", "○"));
   button.append(markers);
-  const chart = createElement("div", "task-profile-chart");
-  chart.dataset.action = task.action_code;
-  chart.dataset.start = task.start_date;
-  chart.dataset.today = task.today;
-  chart.dataset.due = task.due_date;
-  chart.dataset.open = task.is_open ? "true" : "false";
+  const chart = createElement("div", "task-profile-chart workload-chart");
+  chart.dataset.total = task.planned_work_days;
+  chart.dataset.completed = task.completed_work_days;
+  chart.dataset.remaining = task.remaining_work_days;
   chart.setAttribute("role", "img");
-  chart.setAttribute("aria-label", `${task.task_title}, ${task.percentage} pour cent, ${task.observation_count} saisies historiques`);
+  chart.setAttribute("aria-label", `${task.task_title}, ${formatNumber(task.completed_work_days)} jours réalisés, ${formatNumber(task.remaining_work_days)} jours restants`);
   row.append(button, chart);
   const details = createElement("div", "task-profile-details");
   details.hidden = true;
   details.append(
     createElement("p", "", `${task.percentage} % réalisé · ${formatNumber(task.remaining_work_days)} j restants · ${formatNumber(task.planned_work_days)} j initialement`),
-    createElement("p", "", `${task.observation_count} saisie${task.observation_count > 1 ? "s" : ""} · Début ${formatDate(task.start_date)} · Aujourd’hui ${formatDate(task.today)} · Fin prévue ${formatDate(task.due_date)}`),
+    createElement("p", "", `Début ${formatDate(task.start_date)} · Aujourd’hui ${formatDate(task.today)} · Fin prévue ${formatDate(task.due_date)}`),
   );
   const link = createElement("a", "", "Ouvrir la tâche");
   link.href = task.detail_url;
@@ -340,29 +337,18 @@ function taskProfile(task) {
     details.hidden = !expanded;
   });
   article.append(row, details);
-  requestAnimationFrame(() => renderProgressChart(chart, task.progress, { variant: "compact" }));
+  requestAnimationFrame(() => renderWorkloadChart(chart));
   return article;
 }
 
 function renderEmployeeProfile(branch, payload) {
   const target = branch.querySelector(":scope > .team-node-content > [data-team-profile-content]");
   if (!target) return;
-  const heading = createElement("div", "team-node-heading");
-  const link = createElement("a", "", "Voir toutes les tâches");
-  link.href = branch.dataset.teamEmployeeUrl;
-  const stats = createElement("dl", "stacked-stats");
-  stats.append(
-    statItem("Moyenne", `${formatNumber(payload.summary.mean_progress)} %`),
-    statItem("Médiane", `${formatNumber(payload.summary.median_progress)} %`),
-    statItem("Reste cumulé", `${formatNumber(payload.summary.remaining_total)} j`),
-    statItem("Reste moyen", `${formatNumber(payload.summary.remaining_mean)} j`),
-  );
-  heading.append(link, stats);
   const profiles = createElement("div", "task-profiles");
   profiles.append(createElement("h3", "", "Profil des tâches"));
   if (payload.tasks.length) payload.tasks.forEach((task) => profiles.append(taskProfile(task)));
   else profiles.append(createElement("p", "", "Aucune tâche sur cette période."));
-  target.replaceChildren(heading, profiles);
+  target.replaceChildren(profiles);
 }
 
 async function loadTeamBranch(branch) {

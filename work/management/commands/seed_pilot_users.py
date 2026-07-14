@@ -249,35 +249,49 @@ LEGACY_EMAILS = (
 
 TASK_SUBJECTS = (
     "Consolider le programme mensuel",
-    "Finaliser les priorites de la quinzaine",
-    "Mettre a jour le registre des engagements",
-    "Verifier les pieces du dossier prioritaire",
-    "Preparer la reunion de coordination",
+    "Finaliser les priorités de la quinzaine",
+    "Mettre à jour le registre des engagements",
+    "Vérifier les pièces du dossier prioritaire",
+    "Préparer la réunion de coordination",
     "Organiser la revue des livrables",
-    "Actualiser le calendrier operationnel",
+    "Actualiser le calendrier opérationnel",
     "Rapprocher les indicateurs du service",
-    "Finaliser la note de synthese",
+    "Finaliser la note de synthèse",
     "Classer les justificatifs du trimestre",
-    "Resoudre les points restes en attente",
-    "Preparer le bilan de la periode",
-    "Mettre a jour le dossier de reference",
-    "Documenter les decisions de coordination",
-    "Verifier la conformite des livrables",
+    "Résoudre les points restés en attente",
+    "Préparer le bilan de la période",
+    "Mettre à jour le dossier de référence",
+    "Documenter les décisions de coordination",
+    "Vérifier la conformité des livrables",
     "Planifier les prochaines interventions",
     "Consolider les demandes des collaborateurs",
     "Finaliser le compte rendu de suivi",
-    "Mettre en ordre les documents partages",
-    "Preparer le point avec la direction",
+    "Mettre en ordre les documents partagés",
+    "Préparer le point avec la direction",
 )
 
 PROGRESS_MESSAGES = (
-    "Le cadrage et les responsabilites ont ete confirmes",
-    "Les informations utiles ont ete rassemblees et controlees",
-    "Une premiere version exploitable a ete produite",
-    "Les retours des personnes concernees ont ete integres",
-    "Les derniers ecarts ont ete traites",
-    "Le resultat attendu a ete finalise et transmis",
+    "Le cadrage et les responsabilités ont été confirmés",
+    "Les informations utiles ont été rassemblées et contrôlées",
+    "Une première version exploitable a été produite",
+    "Les retours des personnes concernées ont été intégrés",
+    "Les derniers écarts ont été traités",
+    "Le résultat attendu a été finalisé et transmis",
 )
+
+
+def pilot_service_short_name(user: User) -> str:
+    """Return the configured service abbreviation for one pilot user."""
+    alias = cast(str, user.login_alias)
+    spec = next(item for item in PILOT_USERS if item.alias == alias)
+    return UNIT_SHORT_NAMES.get(spec.unit_code or "", alias)
+
+
+def pilot_actor_service_label(user: User) -> str:
+    """Identify one pilot author while retaining the short service name."""
+    alias = cast(str, user.login_alias)
+    service = pilot_service_short_name(user)
+    return service if alias == service else f"{alias} ({service})"
 
 
 class Command(BaseCommand):
@@ -505,7 +519,7 @@ class Command(BaseCommand):
         )
         action_specs = (
             ("ACT-PLAN", "Planifier et coordonner"),
-            ("ACT-PRIORITES", "Executer les priorites"),
+            ("ACT-PRIORITES", "Exécuter les priorités"),
             ("ACT-DOCUMENTATION", "Fiabiliser la documentation"),
             ("ACT-RESOLUTION", "Lever les points bloquants"),
             ("ACT-LIVRABLES", "Finaliser les livrables"),
@@ -554,8 +568,8 @@ class Command(BaseCommand):
             else None
         )
         closed_reason = (
-            "Le responsable a cloture la tache avant achevement apres avoir "
-            "reoriente la priorite."
+            "Le responsable a clôturé la tâche avant achèvement après avoir "
+            "réorienté la priorité."
             if scenario.kind == ScenarioKind.CLOSED_EARLY
             else ""
         )
@@ -611,14 +625,15 @@ class Command(BaseCommand):
     ) -> TaskAssignment:
         """Create one role-based activity and its dated progress history."""
         alias = cast(str, employee.login_alias)
+        service = pilot_service_short_name(employee)
         title = TASK_SUBJECTS[scenario_index % len(TASK_SUBJECTS)]
         assignment = self._task(
             code=f"PIL-{alias.upper()}-{slot:02d}",
             title=title,
             description=(
-                f"Produire un resultat verifiable relevant de "
-                f"{employee.position.lower()}, conserver les justificatifs utiles et "
-                "partager les points d'attention avec le responsable."
+                f"Produire un résultat vérifiable pour le service {service}, "
+                "conserver les justificatifs utiles et partager les points "
+                "d’attention avec le responsable."
             ),
             employee=employee,
             manager=manager,
@@ -662,11 +677,11 @@ class Command(BaseCommand):
         for validation_index, validation_day in enumerate(scenario.validation_dates):
             repeated_validation = len(scenario.validation_dates) > 1
             label = (
-                "Premiere validation"
+                "Première validation"
                 if repeated_validation and validation_index == 0
                 else "Validation finale"
                 if repeated_validation
-                else "Achevement"
+                else "Achèvement"
             )
             TaskActivity.objects.create(
                 assignment=assignment,
@@ -674,8 +689,9 @@ class Command(BaseCommand):
                 actor=manager,
                 occurred_at=self._at(validation_day, 16),
                 message=(
-                    f"{label} de {assignment.task.title.lower()} apres controle "
-                    f"du resultat produit par {employee.position.lower()}."
+                    f"{label} de {assignment.task.title.lower()} après contrôle "
+                    f"du résultat produit par le service "
+                    f"{pilot_actor_service_label(employee)}."
                 ),
                 percentage_before=100,
                 percentage_after=100,
@@ -693,8 +709,9 @@ class Command(BaseCommand):
                 actor=employee,
                 occurred_at=self._at(scenario.reopen_date, 12),
                 message=(
-                    f"{assignment.task.title} rouverte apres le controle : une "
-                    f"correction precise reste a mener pour {employee.position.lower()}."
+                    f"{assignment.task.title} rouverte après le contrôle : une "
+                    f"correction précise reste à mener par le service "
+                    f"{pilot_actor_service_label(employee)}."
                 ),
                 percentage_before=100,
                 percentage_after=reopened_percentage,
@@ -708,9 +725,9 @@ class Command(BaseCommand):
                 actor=manager,
                 occurred_at=self._at(scenario.close_date, 16),
                 message=(
-                    f"{assignment.task.title} cloturee par le responsable avant "
-                    "achevement : la priorite a ete reorientee et le travail produit "
-                    f"reste conserve pour {employee.position.lower()}."
+                    f"{assignment.task.title} clôturée par le responsable avant "
+                    "achèvement : la priorité a été réorientée et le travail produit "
+                    f"par le service {pilot_actor_service_label(employee)} est conservé."
                 ),
                 percentage_before=percentage,
                 percentage_after=percentage,
@@ -726,14 +743,14 @@ class Command(BaseCommand):
         blocked: bool,
     ) -> str:
         if percentage < previous:
-            event = "Une reprise ciblee a ete ouverte apres le controle"
+            event = "Une reprise ciblée a été ouverte après le contrôle"
         elif blocked:
-            event = "Un acces necessaire manque encore et le responsable est informe"
+            event = "Un accès nécessaire manque encore et le responsable est informé"
         else:
             event = PROGRESS_MESSAGES[min(stage_index, len(PROGRESS_MESSAGES) - 1)]
         return (
             f"{event} pour {assignment.task.title.lower()}, dans le cadre de "
-            f"{employee.position.lower()}."
+            f"l’activité du service {pilot_actor_service_label(employee)}."
         )
 
     def _ensure_conversation(
@@ -751,9 +768,9 @@ class Command(BaseCommand):
             assignment,
             employee,
             (
-                f"Pour {assignment.task.title.lower()}, les pieces utiles sont "
-                f"regroupees et le prochain point est fixe avec "
-                f"{employee.position.lower()}."
+                f"Pour {assignment.task.title.lower()}, le service "
+                f"{pilot_actor_service_label(employee)} a regroupé les pièces utiles "
+                "et fixé le prochain point de suivi."
             ),
             first_day,
             9,
@@ -763,9 +780,10 @@ class Command(BaseCommand):
                 assignment,
                 manager,
                 (
-                    f"Le point sur {assignment.task.title.lower()} est bien recu; "
-                    f"les justificatifs de {employee.position.lower()} sont a "
-                    "conserver et tout ecart de calendrier doit etre signale."
+                    f"Le point sur {assignment.task.title.lower()} transmis par "
+                    f"{pilot_actor_service_label(employee)} est bien reçu ; les "
+                    "justificatifs sont à conserver et tout écart de calendrier "
+                    "doit être signalé."
                 ),
                 response_day,
                 15,
@@ -776,8 +794,8 @@ class Command(BaseCommand):
                 employee,
                 (
                     f"Le dossier de {assignment.task.title.lower()} tient maintenant "
-                    f"compte du retour sur {employee.position.lower()} et des pieces "
-                    "complementaires."
+                    f"compte du retour adressé au service "
+                    f"{pilot_actor_service_label(employee)} et des pièces complémentaires."
                 ),
                 last_day,
                 14,
@@ -856,10 +874,10 @@ class Command(BaseCommand):
                 ProposalStatus.REJECTED,
                 start + timedelta(weeks=6),
                 None,
-                "Priorite reportee au prochain cycle de planification.",
+                "Priorité reportée au prochain cycle de planification.",
             ),
             (
-                "Formaliser le tableau de priorites",
+                "Formaliser le tableau de priorités",
                 ProposalStatus.SUBMITTED,
                 current + timedelta(days=1),
                 None,
@@ -877,7 +895,10 @@ class Command(BaseCommand):
                 proposal = TaskProposal.objects.create(
                     employee=employee,
                     title=title,
-                    description="Organiser le travail, produire un resultat verifiable et partager les points d'attention.",
+                    description=(
+                        "Organiser le travail, produire un résultat vérifiable et "
+                        "partager les points d’attention."
+                    ),
                     action=action,
                     start_date=created_day,
                     due_date=calendar.due_date_for(created_day, Decimal("4.0")),
@@ -922,7 +943,7 @@ class Command(BaseCommand):
     ) -> None:
         specs = (
             ("Suivre les engagements de la direction", 71),
-            ("Arbitrer les priorites institutionnelles", 70),
+            ("Arbitrer les priorités institutionnelles", 70),
             ("Valider la note d'orientation trimestrielle", 72),
         )
         for slot, (title, scenario_index) in enumerate(specs, 1):
@@ -933,8 +954,8 @@ class Command(BaseCommand):
                 code=f"PIL-DG-{slot:02d}",
                 title=title,
                 description=(
-                    "Examiner les informations consolidees, consigner les arbitrages "
-                    "et suivre leur execution avec les directions concernees."
+                    "Examiner les informations consolidées, consigner les arbitrages "
+                    "et suivre leur exécution avec les directions concernées."
                 ),
                 employee=dg,
                 manager=dg,

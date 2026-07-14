@@ -3,5 +3,6 @@
 {% block content %}
 <p><a href="{% url 'team-summary' %}?{{ period.query }}">← Retour à l’équipe</a></p><h1>{{ employee }}</h1>
 {% include "work/_period_nav.html" %}
+{% include "work/_chart_legend.html" with legend_id="employee-chart-legend" legend_variant="progress" %}
 <div class="task-grid">{% for card in cards %}{% include "work/_task_card.html" with card=card %}{% empty %}<p>Aucune tâche.</p>{% endfor %}</div>
 {% endblock %}

@@ -1,0 +1,12 @@
+<div class="chart-legend-control">
+  <button type="button" class="legend-toggle" aria-expanded="false" aria-controls="{{ legend_id }}">? <span>Comprendre les graphiques</span></button>
+  <div id="{{ legend_id }}" class="chart-legend" hidden>
+    {% if legend_variant == "workload" %}
+      <p><span class="legend-swatch workload-completed"></span> charge réalisée · <span class="legend-swatch workload-remaining"></span> charge restante</p>
+      <p><span class="marker marker-blocked">●</span> point d’attention · <span class="marker marker-late">▲</span> retard · <span class="marker marker-missing">○</span> absence de mise à jour</p>
+    {% else %}
+      <p>Les points pleins sont des saisies réelles ; les points creux reportent la dernière valeur connue.</p>
+      <p>Les bandes grises représentent les jours non ouvrés comprimés. La zone rose après l’échéance indique un retard sur une tâche ouverte.</p>
+    {% endif %}
+  </div>
+</div>

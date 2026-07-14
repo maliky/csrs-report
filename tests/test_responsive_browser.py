@@ -79,6 +79,32 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             percentage=60,
             author=self.user,
         )
+        closed_task = Task.objects.create(
+            code="BROWSER-CLOSED",
+            title="Clore une action avant l’échéance",
+            description="Contrôle de la fin du graphique",
+            action=action,
+            created_by=self.user,
+        )
+        closed_day = timezone.localdate() - timedelta(days=7)
+        closed_start = closed_day - timedelta(days=3)
+        self.closed_assignment = TaskAssignment.objects.create(
+            task=closed_task,
+            employee=self.user,
+            manager=self.user,
+            start_date=closed_start,
+            due_date=calendar.due_date_for(closed_start, Decimal("20.0")),
+            estimated_work_days=Decimal("20.0"),
+            calendar=calendar,
+            status="completed",
+            completed_at=timezone.now() - timedelta(days=7),
+        )
+        ProgressEntry.objects.create(
+            assignment=self.closed_assignment,
+            entry_date=closed_day,
+            percentage=100,
+            author=self.user,
+        )
         TaskActivity.objects.create(
             assignment=self.assignment,
             actor=self.user,
@@ -153,7 +179,9 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             assert driver.current_url == f"{self.live_server_url}/"
             assert "Mes tâches" in driver.page_source
             WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".workload-chart svg"))
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".task-card-history-chart svg")
+                )
             )
             assert not driver.find_elements(By.LINK_TEXT, "Observable")
             driver.get(f"{self.live_server_url}/taches/nouvelle/")
@@ -175,9 +203,11 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             top_branch.find_element(By.CSS_SELECTOR, ":scope > summary").click()
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, ".task-profile-chart svg")
+                    (By.CSS_SELECTOR, ".task-profile-chart.workload-chart svg")
                 )
             )
+            assert not driver.find_elements(By.LINK_TEXT, "Voir toutes les tâches")
+            assert "Reste cumulé" not in driver.page_source
             assert driver.find_element(
                 By.CSS_SELECTOR, ".team-tree > .team-branch .subteam"
             ).get_attribute("open")
@@ -194,18 +224,9 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                 By.CSS_SELECTOR, ".team-tree > .team-branch .subteam"
             ).get_attribute("open")
             assert not child_branch.get_attribute("open")
-            assert driver.find_element(By.CSS_SELECTOR, ".chart-overrun-zone")
-            pointer_layer = driver.find_element(
-                By.CSS_SELECTOR, ".task-profile-chart .chart-pointer-layer"
+            assert driver.find_element(
+                By.CSS_SELECTOR, ".task-profile-chart .workload-completed"
             )
-            ActionChains(driver).move_to_element(pointer_layer).perform()
-            tooltip = WebDriverWait(driver, 5).until(
-                EC.visibility_of_element_located(
-                    (By.CSS_SELECTOR, "body > .progress-chart-tooltip")
-                )
-            )
-            assert tooltip.value_of_css_property("position") == "fixed"
-            assert int(tooltip.value_of_css_property("z-index")) >= 10000
             toggle = driver.find_element(By.CSS_SELECTOR, ".task-profile-toggle")
             toggle.click()
             assert toggle.get_attribute("aria-expanded") == "true"
@@ -234,6 +255,18 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                 )
             }
             assert marker_labels == {"Début", "Aujourd’hui", "Fin"}
+            assert driver.find_element(By.CSS_SELECTOR, ".chart-overrun-zone")
+            pointer_layer = driver.find_element(
+                By.CSS_SELECTOR, ".task-history-chart .chart-pointer-layer"
+            )
+            ActionChains(driver).move_to_element(pointer_layer).perform()
+            tooltip = WebDriverWait(driver, 5).until(
+                EC.visibility_of_element_located(
+                    (By.CSS_SELECTOR, "body > .progress-chart-tooltip")
+                )
+            )
+            assert tooltip.value_of_css_property("position") == "fixed"
+            assert int(tooltip.value_of_css_property("z-index")) >= 10000
             slider = driver.find_element(By.CSS_SELECTOR, "[data-progress]")
             driver.execute_script(
                 "arguments[0].value=40; arguments[0].dispatchEvent(new Event('input',{bubbles:true}));",
@@ -247,5 +280,22 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             assert activity.value_of_css_property("flex-direction") == "row"
             driver.set_window_size(390, 800)
             assert activity.value_of_css_property("flex-direction") == "column"
+            driver.get(
+                f"{self.live_server_url}/taches/{self.closed_assignment.pk}/"
+            )
+            closed_chart = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".task-history-chart[data-chart-end]")
+                )
+            )
+            assert closed_chart.get_attribute("data-chart-end") == str(
+                self.closed_assignment.completed_at.date()
+            )
+            assert not driver.find_elements(
+                By.CSS_SELECTOR, ".task-history-chart .chart-today-line"
+            )
+            assert not driver.find_elements(
+                By.CSS_SELECTOR, ".task-history-chart .chart-due-line"
+            )
         finally:
             driver.quit()

@@ -1,119 +1,141 @@
-"""Typed JSON projection loaded lazily by the team dashboard."""
+"""Typed workload projection loaded lazily by the team dashboard."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
-from work.progress_cache import cached_daily_progress_rows
+from work.models import ProgressEntry, TaskAssignment
 from work.services import (
-    DailyProgressRow,
-    EmployeeSummary,
+    DeadlineLevel,
     ReportingPeriod,
-    TaskProgressSeries,
+    WorkloadBreakdown,
+    deadline_level,
     effective_assignment_status,
     period_assignments,
-    summarize_employee_period,
-    task_progress_series,
+    workload_breakdown,
 )
 
 
 @dataclass(frozen=True)
-class CachedTaskProfile:
-    """One calculated task profile paired with its cached daily rows."""
+class TeamTaskBar:
+    """One inexpensive task workload bar for the team dashboard."""
 
-    series: TaskProgressSeries
-    rows: tuple[DailyProgressRow, ...]
+    assignment: TaskAssignment
+    percentage: int
+    workload: WorkloadBreakdown
+    status: str
+    deadline_level: DeadlineLevel
+    blocked: bool
+    late: bool
+    missing_update: bool
+    today: date
 
     def as_json(self) -> dict[str, object]:
-        """Return chart metadata without observations, authors, or descriptions."""
-        assignment = self.series.assignment
-        status = effective_assignment_status(assignment.status, self.series.percentage)
+        """Return privacy-minimal workload metadata without historical rows."""
+        assignment = self.assignment
         return {
             "task_id": assignment.pk,
             "task_title": assignment.task.title,
             "detail_url": reverse("assignment-detail", args=[assignment.pk]),
-            "status": status,
-            "is_open": status not in ("completed", "closed_early"),
-            "action_code": self.series.action_key,
-            "percentage": self.series.percentage,
-            "observation_count": self.series.observation_count,
-            "planned_work_days": float(self.series.planned_days),
-            "displayed_days": float(self.series.displayed_days),
-            "overrun_days": float(self.series.overrun_days),
-            "remaining_work_days": float(self.series.workload.remaining_days),
-            "deadline_level": str(self.series.deadline_level),
-            "blocked": self.series.blocked,
-            "late": self.series.late,
-            "missing_update": self.series.missing_update,
+            "status": self.status,
+            "percentage": self.percentage,
+            "planned_work_days": float(self.workload.total_days),
+            "completed_work_days": float(self.workload.completed_days),
+            "remaining_work_days": float(self.workload.remaining_days),
+            "deadline_level": str(self.deadline_level),
+            "blocked": self.blocked,
+            "late": self.late,
+            "missing_update": self.missing_update,
             "start_date": assignment.start_date.isoformat(),
-            "today": self.series.today.isoformat(),
+            "today": self.today.isoformat(),
             "due_date": assignment.due_date.isoformat(),
-            "progress": [row.as_json() for row in self.rows],
         }
 
 
 @dataclass(frozen=True)
 class EmployeeProfileDataset:
-    """Aggregate indicators and cached task profiles for one employee."""
+    """Lean task-bar response for one employee and reporting period."""
 
-    summary: EmployeeSummary
-    tasks: tuple[CachedTaskProfile, ...]
+    employee: User
+    tasks: tuple[TeamTaskBar, ...]
     period: ReportingPeriod
 
     def as_json(self) -> dict[str, object]:
         """Return the stable same-origin team dashboard response."""
-        summary = self.summary
         return {
-            "employee_id": summary.employee.pk,
+            "employee_id": self.employee.pk,
             "period": {
                 "kind": self.period.kind,
                 "start": self.period.start.isoformat(),
                 "end": self.period.end.isoformat(),
             },
-            "summary": {
-                "task_count": summary.task_count,
-                "mean_progress": float(summary.mean_progress),
-                "median_progress": float(summary.median_progress),
-                "remaining_total": float(summary.remaining_total),
-                "remaining_mean": float(summary.remaining_mean),
-                "blocked_count": summary.blocked_count,
-                "late_count": summary.late_count,
-                "missing_update_count": summary.missing_update_count,
-                "progress_delta": float(summary.progress_delta),
-            },
             "tasks": [task.as_json() for task in self.tasks],
         }
+
+
+def _latest_entry(
+    assignment: TaskAssignment, period: ReportingPeriod
+) -> ProgressEntry | None:
+    """Return the latest prefetched entry visible in the selected period."""
+    visible = [
+        entry
+        for entry in assignment.progress_entries.all()
+        if entry.entry_date <= period.end
+    ]
+    if not visible:
+        return None
+    return max(visible, key=lambda entry: (entry.entry_date, entry.updated_at, entry.pk))
+
+
+def _task_bar(
+    assignment: TaskAssignment, period: ReportingPeriod, today: date
+) -> TeamTaskBar:
+    """Build one bar from persisted task and latest progress values."""
+    latest = _latest_entry(assignment, period)
+    percentage = latest.percentage if latest else 0
+    status = effective_assignment_status(assignment.status, percentage)
+    effective_day = min(period.end, today)
+    return TeamTaskBar(
+        assignment=assignment,
+        percentage=percentage,
+        workload=workload_breakdown(assignment.estimated_work_days, percentage),
+        status=status,
+        deadline_level=deadline_level(
+            assignment, on_day=effective_day, percentage=percentage
+        ),
+        blocked=bool(latest and latest.blocked),
+        late=assignment.due_date < effective_day and percentage < 100,
+        missing_update=latest is None or latest.entry_date < period.start,
+        today=today,
+    )
 
 
 def employee_profile_dataset(
     employee: User, period: ReportingPeriod
 ) -> EmployeeProfileDataset:
-    """Build one lazy dashboard payload and reuse persisted chart projections.
+    """Build bars without calculating or transferring progress histories.
 
     Args:
-        employee: Authorized person whose task profiles are requested.
+        employee: Authorized person whose task bars are requested.
         period: Week or month selected on the team dashboard.
 
     Returns:
-        Typed aggregate indicators and privacy-minimal task chart profiles.
+        Typed task metadata derived from persisted assignments and progress.
 
     """
-    assignments = list(period_assignments(employee, period))
-    summary = summarize_employee_period(
-        employee,
-        period,
-        assignments=assignments,
-        include_task_series=False,
+    assignments = list(
+        period_assignments(employee, period, include_progress_cache=False)
+        .prefetch_related(None)
+        .prefetch_related("progress_entries")
     )
-    tasks: list[CachedTaskProfile] = []
-    for assignment in assignments:
-        rows = cached_daily_progress_rows(assignment)
-        tasks.append(
-            CachedTaskProfile(
-                series=task_progress_series(assignment, period, daily_rows=rows),
-                rows=rows,
-            )
-        )
-    return EmployeeProfileDataset(summary=summary, tasks=tuple(tasks), period=period)
+    today = timezone.localdate()
+    return EmployeeProfileDataset(
+        employee=employee,
+        tasks=tuple(_task_bar(item, period, today) for item in assignments),
+        period=period,
+    )

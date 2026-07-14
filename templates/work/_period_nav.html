@@ -1,9 +1,9 @@
 <nav class="period-switch" aria-label="Type de période">
-  <a href="?week={{ period.start|date:'Y-m-d' }}"{% if period.kind == 'week' %} aria-current="page"{% endif %}>Semaine</a>
-  <a href="?month={{ period.start|date:'Y-m' }}"{% if period.kind == 'month' %} aria-current="page"{% endif %}>Mois</a>
+  <a href="?week={{ period.start|date:'Y-m-d' }}{{ filter_query }}"{% if period.kind == 'week' %} aria-current="page"{% endif %}>Semaine</a>
+  <a href="?month={{ period.start|date:'Y-m' }}{{ filter_query }}"{% if period.kind == 'month' %} aria-current="page"{% endif %}>Mois</a>
 </nav>
 <nav class="period-nav period-nav-{{ period.kind }}" aria-label="Changer de période">
-  <a href="?{{ previous_period.query }}" aria-label="Période précédente">← Précédente</a>
+  <a href="?{{ previous_period.query }}{{ filter_query }}" aria-label="Période précédente">← Précédente</a>
   <strong class="period-current">{{ period.label }}</strong>
-  <a href="?{{ next_period.query }}" aria-label="Période suivante">Suivante →</a>
+  <a href="?{{ next_period.query }}{{ filter_query }}" aria-label="Période suivante">Suivante →</a>
 </nav>
