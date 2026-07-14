@@ -18,6 +18,35 @@ dans mon equipe
 
 - dans equipes supprimer les boutons 'supprimer toutes les taches' et les statics general sur toutes les taches.
 
+** Decisions retenues
+
+- Les pages =Mes taches=, detail de tache et taches d'un collaborateur utilisent la courbe de progression et une legende commune.
+- La page =Mon equipe= utilise des barres de charge, chargees uniquement a l'ouverture d'un collaborateur.
+- Le lien =Voir toutes les taches= et les statistiques agregees sont retires du detail charge dans =Mon equipe=.
+- Une proposition appartient aux semaines et mois recoupes par ses dates planifiees; le filtre d'etat reste applique pendant toute navigation.
+- Les observations saisies par les utilisateurs ne sont jamais reecrites. Seuls les messages produits par l'application et les donnees d'illustration sont corriges.
+
+** Realisation
+
+- [X] Les cartes de taches chargent une courbe compacte depuis le JSON de progression mis en cache; les valeurs de charge restent affichees sous la courbe.
+- [X] Une tache ouverte garde aujourd'hui dans son domaine. Une tache terminee ou cloturee s'arrete au dernier jour de son historique et masque les reperes situes apres cette date.
+- [X] Les dates precedent maintenant le graphique de detail. Le compteur de saisies a ete retire et la phrase expliquant les points reels et reportes est conservee.
+- [X] Une legende reutilisable distingue les courbes des taches et les barres de charge de l'equipe.
+- [X] Le JSON paresseux de =Mon equipe= ne calcule plus d'agregats ni de series historiques; il transmet seulement les charges, le pourcentage, l'etat, les dates et les alertes de chaque tache.
+- [X] Les liens et statistiques generaux ont ete retires des branches de l'equipe; chaque tache conserve son propre lien d'ouverture.
+- [X] La liste des propositions accepte =week= ou =month= avec =status=all|submitted|accepted|rejected=. Les liens de periode et d'etat conservent l'autre filtre.
+- [X] Le bouton de la DG est masque sur la page des propositions. Pour les autres utilisateurs, son libelle est =Proposer une tache=.
+- [X] Dans les apercus d'observation, l'auteur, la date et l'heure precedent le message. Le fil detaille conserve date, heure, service abrege, type et progression avant le texte.
+- [X] Les messages automatiques et les conversations d'illustration utilisent un francais corrige, identifient l'auteur et conservent le =short_name= du service.
+- [X] Les pastilles =Terminee= et =Cloturee avant achevement= partagent la meme couleur tout en gardant leurs libelles distincts.
+
+** Verification
+
+- [X] 78 tests serveur reussis, dont les periodes de proposition, le JSON de barres, l'ordre des observations, les couleurs d'etat et les scenarios pilotes.
+- [X] Selenium verifie les courbes de cartes, les barres chargees a l'ouverture, l'absence des agregats, l'infobulle au premier plan, le responsive et l'arret d'une tache terminee a sa date de fin.
+- [X] Ruff, mypy, =git diff --check= et =makemigrations --check --dry-run= reussis; aucune migration supplementaire n'est necessaire.
+- [X] Aucun service, Nginx ou contenu utilisateur de la base publique n'a ete modifie dans cette phase.
+
 * <2026-07-13 lun. 22:41> Donnees d'illustration, equipe et connexion
 ** Besoins confirmes
 
