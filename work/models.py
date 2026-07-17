@@ -96,6 +96,70 @@ class OrganizationUnitLink(models.Model):
         super().save(*args, **kwargs)  # type: ignore[arg-type]
 
 
+class OrganizationMembership(models.Model):
+    """A dated user membership in one organizational unit."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="organization_memberships",
+    )
+    unit = models.ForeignKey(
+        OrganizationUnit,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+    )
+    job_title = models.CharField("fonction dans le service", max_length=160, blank=True)
+    start_date = models.DateField("debut", default=date.today)
+    end_date = models.DateField("fin", null=True, blank=True)
+    is_primary = models.BooleanField("appartenance principale", default=False)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["user", "-is_primary", "-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_date__isnull=True)
+                | Q(end_date__gte=models.F("start_date")),
+                name="organization_membership_valid_dates",
+            ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(is_primary=True, end_date__isnull=True),
+                name="one_open_primary_membership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        qualifier = "principale" if self.is_primary else "secondaire"
+        return f"{self.user} — {self.unit.code} ({qualifier})"
+
+    def clean(self) -> None:
+        """Reject overlapping primary memberships for the same person."""
+        super().clean()
+        if not self.user_id or not self.is_primary or not self.start_date:
+            return
+        memberships = OrganizationMembership.objects.filter(
+            user_id=self.user_id,
+            is_primary=True,
+        )
+        if self.pk:
+            memberships = memberships.exclude(pk=self.pk)
+        if self.end_date is not None:
+            memberships = memberships.filter(start_date__lte=self.end_date)
+        memberships = memberships.filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=self.start_date)
+        )
+        if memberships.exists():
+            raise ValidationError(
+                "Deux appartenances principales ne peuvent pas se chevaucher."
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+
 class ReportingLine(models.Model):
     """A dated manager-to-employee relationship."""
 
@@ -139,7 +203,7 @@ class ReportingLine(models.Model):
         return f"{self.employee} → {self.supervisor} ({qualifier})"
 
     def clean(self) -> None:
-        """Reject cycles in the active reporting graph."""
+        """Reject cycles and inconsistent employee service membership."""
         super().clean()
         if not self.employee_id or not self.supervisor_id:
             return
@@ -163,6 +227,16 @@ class ReportingLine(models.Model):
                 if child_id not in visited:
                     visited.add(child_id)
                     frontier.append(child_id)
+        if self.unit_id and self.start_date:
+            memberships = OrganizationMembership.objects.filter(
+                user_id=self.employee_id,
+                unit_id=self.unit_id,
+                start_date__lte=self.start_date,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=self.start_date))
+            if not memberships.exists():
+                raise ValidationError(
+                    {"unit": "Le collaborateur doit appartenir a ce service."}
+                )
 
 
 class StrategicPlan(models.Model):
@@ -380,6 +454,13 @@ class TaskAssignment(models.Model):
         on_delete=models.PROTECT,
         related_name="managed_assignments",
     )
+    organization_unit = models.ForeignKey(
+        OrganizationUnit,
+        null=True,
+        on_delete=models.PROTECT,
+        related_name="task_assignments",
+        verbose_name="service historique",
+    )
     calendar = models.ForeignKey(
         WorkCalendar,
         on_delete=models.PROTECT,
@@ -453,6 +534,13 @@ class TaskProposal(models.Model):
 
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="task_proposals"
+    )
+    organization_unit = models.ForeignKey(
+        OrganizationUnit,
+        null=True,
+        on_delete=models.PROTECT,
+        related_name="task_proposals",
+        verbose_name="service historique",
     )
     title = models.CharField("nom court", max_length=180)
     description = models.TextField("description")

@@ -14,6 +14,7 @@ from work.models import (
     NotificationDelivery,
     OrganizationUnit,
     OrganizationUnitLink,
+    OrganizationMembership,
     ProgressEntry,
     ReportingLine,
     StrategicPlan,
@@ -67,15 +68,37 @@ class TaskAdmin(SimpleHistoryAdmin):
 
 @admin.register(TaskAssignment)
 class TaskAssignmentAdmin(SimpleHistoryAdmin):
-    list_display = ("task", "employee", "manager", "status", "due_date")
-    list_filter = ("status", "due_date")
-    autocomplete_fields = ("employee", "manager")
+    list_display = (
+        "task",
+        "employee",
+        "manager",
+        "organization_unit",
+        "status",
+        "due_date",
+    )
+    list_filter = ("status", "organization_unit", "due_date")
+    autocomplete_fields = ("employee", "manager", "organization_unit")
 
 
 @admin.register(TaskProposal)
 class TaskProposalAdmin(SimpleHistoryAdmin):
-    list_display = ("title", "employee", "status", "created_at")
-    list_filter = ("status",)
+    list_display = ("title", "employee", "organization_unit", "status", "created_at")
+    list_filter = ("status", "organization_unit")
+
+
+@admin.register(OrganizationMembership)
+class OrganizationMembershipAdmin(SimpleHistoryAdmin):
+    list_display = (
+        "user",
+        "unit",
+        "job_title",
+        "is_primary",
+        "start_date",
+        "end_date",
+    )
+    list_filter = ("is_primary", "unit")
+    search_fields = ("user__email", "user__login_alias", "job_title")
+    autocomplete_fields = ("user", "unit")
 
 
 @admin.register(ProgressEntry)

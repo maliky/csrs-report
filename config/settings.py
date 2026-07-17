@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "simple_history",
     "accounts",
     "work",
+    "access",
 ]
 
 MIDDLEWARE = [
@@ -59,6 +60,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "work.context_processors.authorization_navigation",
             ],
         },
     }
