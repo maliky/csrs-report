@@ -1,9 +1,11 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  base: "/static/react/",
+  // Django serves production assets below /static; Vite development keeps
+  // root history fallback so React Router can exercise /app/* routes.
+  base: command === "build" ? "/static/react/" : "/",
   build: {
     outDir: "../static/react",
     emptyOutDir: true,
@@ -31,4 +33,4 @@ export default defineConfig({
     globals: true,
     exclude: ["e2e/**", "node_modules/**"],
   },
-});
+}));
