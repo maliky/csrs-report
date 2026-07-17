@@ -20,7 +20,7 @@ Lire les sources dans cet ordre :
 
 1. =AGENTS.md= pour les regles de travail, de securite, d'interface et de verification.
 2. =README.md= pour demarrer Django et executer les controles existants.
-3. =docs/task-lifecycle.svg= ou =docs/task-lifecycle.puml= pour comprendre le cycle d'une tache.
+3. =docs/task-lifecycle.png= ou =docs/task-lifecycle.org= pour comprendre le cycle d'une tache.
 4. La section [[*<2026-07-12 dim.> Aide-memoire des comptes d'illustration][Aide-memoire des comptes d'illustration]] pour les roles et la hierarchie fictive, sans recopier de mot de passe dans le code ou la documentation.
 5. La section [[*<2026-07-17 ven. 06:05> Appartenances, roles et delegations par service][Appartenances, roles et delegations par service]] pour comprendre les autorisations par service.
 6. =work/models.py=, =work/services.py= et =access/services.py= pour identifier la source des regles metier et des permissions.
@@ -1174,7 +1174,7 @@ Chaque subordonne recoit cinq affectations reparties sur douze semaines ainsi qu
 - [X] Audit par =django-simple-history= avec attribution de l'utilisateur par middleware.
 - [X] Interfaces responsive en francais : tableau employe, detail, curseur de progression, proposition, synthese equipe et file de validation.
 - [X] File email pour nouvelles taches et nouveaux commentaires : lots limites, cinq tentatives, attente exponentielle et journal limite au type d'erreur.
-- [X] Source PlantUML dans =docs/task-lifecycle.puml= et rendu SVG valide dans =docs/task-lifecycle.svg=.
+- [X] Source Org/PlantUML dans =docs/task-lifecycle.org= et rendu PNG valide dans =docs/task-lifecycle.png=.
 - [X] Donnees de demonstration strictement fictives via =python manage.py seed_demo=.
 - [X] Configuration de deploiement locale sur =127.0.0.1:18005= et modele Nginx pour =csrs.koba.sarl=.
 

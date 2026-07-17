@@ -2,7 +2,7 @@
 
 Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse de Recherches Scientifiques en Côte d'Ivoire.
 
-Le cycle métier est documenté dans [`docs/task-lifecycle.puml`](docs/task-lifecycle.puml) et son rendu [`docs/task-lifecycle.svg`](docs/task-lifecycle.svg).
+Le cycle métier est documenté dans [`docs/task-lifecycle.org`](docs/task-lifecycle.org) et son rendu [`docs/task-lifecycle.png`](docs/task-lifecycle.png).
 
 ## Développement local
 
