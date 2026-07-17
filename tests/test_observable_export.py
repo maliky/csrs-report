@@ -10,6 +10,7 @@ from django.utils import timezone
 from accounts.models import User
 from work.models import (
     InstitutionalAction,
+    OrganizationUnit,
     Task,
     TaskAssignment,
     WorkCalendar,
@@ -24,6 +25,7 @@ def create_assignment(
     employee: User,
     manager: User,
     action: InstitutionalAction,
+    organization_unit: OrganizationUnit,
     workload: Decimal = Decimal("2.0"),
 ) -> TaskAssignment:
     """Create a coherent assignment for export permission tests."""
@@ -40,6 +42,7 @@ def create_assignment(
         task=task,
         employee=employee,
         manager=manager,
+        organization_unit=organization_unit,
         calendar=calendar,
         start_date=start,
         due_date=calendar.due_date_for(start, workload),
@@ -116,12 +119,14 @@ def test_observable_export_contains_all_tasks_for_developer(
         employee=people["manager"],
         manager=people["manager"],
         action=action,
+        organization_unit=assignment.organization_unit,
     )
     outsider_assignment = create_assignment(
         code="OBS-OUTSIDE",
         employee=people["outsider"],
         manager=people["outsider"],
         action=action,
+        organization_unit=assignment.organization_unit,
     )
     developer = User.objects.create_superuser(
         "dev@example.test", "DevSecret9!", login_alias="dev"

@@ -33,6 +33,7 @@ from work.services import (
     reject_completion,
     remaining_projection,
     reporting_period,
+    set_primary_membership,
     set_primary_supervisor,
     task_progress_series,
     validate_completion,
@@ -258,8 +259,12 @@ def test_activity_is_immutable(
 @pytest.mark.django_db
 def test_root_user_can_manage_and_validate_personal_assignment(
     action: InstitutionalAction,
+    unit: OrganizationUnit,
 ) -> None:
     root = User.objects.create_user("root@example.test")
+    set_primary_membership(
+        user=root, unit_id=unit.pk, start_date=timezone.localdate()
+    )
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     task = root.created_tasks.create(
         code="ROOT-01",
@@ -271,6 +276,7 @@ def test_root_user_can_manage_and_validate_personal_assignment(
         task=task,
         employee=root,
         manager=root,
+        organization_unit=unit,
         start_date=timezone.localdate(),
         due_date=calendar.due_date_for(timezone.localdate(), Decimal("2.0")),
         estimated_work_days=Decimal("2.0"),

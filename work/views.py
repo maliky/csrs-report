@@ -54,16 +54,20 @@ from work.services import (
     adjacent_period,
     assignment_snapshot,
     can_self_assign,
+    assignable_employee_ids,
     current_progress,
     is_self_managed_assignment,
     period_assignments,
     primary_manager,
+    organization_unit_for_employee,
     record_progress,
     ReportingPeriod,
     reporting_period,
     assignment_status_label,
     reject_completion,
     reject_proposal,
+    reviewable_proposals,
+    visible_team_proposals,
     remaining_projection,
     team_tree_overview,
     update_assignment_schedule,
@@ -330,6 +334,19 @@ def create_proposal(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         proposal = form.save(commit=False)
         proposal.employee = user
+        proposal.organization_unit_id = organization_unit_for_employee(
+            user, proposal.start_date
+        )
+        if proposal.organization_unit_id is None:
+            form.add_error(
+                None,
+                "Votre compte doit appartenir a un service avant de proposer une tache.",
+            )
+            return render(
+                request,
+                "work/form_page.html",
+                {"form": form, "title": "Proposer une tache"},
+            )
         proposal.save()
         messages.success(request, "Proposition envoyee au responsable principal.")
         return redirect("proposal-list")
@@ -341,6 +358,8 @@ def create_proposal(request: HttpRequest) -> HttpResponse:
 @login_required
 def create_assignment(request: HttpRequest) -> HttpResponse:
     manager = request_user(request)
+    if not assignable_employee_ids(manager):
+        raise PermissionDenied
     form = AssignmentCreateForm(request.POST or None, manager=manager)
     if request.method == "POST" and form.is_valid():
         employee = form.cleaned_data["employee"]
@@ -431,7 +450,9 @@ def team_member_progress_json(request: HttpRequest, employee_id: int) -> JsonRes
     if not can_view_employee(user, employee):
         raise Http404
     period = selected_period(request)
-    return JsonResponse(employee_profile_dataset(employee, period).as_json())
+    return JsonResponse(
+        employee_profile_dataset(employee, period, viewer=user).as_json()
+    )
 
 
 @login_required
@@ -442,7 +463,7 @@ def employee_detail(request: HttpRequest, employee_id: int) -> HttpResponse:
     period = navigation["period"]
     if not can_view_employee(user, employee):
         raise Http404
-    assignments = list(period_assignments(employee, period))
+    assignments = list(period_assignments(employee, period, viewer=user))
     cards = [assignment_snapshot(item, period) for item in assignments]
     return render(
         request,
@@ -470,13 +491,17 @@ def proposal_list(request: HttpRequest) -> HttpResponse:
         "due_date__gte": period.start,
     }
     own = TaskProposal.objects.filter(employee=user, **period_filter)
-    employee_ids = user.supervised_lines.filter(
-        is_primary=True, end_date__isnull=True
-    ).values_list("employee_id", flat=True)
-    team = TaskProposal.objects.filter(employee_id__in=employee_ids, **period_filter)
+    visible_team = visible_team_proposals(user)
+    reviewable = reviewable_proposals(user)
+    has_team = visible_team.exists()
+    manageable_team = reviewable.filter(**period_filter)
+    read_only_team = visible_team.filter(**period_filter).exclude(
+        pk__in=reviewable.values("pk")
+    )
     if status in valid_statuses:
         own = own.filter(status=status)
-        team = team.filter(status=status)
+        manageable_team = manageable_team.filter(status=status)
+        read_only_team = read_only_team.filter(status=status)
     common = ("employee", "action", "reviewed_by", "accepted_assignment")
     ordering = ("-start_date", "-created_at")
     return render(
@@ -484,10 +509,15 @@ def proposal_list(request: HttpRequest) -> HttpResponse:
         "work/proposal_list.html",
         {
             "own_proposals": own.select_related(*common).order_by(*ordering),
-            "team_proposals": team.select_related(*common).order_by(*ordering),
+            "manageable_team_proposals": manageable_team.select_related(
+                *common
+            ).order_by(*ordering),
+            "read_only_team_proposals": read_only_team.select_related(
+                *common
+            ).order_by(*ordering),
             "selected_status": status,
             "status_filter_query": f"&status={status}",
-            "has_team": employee_ids.exists(),
+            "has_team": has_team,
             "can_self_assign": can_self_assign(user),
             **navigation,
         },

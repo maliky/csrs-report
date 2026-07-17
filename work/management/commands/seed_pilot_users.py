@@ -25,6 +25,7 @@ from work.models import (
     NotificationDelivery,
     OrganizationUnit,
     OrganizationUnitLink,
+    OrganizationMembership,
     ProgressEntry,
     ProgressSeriesCache,
     ProposalStatus,
@@ -46,7 +47,7 @@ from work.pilot_scenarios import (
     scenario_counts,
 )
 from work.progress_cache import rebuild_progress_caches
-from work.services import set_primary_supervisor, week_start_for
+from work.services import set_primary_membership, set_primary_supervisor, week_start_for
 
 
 @dataclass(frozen=True)
@@ -491,6 +492,14 @@ class Command(BaseCommand):
     ) -> None:
         start = week_start_for(timezone.localdate()) - timedelta(weeks=11)
         for spec in PILOT_USERS:
+            if not spec.unit_code:
+                continue
+            set_primary_membership(
+                user=users[spec.alias],
+                unit_id=units[spec.unit_code].pk,
+                start_date=start,
+            )
+        for spec in PILOT_USERS:
             if not spec.manager_alias or not spec.unit_code:
                 continue
             line = set_primary_supervisor(
@@ -644,6 +653,11 @@ class Command(BaseCommand):
             employee=employee,
             defaults={
                 "manager": manager,
+                "organization_unit": OrganizationMembership.objects.get(
+                    user=employee,
+                    is_primary=True,
+                    end_date__isnull=True,
+                ).unit,
                 "start_date": scenario.start_date,
                 "due_date": normalized_due,
                 "estimated_work_days": scenario.workload,
@@ -955,6 +969,11 @@ class Command(BaseCommand):
                 calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
                 proposal = TaskProposal.objects.create(
                     employee=employee,
+                    organization_unit=OrganizationMembership.objects.get(
+                        user=employee,
+                        is_primary=True,
+                        end_date__isnull=True,
+                    ).unit,
                     title=title,
                     description=(
                         "Organiser le travail, produire un résultat vérifiable et "
@@ -1041,6 +1060,15 @@ class Command(BaseCommand):
             raise CommandError(
                 "Le nombre de rattachements d'illustration est incoherent."
             )
+        memberships = OrganizationMembership.objects.filter(
+            user_id__in=user_ids,
+            is_primary=True,
+            end_date__isnull=True,
+        )
+        if memberships.count() != len(PILOT_USERS) - 1:
+            raise CommandError(
+                "Le nombre d'appartenances organisationnelles est incoherent."
+            )
         Command._assert_scenario_counts(tuple(aliases))
 
     @staticmethod
@@ -1049,6 +1077,8 @@ class Command(BaseCommand):
         assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
         if assignments.count() != 73:
             raise CommandError("Le nombre d'affectations d'illustration n'est pas 73.")
+        if assignments.filter(organization_unit__isnull=True).exists():
+            raise CommandError("Une affectation d'illustration n'a pas de service.")
         if scenario_counts() != EXPECTED_SCENARIO_COUNTS:
             raise CommandError("La repartition des scenarios est incoherente.")
         if assignments.filter(estimated_work_days__lte=Decimal("10.0")).count() != 65:
@@ -1059,6 +1089,8 @@ class Command(BaseCommand):
         )
         if proposals.count() != 42:
             raise CommandError("Le nombre de propositions d'illustration n'est pas 42.")
+        if proposals.filter(organization_unit__isnull=True).exists():
+            raise CommandError("Une proposition d'illustration n'a pas de service.")
         if ProgressSeriesCache.objects.filter(assignment__in=assignments).count() != 73:
             raise CommandError("Le nombre de caches de progression n'est pas 73.")
         if TaskActivity.objects.filter(assignment__in=assignments).count() < 100:

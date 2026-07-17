@@ -8,8 +8,6 @@ import json
 from typing import Any, cast
 
 from django import forms
-from django.db.models import Q
-
 from accounts.models import User
 from work.models import (
     InstitutionalAction,
@@ -18,8 +16,7 @@ from work.models import (
     default_work_calendar_id,
 )
 from work.services import (
-    active_lines,
-    can_self_assign,
+    assignable_employee_ids,
     due_date_for,
     week_start_for,
     workload_for,
@@ -154,11 +151,9 @@ class AssignmentCreateForm(forms.Form):
         self.calendar = calendar or default_calendar()
         setup_schedule_fields(self, self.calendar)
         employee_field = cast(forms.ModelChoiceField, self.fields["employee"])
-        line_filter = active_lines().filter(supervisor=manager, is_primary=True)
-        allowed_filter = Q(reporting_lines__in=line_filter)
-        if can_self_assign(manager):
-            allowed_filter |= Q(pk=manager.pk)
-        employee_field.queryset = User.objects.filter(allowed_filter).distinct()
+        employee_field.queryset = User.objects.filter(
+            pk__in=assignable_employee_ids(manager)
+        ).distinct()
         monday = week_start_for(date.today())
         while not self.calendar.is_working_day(monday):
             monday = date.fromordinal(monday.toordinal() + 1)

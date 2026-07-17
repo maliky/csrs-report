@@ -18,12 +18,22 @@ from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 from django.utils.text import slugify
 
+from access.services import (
+    MANAGE_PERMISSION,
+    PROPOSAL_PERMISSION,
+    VIEW_PERMISSION,
+    has_scoped_permission,
+    member_user_ids,
+    primary_membership,
+    scoped_unit_ids,
+)
 from accounts.models import User
 from work.models import (
     AssignmentStatus,
     ActivityKind,
     Holiday,
     InstitutionalAction,
+    OrganizationMembership,
     ProgressEntry,
     ProposalStatus,
     ReportingLine,
@@ -616,6 +626,22 @@ def primary_manager(employee: User, on_day: date | None = None) -> User | None:
     return line.supervisor if line else None
 
 
+def organization_unit_for_employee(
+    employee: User, on_day: date | None = None
+) -> int | None:
+    """Resolve the employee's primary unit at a historical date."""
+    membership = primary_membership(employee, on_day)
+    if membership is not None:
+        return membership.unit_id
+    line = (
+        active_lines(on_day)
+        .filter(employee=employee, is_primary=True)
+        .order_by("-start_date", "-pk")
+        .first()
+    )
+    return line.unit_id if line is not None else None
+
+
 def can_self_assign(user: User) -> bool:
     """Allow an organizational root user to create personal assignments."""
     return user.is_active and not user.is_it_admin and primary_manager(user) is None
@@ -640,8 +666,8 @@ def can_view_employee(supervisor: User, employee: User) -> bool:
     return employee.pk in visible_employee_ids(supervisor)
 
 
-def visible_employee_ids(supervisor: User) -> frozenset[int]:
-    """Return the supervisor and every active descendant, cycle safely."""
+def hierarchy_employee_ids(supervisor: User) -> frozenset[int]:
+    """Return the supervisor and active reporting descendants, cycle safely."""
     edges: dict[int, set[int]] = {}
     for manager_id, employee_id in active_lines().values_list(
         "supervisor_id", "employee_id"
@@ -658,8 +684,29 @@ def visible_employee_ids(supervisor: User) -> frozenset[int]:
     return frozenset(visited)
 
 
+def visible_employee_ids(supervisor: User) -> frozenset[int]:
+    """Combine hierarchy, current memberships, and historical scoped work."""
+    hierarchy_ids = set(hierarchy_employee_ids(supervisor))
+    unit_ids = scoped_unit_ids(supervisor, VIEW_PERMISSION)
+    hierarchy_ids.update(member_user_ids(unit_ids))
+    if unit_ids:
+        hierarchy_ids.update(
+            TaskAssignment.objects.filter(organization_unit_id__in=unit_ids).values_list(
+                "employee_id", flat=True
+            )
+        )
+    return frozenset(hierarchy_ids)
+
+
 def can_view_assignment(user: User, assignment: TaskAssignment) -> bool:
-    return can_view_employee(user, assignment.employee)
+    return (
+        assignment.employee_id in hierarchy_employee_ids(user)
+        or user.is_it_admin
+        or user.is_superuser
+        or has_scoped_permission(
+            user, VIEW_PERMISSION, assignment.organization_unit_id
+        )
+    )
 
 
 def is_self_managed_assignment(user: User, assignment: TaskAssignment) -> bool:
@@ -677,6 +724,9 @@ def can_manage_assignment(user: User, assignment: TaskAssignment) -> bool:
         user.is_it_admin
         or user.is_superuser
         or self_managed
+        or has_scoped_permission(
+            user, MANAGE_PERMISSION, assignment.organization_unit_id
+        )
         or (
             assignment.manager_id == user.pk
             and is_primary_supervisor(user, assignment.employee)
@@ -690,7 +740,80 @@ def can_comment_assignment(user: User, assignment: TaskAssignment) -> bool:
         or user.is_it_admin
         or user.is_superuser
         or is_direct_supervisor(user, assignment.employee)
+        or has_scoped_permission(
+            user, MANAGE_PERMISSION, assignment.organization_unit_id
+        )
     )
+
+
+def can_assign_employee(manager: User, employee: User, on_day: date) -> bool:
+    """Check task creation against hierarchy, self-management, or delegation."""
+    if manager.is_it_admin or manager.is_superuser:
+        return True
+    if manager == employee and can_self_assign(manager):
+        return True
+    if active_lines(on_day).filter(
+        supervisor=manager, employee=employee, is_primary=True
+    ).exists():
+        return True
+    return has_scoped_permission(
+        manager,
+        MANAGE_PERMISSION,
+        organization_unit_for_employee(employee, on_day),
+    )
+
+
+def assignable_employee_ids(manager: User, on_day: date | None = None) -> frozenset[int]:
+    """Return active people available in the assignment form."""
+    target = on_day or timezone.localdate()
+    if manager.is_it_admin or manager.is_superuser:
+        return frozenset(User.objects.filter(is_active=True).values_list("pk", flat=True))
+    employee_ids = set(
+        active_lines(target)
+        .filter(supervisor=manager, is_primary=True, employee__is_active=True)
+        .values_list("employee_id", flat=True)
+    )
+    managed_units = scoped_unit_ids(manager, MANAGE_PERMISSION)
+    employee_ids.update(member_user_ids(managed_units, target))
+    if can_self_assign(manager):
+        employee_ids.add(manager.pk)
+    return frozenset(employee_ids)
+
+
+@transaction.atomic
+def set_primary_membership(
+    *, user: User, unit_id: int, start_date: date
+) -> OrganizationMembership:
+    """Ensure one open primary service membership without erasing old records."""
+    current = list(
+        OrganizationMembership.objects.select_for_update().filter(
+            user=user, is_primary=True, end_date__isnull=True
+        )
+    )
+    same = next((item for item in current if item.unit_id == unit_id), None)
+    if same is not None:
+        update_fields: list[str] = []
+        if start_date < same.start_date:
+            same.start_date = start_date
+            update_fields.append("start_date")
+        if not same.job_title and user.position:
+            same.job_title = user.position
+            update_fields.append("job_title")
+        if update_fields:
+            same.save(update_fields=update_fields)
+        return same
+    for membership in current:
+        membership.is_primary = False
+        membership.save(update_fields=["is_primary"])
+    membership = OrganizationMembership(
+        user=user,
+        unit_id=unit_id,
+        job_title=user.position,
+        start_date=start_date,
+        is_primary=True,
+    )
+    membership.save()
+    return membership
 
 
 @transaction.atomic
@@ -700,6 +823,7 @@ def set_primary_supervisor(
     """Set one primary line and transfer active assignment responsibility."""
     if employee == supervisor:
         raise ValidationError("Une personne ne peut pas etre son propre responsable.")
+    set_primary_membership(user=employee, unit_id=unit_id, start_date=start_date)
     old_lines = list(
         ReportingLine.objects.select_for_update().filter(
             employee=employee, is_primary=True, end_date__isnull=True
@@ -775,6 +899,13 @@ def activity_feed(assignment: TaskAssignment) -> tuple[ActivityFeedItem, ...]:
     """
     activities = tuple(visible_activities(assignment).order_by("-occurred_at", "-pk"))
     actor_ids = {activity.actor_id for activity in activities}
+    memberships_by_actor: dict[int, list[OrganizationMembership]] = {}
+    for membership in (
+        OrganizationMembership.objects.filter(user_id__in=actor_ids)
+        .select_related("unit")
+        .order_by("-is_primary", "-start_date", "-pk")
+    ):
+        memberships_by_actor.setdefault(membership.user_id, []).append(membership)
     lines_by_actor: dict[int, list[ReportingLine]] = {}
     for line in (
         ReportingLine.objects.filter(employee_id__in=actor_ids)
@@ -785,6 +916,11 @@ def activity_feed(assignment: TaskAssignment) -> tuple[ActivityFeedItem, ...]:
 
     def short_name(activity: TaskActivity) -> str:
         event_day = timezone.localtime(activity.occurred_at).date()
+        for membership in memberships_by_actor.get(activity.actor_id, []):
+            if membership.start_date <= event_day and (
+                membership.end_date is None or membership.end_date >= event_day
+            ):
+                return membership.unit.short_name
         for line in lines_by_actor.get(activity.actor_id, []):
             if line.start_date <= event_day and (
                 line.end_date is None or line.end_date >= event_day
@@ -835,6 +971,18 @@ def create_assignment_for_user(
     calendar: WorkCalendar,
 ) -> TaskAssignment:
     """Create one classified task and its independently planned assignment."""
+    unit_id = organization_unit_for_employee(employee, start_date)
+    if unit_id is None:
+        raise ValidationError(
+            "Le collaborateur doit avoir une appartenance organisationnelle."
+        )
+    if not can_assign_employee(manager, employee, start_date):
+        raise PermissionDenied("Vous ne pouvez pas affecter une tache a cette personne.")
+    accountable_manager = (
+        manager
+        if manager == employee
+        else primary_manager(employee, start_date) or manager
+    )
     code = next_task_code(action, start_date.year)
     task = Task(
         code=code,
@@ -848,7 +996,8 @@ def create_assignment_for_user(
     assignment = TaskAssignment(
         task=task,
         employee=employee,
-        manager=manager,
+        manager=accountable_manager,
+        organization_unit_id=unit_id,
         calendar=calendar,
         start_date=start_date,
         due_date=due_date,
@@ -1085,10 +1234,16 @@ def accept_proposal(
     user: User, proposal: TaskProposal, code: str | None = None
 ) -> TaskAssignment:
     """Turn an employee proposal into a managed task assignment."""
-    if not is_primary_supervisor(user, proposal.employee) and not user.is_it_admin:
+    if not can_review_proposal(user, proposal):
         raise PermissionDenied(
-            "Seul le responsable principal peut accepter la proposition."
+            "Vous ne pouvez pas accepter cette proposition."
         )
+    unit_id = proposal.organization_unit_id or organization_unit_for_employee(
+        proposal.employee, proposal.start_date
+    )
+    if unit_id is None:
+        raise ValidationError("La proposition n'est rattachee a aucun service.")
+    accountable_manager = primary_manager(proposal.employee, proposal.start_date) or user
     task = Task.objects.create(
         code=code or next_task_code(proposal.action, proposal.start_date.year),
         title=proposal.title,
@@ -1099,7 +1254,8 @@ def accept_proposal(
     assignment = TaskAssignment(
         task=task,
         employee=proposal.employee,
-        manager=user,
+        manager=accountable_manager,
+        organization_unit_id=unit_id,
         calendar=proposal.calendar,
         start_date=proposal.start_date,
         due_date=proposal.due_date,
@@ -1110,10 +1266,17 @@ def accept_proposal(
     assignment.save()
     proposal.status = ProposalStatus.ACCEPTED
     proposal.reviewed_by = user
+    proposal.organization_unit_id = unit_id
     proposal.accepted_assignment = assignment
     proposal.decided_at = timezone.now()
     proposal.save(
-        update_fields=["status", "reviewed_by", "accepted_assignment", "decided_at"]
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "organization_unit",
+            "accepted_assignment",
+            "decided_at",
+        ]
     )
     from work.notifications import queue_assignment_notification
 
@@ -1123,9 +1286,9 @@ def accept_proposal(
 
 @transaction.atomic
 def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
-    if not is_primary_supervisor(user, proposal.employee) and not user.is_it_admin:
+    if not can_review_proposal(user, proposal):
         raise PermissionDenied(
-            "Seul le responsable principal peut refuser la proposition."
+            "Vous ne pouvez pas refuser cette proposition."
         )
     cleaned_reason = reason.strip()
     if not cleaned_reason:
@@ -1135,6 +1298,50 @@ def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
     proposal.decision_note = cleaned_reason
     proposal.decided_at = timezone.now()
     proposal.save(update_fields=["status", "reviewed_by", "decision_note", "decided_at"])
+
+
+def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
+    """Authorize proposal decisions through hierarchy or scoped management."""
+    if proposal.employee_id == user.pk and not (user.is_it_admin or user.is_superuser):
+        return False
+    return (
+        user.is_it_admin
+        or user.is_superuser
+        or is_primary_supervisor(user, proposal.employee)
+        or has_scoped_permission(
+            user, PROPOSAL_PERMISSION, proposal.organization_unit_id
+        )
+    )
+
+
+def reviewable_proposals(user: User) -> QuerySet[TaskProposal]:
+    """Return proposals the user may decide, without including mere readers."""
+    queryset = TaskProposal.objects.exclude(employee=user)
+    if user.is_it_admin or user.is_superuser:
+        return queryset
+    direct_ids = active_lines().filter(
+        supervisor=user, is_primary=True
+    ).values_list("employee_id", flat=True)
+    delegated_units = scoped_unit_ids(user, PROPOSAL_PERMISSION)
+    return queryset.filter(
+        Q(employee_id__in=direct_ids)
+        | Q(organization_unit_id__in=delegated_units)
+    )
+
+
+def visible_team_proposals(user: User) -> QuerySet[TaskProposal]:
+    """Return team proposals visible through hierarchy or a read delegation."""
+    queryset = TaskProposal.objects.exclude(employee=user)
+    if user.is_it_admin or user.is_superuser:
+        return queryset
+    direct_ids = active_lines().filter(
+        supervisor=user, is_primary=True
+    ).values_list("employee_id", flat=True)
+    delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
+    return queryset.filter(
+        Q(employee_id__in=direct_ids)
+        | Q(organization_unit_id__in=delegated_units)
+    )
 
 
 def weekly_assignments(employee: User, monday: date) -> QuerySet[TaskAssignment]:
@@ -1152,6 +1359,7 @@ def period_assignments(
     period: ReportingPeriod,
     *,
     include_progress_cache: bool = True,
+    viewer: User | None = None,
 ) -> QuerySet[TaskAssignment]:
     """Return assignments that overlap an inclusive reporting period.
 
@@ -1159,6 +1367,7 @@ def period_assignments(
         employee: Person whose assigned work is requested.
         period: Inclusive week or month to display.
         include_progress_cache: Join cached daily rows for curve consumers.
+        viewer: Optional requester used to filter delegated, unit-scoped access.
 
     Returns:
         Assignments with the relations required by cards and team profiles.
@@ -1167,8 +1376,13 @@ def period_assignments(
     related = ["task", "employee", "manager", "task__action", "calendar"]
     if include_progress_cache:
         related.append("progress_series_cache")
+    queryset = TaskAssignment.objects.filter(
+        employee=employee, start_date__lte=period.end
+    )
+    if viewer is not None:
+        queryset = queryset.filter(pk__in=visible_assignments(viewer).values("pk"))
     return (
-        TaskAssignment.objects.filter(employee=employee, start_date__lte=period.end)
+        queryset
         .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
         .select_related(*related)
         .prefetch_related("calendar__days", "progress_entries", "activities__actor")
@@ -1381,14 +1595,24 @@ def team_tree_overview(
         .select_related("employee")
         .order_by("employee__position", "employee__email")
     )
+    visible_ids = set(visible_employee_ids(manager))
+    visible_ids.discard(manager.pk)
     edges: dict[int, list[User]] = {}
-    employee_ids: set[int] = set()
     for line in lines:
-        edges.setdefault(line.supervisor_id, []).append(line.employee)
-        employee_ids.add(line.employee_id)
+        if line.employee_id not in visible_ids:
+            continue
+        if line.supervisor_id in visible_ids or line.supervisor_id == manager.pk:
+            edges.setdefault(line.supervisor_id, []).append(line.employee)
+    represented = {employee.pk for employees in edges.values() for employee in employees}
+    detached_ids = visible_ids - represented
+    for employee in User.objects.filter(pk__in=detached_ids).order_by(
+        "position", "email"
+    ):
+        edges.setdefault(manager.pk, []).append(employee)
+    employee_ids = visible_ids
     task_counts = {
         item["employee_id"]: item["task_count"]
-        for item in TaskAssignment.objects.filter(
+        for item in visible_assignments(manager).filter(
             employee_id__in=employee_ids,
             start_date__lte=period.end,
         )
@@ -1438,4 +1662,9 @@ def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
     )
     if user.is_it_admin or user.is_superuser:
         return queryset
-    return queryset.filter(employee_id__in=visible_employee_ids(user))
+    hierarchy_ids = hierarchy_employee_ids(user)
+    delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
+    return queryset.filter(
+        Q(employee_id__in=hierarchy_ids)
+        | Q(organization_unit_id__in=delegated_units)
+    )

@@ -1,3 +1,5 @@
+from io import StringIO
+
 from django.core.management import call_command
 from django.db import models
 from django.db.models import Count
@@ -10,6 +12,7 @@ from work.models import (
     NotificationDelivery,
     OrganizationUnit,
     OrganizationUnitLink,
+    OrganizationMembership,
     ProgressEntry,
     ProgressSeriesCache,
     ProposalStatus,
@@ -87,8 +90,15 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         ReportingLine.objects.filter(is_primary=True, end_date__isnull=True).count()
         == len(PILOT_USERS) - 2
     )
+    assert (
+        OrganizationMembership.objects.filter(
+            is_primary=True, end_date__isnull=True
+        ).count()
+        == len(PILOT_USERS) - 1
+    )
     assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
     assert assignments.count() == 73
+    assert not assignments.filter(organization_unit__isnull=True).exists()
     assert assignments.filter(estimated_work_days__lte=10).count() == 65
     assert assignments.filter(estimated_work_days__gt=10).count() == 8
     assert (
@@ -133,6 +143,14 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     }
     assert len(signatures) == long_running.count()
     assert TaskProposal.objects.count() == 42
+    assert not TaskProposal.objects.filter(organization_unit__isnull=True).exists()
+    audit_output = StringIO()
+    call_command(
+        "audit_organization_scope",
+        fail_on_unresolved=True,
+        stdout=audit_output,
+    )
+    assert "affectations_sans_service=0" in audit_output.getvalue()
     assert TaskActivity.objects.filter(assignment__in=assignments).count() >= 100
     assert NotificationDelivery.objects.count() == 0
 

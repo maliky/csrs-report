@@ -71,7 +71,10 @@ def action(db) -> InstitutionalAction:
 
 @pytest.fixture
 def assignment(
-    db, people: dict[str, User], action: InstitutionalAction
+    db,
+    people: dict[str, User],
+    action: InstitutionalAction,
+    unit: OrganizationUnit,
 ) -> TaskAssignment:
     monday = week_start_for(timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
@@ -86,6 +89,7 @@ def assignment(
         task=task,
         employee=people["employee"],
         manager=people["manager"],
+        organization_unit=unit,
         start_date=monday,
         due_date=calendar.due_date_for(monday, Decimal("5.0")),
         estimated_work_days=Decimal("5.0"),

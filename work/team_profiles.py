@@ -116,20 +116,26 @@ def _task_bar(
 
 
 def employee_profile_dataset(
-    employee: User, period: ReportingPeriod
+    employee: User, period: ReportingPeriod, *, viewer: User | None = None
 ) -> EmployeeProfileDataset:
     """Build bars without calculating or transferring progress histories.
 
     Args:
         employee: Authorized person whose task bars are requested.
         period: Week or month selected on the team dashboard.
+        viewer: Optional requester whose unit scope filters the returned tasks.
 
     Returns:
         Typed task metadata derived from persisted assignments and progress.
 
     """
     assignments = list(
-        period_assignments(employee, period, include_progress_cache=False)
+        period_assignments(
+            employee,
+            period,
+            include_progress_cache=False,
+            viewer=viewer,
+        )
         .prefetch_related(None)
         .prefetch_related("progress_entries")
     )

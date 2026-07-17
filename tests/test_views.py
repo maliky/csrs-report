@@ -15,6 +15,7 @@ from work.models import (
     InstitutionalAction,
     ProposalStatus,
     ProgressSeriesCache,
+    OrganizationUnit,
     TaskActivity,
     TaskAssignment,
     TaskProposal,
@@ -117,12 +118,16 @@ def test_team_summary_starts_fully_collapsed_without_progress_queries(
 
 @pytest.mark.django_db
 def test_rejected_proposal_is_visible_to_author_and_manager_but_audited(
-    client, people: dict[str, User], action: InstitutionalAction
+    client,
+    people: dict[str, User],
+    action: InstitutionalAction,
+    unit: OrganizationUnit,
 ) -> None:
     monday = week_start_for(timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     proposal = TaskProposal.objects.create(
         employee=people["employee"],
+        organization_unit=unit,
         title="Proposition rejetee",
         description="Amelioration proposee",
         action=action,
@@ -272,12 +277,16 @@ def test_employee_detail_shows_progress_and_workload(
 
 @pytest.mark.django_db
 def test_month_view_and_proposal_visibility_are_scoped(
-    client, people: dict[str, User], action: InstitutionalAction
+    client,
+    people: dict[str, User],
+    action: InstitutionalAction,
+    unit: OrganizationUnit,
 ) -> None:
     monday = week_start_for(timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     proposal = TaskProposal.objects.create(
         employee=people["employee"],
+        organization_unit=unit,
         title="Ameliorer le classement",
         description="Regrouper les dossiers",
         action=action,
@@ -297,12 +306,16 @@ def test_month_view_and_proposal_visibility_are_scoped(
 
 @pytest.mark.django_db
 def test_proposal_period_and_status_filters_are_combined_and_preserved(
-    client, people: dict[str, User], action: InstitutionalAction
+    client,
+    people: dict[str, User],
+    action: InstitutionalAction,
+    unit: OrganizationUnit,
 ) -> None:
     monday = week_start_for(timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     overlapping = TaskProposal.objects.create(
         employee=people["employee"],
+        organization_unit=unit,
         title="Proposition de la semaine",
         description="Chevauche le début de la semaine",
         action=action,
@@ -314,6 +327,7 @@ def test_proposal_period_and_status_filters_are_combined_and_preserved(
     old_start = monday - timedelta(days=21)
     TaskProposal.objects.create(
         employee=people["employee"],
+        organization_unit=unit,
         title="Proposition ancienne",
         description="Hors de la période",
         action=action,
@@ -423,9 +437,14 @@ def test_team_member_profile_is_loaded_by_authorized_json_route(
 
 @pytest.mark.django_db
 def test_self_managed_task_uses_first_person_labels_and_five_percent_step(
-    client, action: InstitutionalAction
+    client, action: InstitutionalAction, unit: OrganizationUnit
 ) -> None:
     root = User.objects.create_user("dg-ui@example.test")
+    from work.services import set_primary_membership
+
+    set_primary_membership(
+        user=root, unit_id=unit.pk, start_date=timezone.localdate()
+    )
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     task = root.created_tasks.create(
         code="DG-UI",
@@ -437,6 +456,7 @@ def test_self_managed_task_uses_first_person_labels_and_five_percent_step(
         task=task,
         employee=root,
         manager=root,
+        organization_unit=unit,
         start_date=timezone.localdate(),
         due_date=calendar.due_date_for(timezone.localdate(), Decimal("3.0")),
         estimated_work_days=Decimal("3.0"),

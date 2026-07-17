@@ -77,6 +77,7 @@ class Command(BaseCommand):
             employee=employee,
             defaults={
                 "manager": manager,
+                "organization_unit": unit,
                 "start_date": monday,
                 "due_date": WorkCalendar.objects.get(
                     pk=default_work_calendar_id()
