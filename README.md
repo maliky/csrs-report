@@ -27,6 +27,45 @@ mypy accounts work config
 python manage.py makemigrations --check --dry-run
 ```
 
+## Interface React progressive
+
+L'interface métier React est disponible sous `/app/`. Elle utilise la même
+session Django et les mêmes autorisations serveur que l'interface classique,
+qui reste accessible à la racine. L'administration Django continue de gérer
+les comptes, services, rôles et délégations.
+
+Le frontend demande Node 24 (version indiquée dans `frontend/.node-version`) :
+
+```bash
+cd frontend
+npm ci
+npm run dev
+npm test
+npm run build-storybook
+npm run build
+```
+
+Le serveur Vite transmet `/api/` à Django sur `127.0.0.1:8000`. Pour travailler
+sur l'interface avec les scénarios fictifs sans démarrer Django :
+
+```bash
+cd frontend
+VITE_USE_MOCKS=true npm run dev
+```
+
+Le contrat OpenAPI et les types TypeScript sont reproductibles :
+
+```bash
+pyenv activate csrs
+python manage.py spectacular --file frontend/openapi.yml --validate
+cd frontend
+npm run types:generate
+```
+
+La compilation Docker est multi-étape : Node produit les fichiers React, puis
+WhiteNoise les sert avec les autres fichiers statiques. Aucun changement Nginx
+n'est nécessaire pour `/app/`.
+
 ## Conteneurs et déploiement
 
 ```bash

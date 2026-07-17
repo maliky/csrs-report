@@ -14,6 +14,43 @@
 
 La decision est donc de preparer une migration progressive, et non de reecrire immediatement l'application. L'interface Django reste disponible comme reference et solution de repli jusqu'a ce qu'un ecran React atteigne la parite fonctionnelle, de permissions, responsive et d'accessibilite.
 
+** Realisation du <2026-07-17 ven.>
+
+Le plan a ete realise au-dela du premier dashboard en lecture seule, tout en
+conservant une adoption progressive et reversible :
+
+- l'interface React couvre le dashboard, le detail, la creation et la
+  modification des taches, les progressions, les observations, les transitions,
+  les propositions et l'equipe;
+- elle est montee sous =/app/=; l'interface Django reste la destination de
+  connexion et demeure accessible a la racine;
+- l'administration Django reste la surface de gestion des comptes, services,
+  roles et delegations;
+- l'API =/api/v1/= applique les sessions, CSRF et autorisations Django et renvoie
+  un format d'erreur stable;
+- =TaskAssignment= et =TaskProposal= possedent une revision incrementale. Une
+  ecriture issue d'une ancienne page recoit =409 stale_revision= au lieu
+  d'ecraser une modification plus recente;
+- React 19, TypeScript strict, Vite 7, React Router 7, Storybook 9, MSW 2,
+  Vitest, Testing Library, Playwright et axe sont installes sous =frontend/=;
+- le graphique React utilise les dates et lignes journalieres issues de
+  l'historique serveur, distingue les jours ouvres et expose une table
+  alternative navigable;
+- l'arbre d'equipe reste replie. Son premier appel ne calcule aucun graphique;
+  le detail des taches est charge seulement lorsque le collaborateur est ouvert;
+- le Dockerfile multi-etape epingle Node 24.18.0, compile React puis remet les
+  fichiers produits a WhiteNoise. Aucune modification Nginx n'est necessaire.
+
+Les donnees MSW sont fictives, credibles et couvrent plusieurs semaines avec
+des observations propres a chaque situation. Les memes handlers alimentent les
+stories et les tests de composants. Le bundle de production a aussi ete teste
+contre la vraie API Django avec Chromium aux largeurs 360 et 1440 pixels; l'audit
+axe WCAG 2 A/AA ne signale aucune violation serieuse ou critique.
+
+Questions restantes non bloquantes : aucune page Django n'est retiree dans ce
+lot. La suppression eventuelle de l'ancienne interface devra attendre une revue
+utilisateur explicite de la parite fonctionnelle.
+
 ** Parcours de lecture avant de coder
 
 Lire les sources dans cet ordre :
@@ -87,15 +124,24 @@ frontend/
 
 En developpement, Vite sert les modules et transmet les appels =/api/= a Django. En production, une etape Node construit les fichiers statiques; Django et WhiteNoise les servent a partir du manifeste Vite. Cette integration sera ajoutee au Dockerfile sans rendre l'execution Python dependante d'un poste particulier.
 
-** Premier contrat API a realiser
+** Contrat API realise
 
-Le premier lot est en lecture seule et ajoute deux ressources :
+Le contrat versionne expose les ressources suivantes :
 
-| Methode | URL                                            | Contenu                                                                 |
-|---------+------------------------------------------------+-------------------------------------------------------------------------|
-| =GET=   | =/api/v1/session/=                            | Utilisateur courant, libelles utiles et capacites autorisees            |
-| =GET=   | =/api/v1/dashboard/?week=YYYY-MM-DD=          | Periode hebdomadaire, navigation et taches visibles                      |
-| =GET=   | =/api/v1/dashboard/?month=YYYY-MM=            | Periode mensuelle, navigation et taches visibles                         |
+| Methode       | URL                                      | Contenu ou action                                                   |
+|---------------+------------------------------------------+---------------------------------------------------------------------|
+| =GET/POST=    | =/api/v1/session/= et =session/logout/=  | Session, capacites, jeton CSRF et deconnexion                        |
+| =GET=         | =/api/v1/dashboard/=                     | Dashboard hebdomadaire ou mensuel                                   |
+| =GET/POST=    | =/api/v1/planning/options/= et =preview/=| Choix autorises et calcul serveur de la planification                |
+| =POST=        | =/api/v1/tasks/=                         | Affectation d'une tache                                              |
+| =GET/PATCH=   | =/api/v1/tasks/{id}/=                    | Detail et modification optimiste                                    |
+| =POST=        | =/api/v1/tasks/{id}/progress/=           | Progression auditee                                                  |
+| =POST=        | =/api/v1/tasks/{id}/observations/=       | Observation auditee                                                  |
+| =POST=        | =/api/v1/tasks/{id}/transition/=         | Validation, reprise ou cloture anticipee                            |
+| =GET/POST=    | =/api/v1/proposals/=                     | Listes et creation des propositions                                 |
+| =POST=        | =/api/v1/proposals/{id}/decision/=       | Validation ou rejet                                                 |
+| =GET=         | =/api/v1/team/= et =team/{id}/=          | Arbre leger puis detail charge a la demande                         |
+| =GET=         | =/api/v1/openapi/=                       | Schema OpenAPI servant a generer les types TypeScript               |
 
 Chaque tache du dashboard expose au minimum : identifiant, code, titre, code d'action optionnel, statut effectif et libelle, pourcentage, dates de debut/du jour/de fin prevue, charge totale/realisee/restante, niveau d'echeance, blocage, observations visibles et serie journaliere de progression. Les dates utilisent =YYYY-MM-DD= dans l'API; les libelles presentes a l'utilisateur restent en francais et les charges gardent au maximum un chiffre decimal.
 
@@ -116,7 +162,7 @@ Les scenarios initiaux sont :
 
 MSW n'est jamais un second backend et reste desactive dans le build de production. En production, le meme client appelle Django. Les donnees simulees restent fictives, credibles et sans mention indiquant qu'elles sont destinees a un test.
 
-** Objectif Premier
+** Objectif premier — realise
 
 *creer un systeme de design minimal puis reproduire le dashboard personnel en lecture seule avec une nouvelle direction visuelle.*
 
@@ -142,25 +188,25 @@ Refondre la hierarchie visuelle, les couleurs, les espacements et la composition
 6. Verifier manuellement clavier, ordre du focus, contraste, zoom, textes longs, chargement lent et telephone etroit.
 7. Livrer de petits commits par composant ou comportement, accompagnes de leurs stories et tests.
 
-** Criteres de sortie du premier lot React
+** Criteres de sortie du lot React
 
-- [ ] Le dashboard React et le dashboard Django montrent le meme ensemble de taches pour le meme utilisateur et la meme periode.
-- [ ] Les changements semaine/mois sont partageables par URL et conservent le bon filtre apres rechargement.
-- [ ] Les etats normal, vide, chargement, erreur, session absente et acces refuse sont comprehensibles sans console de developpement.
-- [ ] Les cartes couvrent blocage, retard, termine, cloture anticipee, absence d'observation et absence de progression.
-- [ ] Le graphique provient de l'historique journalier reel, montre les dates et fournit une alternative accessible.
-- [ ] L'interface reste utilisable au clavier, a =200 %= de zoom, a =360 px= et sur grand ecran.
-- [ ] Les permissions serveur existantes et les tests Django restent inchanges et verts.
-- [ ] Le schema OpenAPI, les types generes et les simulations MSW ne divergent pas.
-- [ ] Aucun secret, mot de passe, jeton ou donnee personnelle reelle n'est ajoute au depot.
+- [X] Le dashboard React et le dashboard Django reposent sur les memes services, autorisations, taches et periodes.
+- [X] Les changements semaine/mois sont partageables par URL et conservent le bon filtre apres rechargement.
+- [X] Les etats normal, vide, chargement, erreur, session absente et acces refuse sont comprehensibles sans console de developpement.
+- [X] Les cartes et stories couvrent blocage, urgence, validation, absence d'observation et periode vide.
+- [X] Le graphique provient de l'historique journalier reel, montre les dates et fournit une alternative accessible.
+- [X] L'interface est testee au clavier, a =360 px= et sur grand ecran; axe controle WCAG 2 A/AA.
+- [X] Les permissions serveur, CSRF, conflits de revision et parcours Django sont testes.
+- [X] Le schema OpenAPI, les types generes et les simulations MSW sont versionnes ensemble.
+- [X] Aucun secret, mot de passe, jeton ou donnee personnelle reelle n'est ajoute au depot.
 
-** Phases suivantes, non realisees dans cette entree
+** Phases realisees dans cette entree
 
-1. Creer le socle =frontend/=, Storybook, tokens, tests et MSW.
-2. Creer =api=, le schema OpenAPI et les deux endpoints en lecture seule.
-3. Realiser et comparer le dashboard React avant de l'exposer sous =/app/=.
-4. Migrer ensuite le detail d'une tache, puis les ecritures avec CSRF, et enfin l'equipe et les propositions.
-5. Retirer une page Django seulement apres parite fonctionnelle, autorisations, responsive, accessibilite et validation utilisateur.
+1. [X] Creer le socle =frontend/=, Storybook, tokens, tests et MSW.
+2. [X] Creer =api=, le schema OpenAPI et les endpoints metier.
+3. [X] Realiser le dashboard React et l'exposer sous =/app/= sans changer la destination de connexion.
+4. [X] Migrer le detail d'une tache, les ecritures avec CSRF, l'equipe et les propositions.
+5. [ ] Retirer une page Django seulement apres parite fonctionnelle, autorisations, responsive, accessibilite et validation utilisateur.
 
 ** References officielles
 
