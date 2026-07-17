@@ -1,0 +1,19 @@
+{% load static %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b35">
+  <title>CSRS Report</title>
+  <link rel="stylesheet" href="{% static 'react/assets/app.css' %}">
+  <script type="module" src="{% static 'react/assets/app.js' %}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+  <div id="root">
+    <main class="boot-state" aria-busy="true">Chargement de CSRS Report…</main>
+  </div>
+  <noscript>Cette interface nécessite JavaScript. L'interface classique reste disponible.</noscript>
+</body>
+</html>

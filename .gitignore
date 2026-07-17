@@ -67,3 +67,4 @@ backups/
 
 # Generated static assets
 staticfiles/
+static/react/
