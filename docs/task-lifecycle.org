@@ -1,3 +1,7 @@
+#+PROPERTY: header-args:plantuml :exports both :results file graphics :cmdline -charset UTF-8
+
+#+begin_src plantuml :file  task-lifecycle.png 
+
 @startuml
 title Cycle de vie d'une proposition et d'une affectation
 
@@ -26,3 +30,7 @@ completed --> [*]
 early --> [*]
 rejected --> [*]
 @enduml
+#+END_SRC
+
+#+RESULTS:
+[[file:task-lifecycle.png]]

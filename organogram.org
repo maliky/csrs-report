@@ -1,0 +1,17 @@
+- Alias: Fonction :  Responsable principal
+- dg: Direction generale: -           
+- daf: Direction administrative et financiere: dg          
+- drv: Direction recherche, ressources et valorisation: dg          
+- finances: Responsable comptabilite, finances et caisse: daf         
+- kpon: Responsable technologies et systemes d'information: daf         
+- formation: Responsable formation et renforcement des capacites: drv         
+- valorisation: Responsable valorisation et partenariats: drv         
+- comptable: Comptable: finances    
+- caissier: Caissier: finances    
+- atall: Agent technologies et systemes d'information: kpon        
+- assistant: Assistant de formation: formation   
+- bibliothecaire: Bibliothecaire: formation   
+- communication: Charge de communication: valorisation 
+- partenariat: Charge des partenariats: valorisation 
+
+
