@@ -335,6 +335,24 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                     driver.execute_script("return document.documentElement.scrollWidth")
                     <= width
                 )
+                axe_source = Path(
+                    "frontend/node_modules/axe-core/axe.min.js"
+                ).read_text()
+                driver.execute_script(axe_source)
+                audit = driver.execute_async_script(
+                    """
+                    const done = arguments[arguments.length - 1];
+                    axe.run(document, {
+                      runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa']}
+                    }).then(done);
+                    """
+                )
+                serious = [
+                    item
+                    for item in audit["violations"]
+                    if item["impact"] in ("serious", "critical")
+                ]
+                assert not serious, serious
             driver.get(
                 f"{self.live_server_url}/app/taches/{self.assignment.pk}/"
             )
