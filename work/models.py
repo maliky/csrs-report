@@ -483,6 +483,7 @@ class TaskAssignment(models.Model):
     )
     closed_reason = models.TextField("motif de cloture", blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    revision = models.PositiveBigIntegerField(default=1)
     history = HistoricalRecords()
 
     class Meta:
@@ -577,6 +578,7 @@ class TaskProposal(models.Model):
     )
     decision_note = models.TextField("motif", blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
+    revision = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     history = HistoricalRecords()
 

@@ -8,6 +8,7 @@ from accounts.forms import AliasAuthenticationForm
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/v1/", include("api.urls")),
     path(
         "connexion/",
         auth_views.LoginView.as_view(

@@ -31,9 +31,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "simple_history",
+    "rest_framework",
+    "drf_spectacular",
     "accounts",
     "work",
     "access",
+    "api",
 ]
 
 MIDDLEWARE = [
@@ -116,6 +119,23 @@ AUTHENTICATION_BACKENDS = ["accounts.backends.AliasOrEmailBackend"]
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "api.authentication.CsrfSessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "api.exceptions.api_exception_handler",
+}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "CSRS Report API",
+    "DESCRIPTION": "API metier versionnee pour l'interface React CSRS Report.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
 
 # Short-lived bearer tokens let Observable read authorized JSON without sharing
 # the CSRS session cookie across domains.

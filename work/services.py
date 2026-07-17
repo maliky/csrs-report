@@ -53,6 +53,20 @@ ACTIVE_STATES = (
 DecimalPairT: TypeAlias = tuple[Decimal, Decimal]
 
 
+class StaleRevisionError(Exception):
+    """Signal that a client attempted to overwrite a newer representation."""
+
+    def __init__(self, current_revision: int) -> None:
+        super().__init__("Cette ressource a été modifiée depuis son chargement.")
+        self.current_revision = current_revision
+
+
+def ensure_revision(current_revision: int, expected_revision: int | None) -> None:
+    """Reject an optimistic write when the submitted revision is stale."""
+    if expected_revision is not None and expected_revision != current_revision:
+        raise StaleRevisionError(current_revision)
+
+
 @dataclass(frozen=True)
 class Projection:
     """Remaining-work projection for one assignment."""
@@ -703,9 +717,7 @@ def can_view_assignment(user: User, assignment: TaskAssignment) -> bool:
         assignment.employee_id in hierarchy_employee_ids(user)
         or user.is_it_admin
         or user.is_superuser
-        or has_scoped_permission(
-            user, VIEW_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, VIEW_PERMISSION, assignment.organization_unit_id)
     )
 
 
@@ -724,9 +736,7 @@ def can_manage_assignment(user: User, assignment: TaskAssignment) -> bool:
         user.is_it_admin
         or user.is_superuser
         or self_managed
-        or has_scoped_permission(
-            user, MANAGE_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, MANAGE_PERMISSION, assignment.organization_unit_id)
         or (
             assignment.manager_id == user.pk
             and is_primary_supervisor(user, assignment.employee)
@@ -740,9 +750,7 @@ def can_comment_assignment(user: User, assignment: TaskAssignment) -> bool:
         or user.is_it_admin
         or user.is_superuser
         or is_direct_supervisor(user, assignment.employee)
-        or has_scoped_permission(
-            user, MANAGE_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, MANAGE_PERMISSION, assignment.organization_unit_id)
     )
 
 
@@ -752,9 +760,11 @@ def can_assign_employee(manager: User, employee: User, on_day: date) -> bool:
         return True
     if manager == employee and can_self_assign(manager):
         return True
-    if active_lines(on_day).filter(
-        supervisor=manager, employee=employee, is_primary=True
-    ).exists():
+    if (
+        active_lines(on_day)
+        .filter(supervisor=manager, employee=employee, is_primary=True)
+        .exists()
+    ):
         return True
     return has_scoped_permission(
         manager,
@@ -1017,9 +1027,16 @@ def update_assignment_schedule(
     start_date: date,
     due_date: date,
     estimated_work_days: Decimal,
-) -> None:
+    expected_revision: int | None = None,
+) -> TaskAssignment:
     """Apply a coherent schedule and append its visible audit event."""
+    assignment = (
+        TaskAssignment.objects.select_for_update()
+        .select_related("employee", "manager", "task", "calendar")
+        .get(pk=assignment.pk)
+    )
     ensure_manage(user, assignment)
+    ensure_revision(assignment.revision, expected_revision)
     old = {
         "start_date": assignment.start_date.isoformat(),
         "due_date": assignment.due_date.isoformat(),
@@ -1028,8 +1045,16 @@ def update_assignment_schedule(
     assignment.start_date = start_date
     assignment.due_date = due_date
     assignment.estimated_work_days = estimated_work_days
+    assignment.revision += 1
     assignment.full_clean()
-    assignment.save(update_fields=["start_date", "due_date", "estimated_work_days"])
+    assignment.save(
+        update_fields=[
+            "start_date",
+            "due_date",
+            "estimated_work_days",
+            "revision",
+        ]
+    )
     new = {
         "start_date": start_date.isoformat(),
         "due_date": due_date.isoformat(),
@@ -1043,6 +1068,44 @@ def update_assignment_schedule(
             message="Planification mise à jour.",
             details={"before": old, "after": new},
         )
+    return assignment
+
+
+@transaction.atomic
+def update_assignment_details(
+    *,
+    user: User,
+    assignment: TaskAssignment,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None = None,
+) -> TaskAssignment:
+    """Update task wording and schedule as one optimistic transaction."""
+    locked = (
+        TaskAssignment.objects.select_for_update()
+        .select_related("employee", "manager", "task", "calendar")
+        .get(pk=assignment.pk)
+    )
+    ensure_manage(user, locked)
+    ensure_revision(locked.revision, expected_revision)
+    task = locked.task
+    task.title = title.strip()
+    task.description = description.strip()
+    task.action = action
+    task.full_clean()
+    task.save(update_fields=["title", "description", "action", "updated_at"])
+    return update_assignment_schedule(
+        user=user,
+        assignment=locked,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        expected_revision=locked.revision,
+    )
 
 
 @transaction.atomic
@@ -1054,6 +1117,7 @@ def record_progress(
     percentage: int,
     note: str,
     blocked: bool,
+    expected_revision: int | None = None,
 ) -> ProgressEntry:
     """Create or correct one daily progress entry under the correction rules."""
     assignment = (
@@ -1061,6 +1125,7 @@ def record_progress(
         .select_related("employee", "manager", "task")
         .get(pk=assignment.pk)
     )
+    ensure_revision(assignment.revision, expected_revision)
     employee_edit = user == assignment.employee
     manager_edit = can_manage_assignment(user, assignment)
     if not employee_edit and not manager_edit:
@@ -1139,25 +1204,32 @@ def record_progress(
         assignment.status = AssignmentStatus.ACTIVE
     elif assignment.status == AssignmentStatus.PLANNED:
         assignment.status = AssignmentStatus.ACTIVE
-    assignment.save(update_fields=["status", "completed_at"])
+    assignment.revision += 1
+    assignment.save(update_fields=["status", "completed_at", "revision"])
     return entry
 
 
 @transaction.atomic
-def validate_completion(user: User, assignment: TaskAssignment) -> None:
+def validate_completion(
+    user: User,
+    assignment: TaskAssignment,
+    expected_revision: int | None = None,
+) -> None:
     assignment = (
         TaskAssignment.objects.select_for_update()
         .select_related("employee", "manager")
         .get(pk=assignment.pk)
     )
     ensure_manage(user, assignment)
+    ensure_revision(assignment.revision, expected_revision)
     if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
         raise ValidationError("Cette tâche n’est pas en attente de validation.")
     if current_progress(assignment) != 100:
         raise ValidationError("Une tâche doit être réalisée à 100 % avant validation.")
     assignment.status = AssignmentStatus.COMPLETED
     assignment.completed_at = timezone.now()
-    assignment.save(update_fields=["status", "completed_at"])
+    assignment.revision += 1
+    assignment.save(update_fields=["status", "completed_at", "revision"])
     TaskActivity.objects.create(
         assignment=assignment,
         kind=ActivityKind.VALIDATED,
@@ -1169,12 +1241,20 @@ def validate_completion(user: User, assignment: TaskAssignment) -> None:
 
 
 @transaction.atomic
-def reject_completion(user: User, assignment: TaskAssignment, reason: str) -> None:
+def reject_completion(
+    user: User,
+    assignment: TaskAssignment,
+    reason: str,
+    expected_revision: int | None = None,
+) -> None:
+    assignment = TaskAssignment.objects.select_for_update().get(pk=assignment.pk)
     ensure_manage(user, assignment)
+    ensure_revision(assignment.revision, expected_revision)
     if not reason.strip():
         raise ValidationError("Un motif est obligatoire.")
     assignment.status = AssignmentStatus.ACTIVE
-    assignment.save(update_fields=["status"])
+    assignment.revision += 1
+    assignment.save(update_fields=["status", "revision"])
     TaskActivity.objects.create(
         assignment=assignment,
         kind=ActivityKind.REJECTED,
@@ -1189,14 +1269,22 @@ def reject_completion(user: User, assignment: TaskAssignment, reason: str) -> No
 
 
 @transaction.atomic
-def close_early(user: User, assignment: TaskAssignment, reason: str) -> None:
+def close_early(
+    user: User,
+    assignment: TaskAssignment,
+    reason: str,
+    expected_revision: int | None = None,
+) -> None:
+    assignment = TaskAssignment.objects.select_for_update().get(pk=assignment.pk)
     ensure_manage(user, assignment)
+    ensure_revision(assignment.revision, expected_revision)
     if not reason.strip():
         raise ValidationError("Un motif est obligatoire.")
     assignment.status = AssignmentStatus.CLOSED_EARLY
     assignment.closed_reason = reason.strip()
     assignment.completed_at = timezone.now()
-    assignment.save(update_fields=["status", "closed_reason", "completed_at"])
+    assignment.revision += 1
+    assignment.save(update_fields=["status", "closed_reason", "completed_at", "revision"])
     TaskActivity.objects.create(
         assignment=assignment,
         kind=ActivityKind.CLOSED,
@@ -1209,11 +1297,17 @@ def close_early(user: User, assignment: TaskAssignment, reason: str) -> None:
 
 @transaction.atomic
 def add_observation(
-    *, user: User, assignment: TaskAssignment, message: str
+    *,
+    user: User,
+    assignment: TaskAssignment,
+    message: str,
+    expected_revision: int | None = None,
 ) -> TaskActivity:
     """Append a general observation under direct-participant permissions."""
+    assignment = TaskAssignment.objects.select_for_update().get(pk=assignment.pk)
     if not can_comment_assignment(user, assignment):
         raise PermissionDenied("Vous ne pouvez pas commenter cette tâche.")
+    ensure_revision(assignment.revision, expected_revision)
     cleaned = message.strip()
     if not cleaned:
         raise ValidationError("Une observation est obligatoire.")
@@ -1226,18 +1320,29 @@ def add_observation(
     from work.notifications import queue_comment_notification
 
     queue_comment_notification(assignment, user)
+    assignment.revision += 1
+    assignment.save(update_fields=["revision"])
     return activity
 
 
 @transaction.atomic
 def accept_proposal(
-    user: User, proposal: TaskProposal, code: str | None = None
+    user: User,
+    proposal: TaskProposal,
+    code: str | None = None,
+    expected_revision: int | None = None,
 ) -> TaskAssignment:
     """Turn an employee proposal into a managed task assignment."""
+    proposal = (
+        TaskProposal.objects.select_for_update()
+        .select_related("employee", "action", "calendar")
+        .get(pk=proposal.pk)
+    )
     if not can_review_proposal(user, proposal):
-        raise PermissionDenied(
-            "Vous ne pouvez pas accepter cette proposition."
-        )
+        raise PermissionDenied("Vous ne pouvez pas accepter cette proposition.")
+    ensure_revision(proposal.revision, expected_revision)
+    if proposal.status != ProposalStatus.SUBMITTED:
+        raise ValidationError("Cette proposition a déjà été traitée.")
     unit_id = proposal.organization_unit_id or organization_unit_for_employee(
         proposal.employee, proposal.start_date
     )
@@ -1269,6 +1374,7 @@ def accept_proposal(
     proposal.organization_unit_id = unit_id
     proposal.accepted_assignment = assignment
     proposal.decided_at = timezone.now()
+    proposal.revision += 1
     proposal.save(
         update_fields=[
             "status",
@@ -1276,6 +1382,7 @@ def accept_proposal(
             "organization_unit",
             "accepted_assignment",
             "decided_at",
+            "revision",
         ]
     )
     from work.notifications import queue_assignment_notification
@@ -1285,11 +1392,22 @@ def accept_proposal(
 
 
 @transaction.atomic
-def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
+def reject_proposal(
+    user: User,
+    proposal: TaskProposal,
+    reason: str,
+    expected_revision: int | None = None,
+) -> None:
+    proposal = (
+        TaskProposal.objects.select_for_update()
+        .select_related("employee")
+        .get(pk=proposal.pk)
+    )
     if not can_review_proposal(user, proposal):
-        raise PermissionDenied(
-            "Vous ne pouvez pas refuser cette proposition."
-        )
+        raise PermissionDenied("Vous ne pouvez pas refuser cette proposition.")
+    ensure_revision(proposal.revision, expected_revision)
+    if proposal.status != ProposalStatus.SUBMITTED:
+        raise ValidationError("Cette proposition a déjà été traitée.")
     cleaned_reason = reason.strip()
     if not cleaned_reason:
         raise ValidationError("Un motif de rejet est obligatoire.")
@@ -1297,7 +1415,16 @@ def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
     proposal.reviewed_by = user
     proposal.decision_note = cleaned_reason
     proposal.decided_at = timezone.now()
-    proposal.save(update_fields=["status", "reviewed_by", "decision_note", "decided_at"])
+    proposal.revision += 1
+    proposal.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "decision_note",
+            "decided_at",
+            "revision",
+        ]
+    )
 
 
 def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
@@ -1308,9 +1435,7 @@ def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
         user.is_it_admin
         or user.is_superuser
         or is_primary_supervisor(user, proposal.employee)
-        or has_scoped_permission(
-            user, PROPOSAL_PERMISSION, proposal.organization_unit_id
-        )
+        or has_scoped_permission(user, PROPOSAL_PERMISSION, proposal.organization_unit_id)
     )
 
 
@@ -1319,13 +1444,14 @@ def reviewable_proposals(user: User) -> QuerySet[TaskProposal]:
     queryset = TaskProposal.objects.exclude(employee=user)
     if user.is_it_admin or user.is_superuser:
         return queryset
-    direct_ids = active_lines().filter(
-        supervisor=user, is_primary=True
-    ).values_list("employee_id", flat=True)
+    direct_ids = (
+        active_lines()
+        .filter(supervisor=user, is_primary=True)
+        .values_list("employee_id", flat=True)
+    )
     delegated_units = scoped_unit_ids(user, PROPOSAL_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=direct_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=direct_ids) | Q(organization_unit_id__in=delegated_units)
     )
 
 
@@ -1334,13 +1460,14 @@ def visible_team_proposals(user: User) -> QuerySet[TaskProposal]:
     queryset = TaskProposal.objects.exclude(employee=user)
     if user.is_it_admin or user.is_superuser:
         return queryset
-    direct_ids = active_lines().filter(
-        supervisor=user, is_primary=True
-    ).values_list("employee_id", flat=True)
+    direct_ids = (
+        active_lines()
+        .filter(supervisor=user, is_primary=True)
+        .values_list("employee_id", flat=True)
+    )
     delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=direct_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=direct_ids) | Q(organization_unit_id__in=delegated_units)
     )
 
 
@@ -1382,8 +1509,9 @@ def period_assignments(
     if viewer is not None:
         queryset = queryset.filter(pk__in=visible_assignments(viewer).values("pk"))
     return (
-        queryset
-        .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
+        queryset.filter(
+            Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start)
+        )
         .select_related(*related)
         .prefetch_related("calendar__days", "progress_entries", "activities__actor")
     )
@@ -1612,7 +1740,8 @@ def team_tree_overview(
     employee_ids = visible_ids
     task_counts = {
         item["employee_id"]: item["task_count"]
-        for item in visible_assignments(manager).filter(
+        for item in visible_assignments(manager)
+        .filter(
             employee_id__in=employee_ids,
             start_date__lte=period.end,
         )
@@ -1665,6 +1794,5 @@ def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
     hierarchy_ids = hierarchy_employee_ids(user)
     delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=hierarchy_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=hierarchy_ids) | Q(organization_unit_id__in=delegated_units)
     )
