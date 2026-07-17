@@ -2,6 +2,177 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-17 ven.> Parcours frontend React pour un etudiant
+** Objectif et diagnostic
+
+- le serveur Django, les modeles, les services types, les permissions, les historiques et les scenarios d'illustration constituent une base fonctionnelle solide;
+- les pages sont actuellement rendues par des templates Django et restent la reference du comportement attendu;
+- =static/js/app.js= concentre environ 450 lignes de JavaScript sans modules ni composants;
+- =static/css/app.css= est compacte et peu adaptee a l'etude progressive d'un systeme de design;
+- les JSON existants alimentent surtout les graphiques de progression et le chargement paresseux de l'equipe; il n'existe pas encore de contrat complet pour un dashboard React;
+- aucun =package.json=, environnement TypeScript, Node ou npm n'est installe dans le depot ou sur cette machine.
+
+La decision est donc de preparer une migration progressive, et non de reecrire immediatement l'application. L'interface Django reste disponible comme reference et solution de repli jusqu'a ce qu'un ecran React atteigne la parite fonctionnelle, de permissions, responsive et d'accessibilite.
+
+** Parcours de lecture avant de coder
+
+Lire les sources dans cet ordre :
+
+1. =AGENTS.md= pour les regles de travail, de securite, d'interface et de verification.
+2. =README.md= pour demarrer Django et executer les controles existants.
+3. =docs/task-lifecycle.svg= ou =docs/task-lifecycle.puml= pour comprendre le cycle d'une tache.
+4. La section [[*<2026-07-12 dim.> Aide-memoire des comptes d'illustration][Aide-memoire des comptes d'illustration]] pour les roles et la hierarchie fictive, sans recopier de mot de passe dans le code ou la documentation.
+5. La section [[*<2026-07-17 ven. 06:05> Appartenances, roles et delegations par service][Appartenances, roles et delegations par service]] pour comprendre les autorisations par service.
+6. =work/models.py=, =work/services.py= et =access/services.py= pour identifier la source des regles metier et des permissions.
+7. =templates/work/dashboard.html=, =templates/work/_task_card.html=, =static/js/app.js= et =static/css/app.css= pour observer le comportement actuel a remplacer progressivement.
+
+Commandes actuelles, independantes du futur frontend :
+
+#+begin_src sh
+pyenv activate csrs
+python manage.py runserver
+pytest -m "not selenium"
+#+end_src
+
+Les commandes Node, Storybook et Vite decrites plus bas sont une cible de la phase suivante. Elles ne doivent pas etre presentees comme utilisables avant la creation du socle =frontend/=.
+
+** Frontiere de responsabilite
+
+| Couche                    | Responsabilite                                                                                       |
+|---------------------------+------------------------------------------------------------------------------------------------------|
+| Django                    | Authentification, session, CSRF, autorisations, regles metier, base de donnees et notifications     |
+| =work= et =access=        | Calculs de progression, visibilite, hierarchie, delegations et transitions auditees                 |
+| API =/api/v1/=            | Contrat JSON versionne qui expose uniquement les donnees et actions autorisees                       |
+| React                     | Presentation, navigation, etats visuels, interactions et etat local de l'interface                  |
+| Storybook et MSW          | Conception isolee et simulation reproductible des reponses de l'API                                 |
+
+Une interface masquee n'est jamais une autorisation. React peut utiliser les capacites renvoyees par l'API pour presenter les bons controles, mais chaque lecture et chaque ecriture reste verifiee par Django. React ne recalcule pas les droits, le statut effectif, les jours ouvres, la charge ou la progression historique.
+
+** Architecture cible retenue
+
+- Ajouter React progressivement sous la sous-route =/app/=; conserver les routes Django actuelles tant que leur equivalent React n'est pas valide.
+- Garder Django et React dans le meme depot et sur la meme origine. Conserver l'authentification par session et la protection CSRF; ne pas introduire de JWT.
+- Ajouter une application Django =api= dediee aux vues, serializers et schema OpenAPI. Elle appelle les services de =work= et =access= sans dupliquer leur logique.
+- Utiliser Django REST Framework et =drf-spectacular= pour produire un schema OpenAPI versionne.
+- Generer les types TypeScript avec =openapi-typescript= et utiliser un petit client =openapi-fetch= afin que le contrat serveur reste la source de verite.
+- Utiliser React et TypeScript avec Vite, npm et une version Node 24 LTS epinglee. Le =package-lock.json= devra etre versionne.
+- Utiliser React Router en mode Data pour la sous-route =/app/=; ne pas ajouter Redux pour le premier lot. Les filtres de periode appartiennent a l'URL et l'etat purement visuel reste local aux composants.
+- Construire les styles avec des variables CSS de design tokens et des CSS Modules. Ne pas ajouter Tailwind ni une bibliotheque visuelle prete pour ce parcours pedagogique.
+- Utiliser Storybook pour concevoir les composants et leurs etats avant de les integrer a une page.
+
+Structure cible additive; les dossiers Django existants ne sont pas deplaces :
+
+#+begin_example
+api/
+  serializers.py             representations JSON sans logique metier
+  urls.py                    routes versionnees /api/v1/
+  views.py                   orchestration, session et permissions
+
+frontend/
+  package.json
+  package-lock.json
+  vite.config.ts
+  tsconfig.json
+  .storybook/
+  src/
+    app/                     bootstrap, routes et fournisseurs globaux
+    components/ui/           primitives reutilisables
+    features/tasks/          dashboard, cartes et graphiques
+    features/team/           futur ecran equipe
+    lib/api/                 client et types OpenAPI generes
+    mocks/                   scenarios MSW
+    styles/                  tokens et styles globaux
+    test/                    outils de test partages
+#+end_example
+
+En developpement, Vite sert les modules et transmet les appels =/api/= a Django. En production, une etape Node construit les fichiers statiques; Django et WhiteNoise les servent a partir du manifeste Vite. Cette integration sera ajoutee au Dockerfile sans rendre l'execution Python dependante d'un poste particulier.
+
+** Premier contrat API a realiser
+
+Le premier lot est en lecture seule et ajoute deux ressources :
+
+| Methode | URL                                            | Contenu                                                                 |
+|---------+------------------------------------------------+-------------------------------------------------------------------------|
+| =GET=   | =/api/v1/session/=                            | Utilisateur courant, libelles utiles et capacites autorisees            |
+| =GET=   | =/api/v1/dashboard/?week=YYYY-MM-DD=          | Periode hebdomadaire, navigation et taches visibles                      |
+| =GET=   | =/api/v1/dashboard/?month=YYYY-MM=            | Periode mensuelle, navigation et taches visibles                         |
+
+Chaque tache du dashboard expose au minimum : identifiant, code, titre, code d'action optionnel, statut effectif et libelle, pourcentage, dates de debut/du jour/de fin prevue, charge totale/realisee/restante, niveau d'echeance, blocage, observations visibles et serie journaliere de progression. Les dates utilisent =YYYY-MM-DD= dans l'API; les libelles presentes a l'utilisateur restent en francais et les charges gardent au maximum un chiffre decimal.
+
+Le serveur renvoie =401= en JSON en l'absence de session. Une ressource non visible n'est pas revelee. Les reponses OpenAPI, les types TypeScript et les scenarios MSW doivent utiliser exactement les memes noms et types.
+
+** MSW en termes simples
+
+=MSW= signifie /Mock Service Worker/. En developpement, dans Storybook et dans les tests, il intercepte les appels =fetch= du navigateur et fournit des reponses JSON conformes au contrat =/api/v1/=. Il permet a l'etudiant de construire une interface meme lorsque Django n'est pas lance et de reproduire facilement des situations difficiles.
+
+Les scenarios initiaux sont :
+
+- dashboard normal avec plusieurs taches et progressions differentes;
+- periode sans tache;
+- tache sans observation ou sans progression saisie;
+- tache bloquee, en retard, terminee et cloturee avant achevement;
+- reponse lente avec indicateur de chargement;
+- session absente, acces refuse et erreur serveur avec possibilite de reessayer.
+
+MSW n'est jamais un second backend et reste desactive dans le build de production. En production, le meme client appelle Django. Les donnees simulees restent fictives, credibles et sans mention indiquant qu'elles sont destinees a un test.
+
+** Premier exercice de l'etudiant
+
+Objectif : creer un systeme de design minimal puis reproduire le dashboard personnel en lecture seule avec une nouvelle direction visuelle.
+
+Composants attendus :
+
+- tokens de couleur, typographie, espacement, rayon, ombre et focus;
+- =Button=, =Card=, =StatusBadge=, =Skeleton=, =EmptyState= et =ErrorState=;
+- =AppShell= avec navigation ordinateur et telephone;
+- =PeriodNavigation= synchronisee avec les parametres semaine ou mois de l'URL;
+- =TaskCard= avec statut, progression, charge, echeance, alertes et observations repliees;
+- =TaskProgressChart= fonde sur les points historiques, les dates reelles et les jours ouvres, avec alternative textuelle et navigation clavier;
+- =DashboardPage= qui compose ces elements sans contenir les regles metier du serveur.
+
+L'etudiant peut refondre la hierarchie visuelle, les couleurs, les espacements et la composition. Il doit conserver les informations, les sens des statuts, les parcours, les permissions et les libelles metier confirmes.
+
+** Methode de conception et de revue
+
+1. Commencer par les tokens et les primitives dans Storybook.
+2. Ajouter une story par etat important avant l'integration au dashboard.
+3. Utiliser les scenarios MSW partages par Storybook, Vitest et les tests navigateur.
+4. Tester les interactions avec Vitest et Testing Library en interrogeant l'interface par role, libelle et texte plutot que par structure interne.
+5. Tester le parcours integre avec Playwright aux largeurs =360 px= et =1440 px=, puis analyser les erreurs accessibles automatisees avec =axe=.
+6. Verifier manuellement clavier, ordre du focus, contraste, zoom, textes longs, chargement lent et telephone etroit.
+7. Livrer de petits commits par composant ou comportement, accompagnes de leurs stories et tests.
+
+** Criteres de sortie du premier lot React
+
+- [ ] Le dashboard React et le dashboard Django montrent le meme ensemble de taches pour le meme utilisateur et la meme periode.
+- [ ] Les changements semaine/mois sont partageables par URL et conservent le bon filtre apres rechargement.
+- [ ] Les etats normal, vide, chargement, erreur, session absente et acces refuse sont comprehensibles sans console de developpement.
+- [ ] Les cartes couvrent blocage, retard, termine, cloture anticipee, absence d'observation et absence de progression.
+- [ ] Le graphique provient de l'historique journalier reel, montre les dates et fournit une alternative accessible.
+- [ ] L'interface reste utilisable au clavier, a =200 %= de zoom, a =360 px= et sur grand ecran.
+- [ ] Les permissions serveur existantes et les tests Django restent inchanges et verts.
+- [ ] Le schema OpenAPI, les types generes et les simulations MSW ne divergent pas.
+- [ ] Aucun secret, mot de passe, jeton ou donnee personnelle reelle n'est ajoute au depot.
+
+** Phases suivantes, non realisees dans cette entree
+
+1. Creer le socle =frontend/=, Storybook, tokens, tests et MSW.
+2. Creer =api=, le schema OpenAPI et les deux endpoints en lecture seule.
+3. Realiser et comparer le dashboard React avant de l'exposer sous =/app/=.
+4. Migrer ensuite le detail d'une tache, puis les ecritures avec CSRF, et enfin l'equipe et les propositions.
+5. Retirer une page Django seulement apres parite fonctionnelle, autorisations, responsive, accessibilite et validation utilisateur.
+
+** References officielles
+
+- Adoption progressive de React : https://react.dev/learn/add-react-to-an-existing-project
+- Integration Vite avec un backend : https://vite.dev/guide/backend-integration.html
+- Node LTS : https://nodejs.org/en/about/previous-releases
+- Storybook avec React et Vite : https://storybook.js.org/docs/9/get-started/frameworks/react-vite
+- React Testing Library : https://testing-library.com/docs/react-testing-library/intro/
+- Tests d'accessibilite Playwright : https://playwright.dev/docs/accessibility-testing
+- Schemas OpenAPI Django REST Framework : https://www.django-rest-framework.org/api-guide/schemas/
+- MSW : https://mswjs.io/
+
 * <2026-07-17 ven. 06:05> Appartenances, roles et delegations par service
 ** Besoins confirmes
 
