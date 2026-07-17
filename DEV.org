@@ -2,6 +2,112 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-17 ven. 06:05> Appartenances, roles et delegations par service
+** Besoins confirmes
+
+- Plusieurs personnes peuvent exercer le meme droit metier, par exemple deux responsables DAF ou un DG et un vice-DG.
+- Une delegation peut etre temporaire puis retiree sans modifier le compte ni la hierarchie de la personne.
+- La lecture et la gestion sont separees. La gestion comprend l'affectation, la planification, les observations, la correction des progressions, la validation, la cloture et la decision des propositions.
+- Les delegations completent la hierarchie existante; elles ne remplacent ni le responsable principal d'une personne ni le responsable enregistre sur une tache.
+- Seul l'administrateur IT, ou le superutilisateur d'urgence, attribue et revoque les delegations.
+- Pendant sa validite, une delegation de lecture donne acces a tout l'historique du perimetre. Apres expiration ou revocation, cet acces disparait a la requete suivante.
+
+** Decision d'architecture
+
+=accounts_user= est deja une table utilisateur etendue issue de =AbstractUser=. Une seconde table de profil utilisateur n'est donc pas ajoutee. Les responsabilites sont separees ainsi :
+
+#+begin_example
+accounts_user
+  +-- work_organizationmembership  appartenance datee a un service
+  +-- work_reportingline           responsabilite hierarchique
+  `-- access_rolegrant             autorisation deleguee et temporaire
+
+work_organizationunit
+  +-- work_organizationunitlink    dependance entre services
+  +-- work_taskassignment          service historique de la tache
+  `-- work_taskproposal            service historique de la proposition
+
+auth_group -- access_scopedrole -- access_rolegrant
+#+end_example
+
+| Groupe de tables | Table                           | Responsabilite                                                               |
+|------------------+---------------------------------+------------------------------------------------------------------------------|
+| Identite         | =accounts_user=                 | Compte, connexion et informations minimales de la personne                   |
+| Organisation     | =work_organizationmembership=  | Service, fonction, periode et appartenance principale ou secondaire          |
+| Hierarchie       | =work_reportingline=            | Relation datee entre collaborateur et responsable                            |
+| Services         | =work_organizationunitlink=     | Graphe acyclique des services et sous-services                               |
+| Role             | =access_scopedrole=             | Role metier versionne, relie a un =auth_group= de permissions                 |
+| Delegation       | =access_rolegrant=              | Utilisateur, role, service, portee, periode, attribution et revocation        |
+| Travail          | =work_taskassignment=           | Tache affectee avec une photographie du service au moment de sa creation      |
+| Proposition      | =work_taskproposal=             | Proposition avec la meme photographie de service                             |
+
+Un utilisateur n'est pas ajoute directement au groupe metier : =auth_group= contient l'ensemble de permissions, tandis que =access_rolegrant= porte le service et la duree. Les groupes directs de Django restent reserves aux droits techniques globaux.
+
+** Roles initiaux et resolution des droits
+
+| Code role       | Portee fonctionnelle                                                                                   |
+|-----------------+--------------------------------------------------------------------------------------------------------|
+| =UNIT_VIEWER=   | Tableaux de bord, taches, historiques et propositions en lecture seule                                   |
+| =UNIT_MANAGER=  | Lecture plus affectation, planification, observations, progressions, validation, cloture et propositions |
+
+- =UNIT_ONLY= couvre exactement le service selectionne; =UNIT_TREE= inclut ses sous-services actifs.
+- Les droits effectifs sont l'union des droits personnels, des droits hierarchiques et des delegations actives. Aucun refus explicite n'est ajoute dans cette version.
+- Les controles sont centralises et appliques aux vues HTML, actions POST, formulaires, JSON de progression et chargements paresseux de l'equipe.
+- Un responsable delegue peut agir sur une tache sans remplacer =TaskAssignment.manager=. Lorsqu'il accepte une proposition, le responsable principal naturel reste le responsable de la nouvelle tache et l'auteur de la decision reste audite.
+- L'export Observable demeure reserve au superutilisateur =dev= conformement a la decision precedente; les permissions d'export des roles preparent seulement de futurs exports metier.
+
+** Realisation
+
+- [X] =OrganizationMembership= conserve plusieurs appartenances datees, une appartenance principale non chevauchante et l'historique de chaque modification.
+- [X] =ScopedRole= relie les roles versionnes aux permissions Django; =RoleGrant= conserve le perimetre, la periode, l'auteur, les motifs et l'historique.
+- [X] Une delegation ne peut pas etre supprimee depuis l'application ou l'administration : elle doit etre revoquee avec un auteur et un motif.
+- [X] L'administration affiche les delegations actives, futures, expirees ou revoquees et refuse leur gestion aux non-IT.
+- [X] Les formulaires d'affectation proposent les collaborateurs directs et les membres des services geres par delegation, sans exposer les autres services.
+- [X] Une equipe deleguee retrouve aussi les anciens collaborateurs qui possedent des taches historiques dans son perimetre; leurs taches d'un autre service restent masquees.
+- [X] Les propositions visibles en lecture sont distinguees de celles que l'utilisateur peut accepter ou refuser.
+- [X] La navigation =Mon equipe= et =Affecter= tient compte des delegations encore valides.
+- [X] Le fil d'activite utilise d'abord l'appartenance historique de l'auteur, puis l'ancienne ligne hierarchique comme compatibilite.
+- [X] La population d'illustration cree les appartenances de tous les comptes metier et rattache les 73 taches et 42 propositions a leur service.
+
+** Migrations et reprise des donnees
+
+- [X] =work.0013= ajoute les appartenances et les services historiques, y compris dans les tables d'historique.
+- [X] =work.0014= reconstruit les appartenances depuis =ReportingLine=, deduit le service des responsables racines depuis le graphe des services et rattache les taches et propositions existantes a la date de debut.
+- [X] =work.0015= rend le service obligatoire dans les formulaires de modele tout en gardant la colonne nullable pour l'audit des anciennes donnees ambiguës.
+- [X] =access.0001= cree les roles, delegations, contraintes, index et historique; =access.0002= cree les groupes et permissions =UNIT_VIEWER= et =UNIT_MANAGER=.
+- [X] La commande =python manage.py audit_organization_scope --fail-on-unresolved= liste et signale les comptes metier, taches ou propositions restant sans service.
+- [X] Les colonnes de service restent temporairement nullables pour permettre de diagnostiquer une donnee historique ambigue au lieu de lui attribuer silencieusement un service. Les ecritures applicatives normales exigent une appartenance resolue.
+
+** Attribution initiale des roles utilisateurs
+
+La synchronisation du <2026-07-17 ven. 06:27> attribue =UNIT_MANAGER= avec la portee =UNIT_TREE= aux utilisateurs qui possedent simultanement une appartenance principale active et au moins un collaborateur principal actif.
+
+| Utilisateur     | Role             | Service | Portee      |
+|-----------------+------------------+---------+-------------|
+| =dg=            | =UNIT_MANAGER=   | DG      | =UNIT_TREE= |
+| =daf=           | =UNIT_MANAGER=   | DAF     | =UNIT_TREE= |
+| =drv=           | =UNIT_MANAGER=   | DRV     | =UNIT_TREE= |
+| =finances=      | =UNIT_MANAGER=   | FIN     | =UNIT_TREE= |
+| =kpon=          | =UNIT_MANAGER=   | TSI     | =UNIT_TREE= |
+| =formation=     | =UNIT_MANAGER=   | FOR     | =UNIT_TREE= |
+| =valorisation=  | =UNIT_MANAGER=   | VAL     | =UNIT_TREE= |
+
+- Les huit collaborateurs sans subordonne ne recoivent pas automatiquement =UNIT_VIEWER= : leur attribuer ce role exposerait les taches de leurs collegues sans besoin confirme.
+- =dev= reste l'auteur audite des sept attributions et ne recoit aucun role metier, car son autorite technique vient de =is_superuser= et =is_it_admin=.
+- La commande =python manage.py sync_hierarchy_role_grants --actor dev= est idempotente. Elle conserve les attributions existantes, n'efface aucune delegation manuelle et refuse un responsable sans appartenance principale.
+- L'option =--dry-run= simule toute l'operation dans une transaction annulee.
+
+** Verification
+
+- [X] Migration appliquee avec succes sur une base SQLite locale deja peuplee, apres copie dans =/tmp/csrs_report_db_before_scoped_access.sqlite3=; aucune tache locale n'est restee sans service.
+- [X] 90 tests serveur reussis, dont la synchronisation idempotente des responsables, deux responsables DAF, vice-DG, lecture seule, portees exacte et recursive, expiration, revocation, etats inactifs, propositions, filtrage inter-services et conservation du responsable principal.
+- [X] Selenium reussi sur ordinateur et telephone; Ruff, mypy, =django check=, controle de derive des migrations et =git diff --check= reussis.
+- [X] Sauvegarde PostgreSQL publique verifiee avant migration : =backups/csrs_20260717T061248Z.dump=, format personnalise PostgreSQL 17 et 306 entrees de catalogue.
+- [X] Les migrations =work.0013= a =0015= et =access.0001= a =0002= sont appliquees dans le conteneur public; =web=, =notifier= et PostgreSQL sont sains.
+- [X] L'audit public retourne zero affectation, proposition ou utilisateur metier sans service. Il existe 15 appartenances principales, deux roles initiaux et les sept delegations responsables explicites du tableau ci-dessus.
+- [X] Les deux pages d'administration des roles repondent en =200= pour =dev= et =https://csrs.koba.sarl/connexion/= repond en HTTP/2 =200=. Nginx n'a pas ete modifie ni recharge.
+- [X] Sauvegarde immediate avant attribution : =backups/csrs_20260717T062536Z.dump=. La simulation annoncait sept creations, l'execution a cree sept lignes auditees et la seconde execution a conserve les sept lignes sans doublon.
+
 * <2026-07-14 mar. 04:44> petits details graphiques
 - une tache close ne se prolonge pas jusqu'a la date du jour.
 - Corriger les fautes d expressions dans les fils de discussion. pas necessaire de reproduire les faute de l ivoirien. utiliser les abbrevation des noms de services dans les textes.
