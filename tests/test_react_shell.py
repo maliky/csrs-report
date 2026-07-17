@@ -18,5 +18,5 @@ def test_react_shell_supports_client_side_routes(people: dict[str, User]) -> Non
     response = client.get("/app/taches/31/")
 
     assert response.status_code == 200
-    assert b'/static/react/assets/app.js' in response.content
+    assert b"/static/react/assets/app.js" in response.content
     assert b'id="root"' in response.content

@@ -286,9 +286,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             assert activity.value_of_css_property("flex-direction") == "row"
             driver.set_window_size(390, 800)
             assert activity.value_of_css_property("flex-direction") == "column"
-            driver.get(
-                f"{self.live_server_url}/taches/{self.closed_assignment.pk}/"
-            )
+            driver.get(f"{self.live_server_url}/taches/{self.closed_assignment.pk}/")
             closed_chart = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".task-history-chart[data-chart-end]")
@@ -335,9 +333,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                     driver.execute_script("return document.documentElement.scrollWidth")
                     <= width
                 )
-                axe_source = Path(
-                    "frontend/node_modules/axe-core/axe.min.js"
-                ).read_text()
+                axe_source = Path("frontend/node_modules/axe-core/axe.min.js").read_text()
                 driver.execute_script(axe_source)
                 audit = driver.execute_async_script(
                     """
@@ -353,9 +349,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                     if item["impact"] in ("serious", "critical")
                 ]
                 assert not serious, serious
-            driver.get(
-                f"{self.live_server_url}/app/taches/{self.assignment.pk}/"
-            )
+            driver.get(f"{self.live_server_url}/app/taches/{self.assignment.pk}/")
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "svg[role='img']"))
             )
