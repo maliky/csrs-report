@@ -1,3 +1,11 @@
+FROM node:24.18.0-alpine AS frontend
+
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,6 +15,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+COPY --from=frontend /src/static/react ./static/react
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000

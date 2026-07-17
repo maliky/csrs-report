@@ -14,3 +14,8 @@ backups
 logs
 media
 staticfiles
+static/react
+frontend/node_modules
+frontend/coverage
+frontend/storybook-static
+tmp
