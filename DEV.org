@@ -116,9 +116,9 @@ Les scenarios initiaux sont :
 
 MSW n'est jamais un second backend et reste desactive dans le build de production. En production, le meme client appelle Django. Les donnees simulees restent fictives, credibles et sans mention indiquant qu'elles sont destinees a un test.
 
-** Premier exercice de l'etudiant
+** Objectif Premier
 
-Objectif : creer un systeme de design minimal puis reproduire le dashboard personnel en lecture seule avec une nouvelle direction visuelle.
+*creer un systeme de design minimal puis reproduire le dashboard personnel en lecture seule avec une nouvelle direction visuelle.*
 
 Composants attendus :
 
@@ -130,7 +130,7 @@ Composants attendus :
 - =TaskProgressChart= fonde sur les points historiques, les dates reelles et les jours ouvres, avec alternative textuelle et navigation clavier;
 - =DashboardPage= qui compose ces elements sans contenir les regles metier du serveur.
 
-L'etudiant peut refondre la hierarchie visuelle, les couleurs, les espacements et la composition. Il doit conserver les informations, les sens des statuts, les parcours, les permissions et les libelles metier confirmes.
+Refondre la hierarchie visuelle, les couleurs, les espacements et la composition. Il doit conserver les informations, les sens des statuts, les parcours, les permissions et les libelles metier confirmes.
 
 ** Methode de conception et de revue
 
