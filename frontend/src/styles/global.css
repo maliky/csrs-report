@@ -1,0 +1,240 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-canvas);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--color-ink);
+  background:
+    radial-gradient(
+      circle at 90% -10%,
+      rgb(230 168 75 / 18%),
+      transparent 28rem
+    ),
+    var(--color-canvas);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: var(--color-primary);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  left: 1rem;
+  top: -5rem;
+  padding: 0.7rem 1rem;
+  color: white;
+  background: var(--color-primary);
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+.boot-state {
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.12;
+}
+h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  letter-spacing: -0.035em;
+}
+h2 {
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+}
+
+.page-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.page-heading p {
+  max-width: 48rem;
+  color: var(--color-muted);
+}
+.eyebrow {
+  margin-bottom: var(--space-2);
+  color: var(--color-warning);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.muted {
+  color: var(--color-muted);
+}
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: var(--space-5);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.form-field {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+.form-field.wide {
+  grid-column: 1 / -1;
+}
+.form-field label,
+.legend {
+  font-weight: 750;
+}
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-height: 2.8rem;
+  padding: 0.68rem 0.75rem;
+  border: 1px solid #aeb9b4;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  background: white;
+}
+.form-field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.field-error {
+  color: var(--color-danger);
+  font-size: 0.88rem;
+}
+
+.progress-input {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+.progress-value {
+  font-size: 2rem;
+  font-family: var(--font-display);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-border);
+}
+.detail {
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+.detail dt {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.detail dd {
+  margin: 0.2rem 0 0;
+  font-weight: 750;
+}
+
+.activity {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(12rem, 1fr);
+  gap: 0.65rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.activity time,
+.activity-meta {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.error-banner {
+  padding: 1rem;
+  border-left: 0.35rem solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  background: #fff0ef;
+}
+.success-banner {
+  padding: 1rem;
+  border-left: 0.35rem solid var(--color-success);
+  background: #e9f6f1;
+}
+
+@media (max-width: 720px) {
+  .page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .form-grid,
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+  .activity {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+  .grid {
+    gap: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

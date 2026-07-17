@@ -1,0 +1,4 @@
+node_modules
+public/mockServiceWorker.js
+src/lib/api/schema.ts
+openapi.yml

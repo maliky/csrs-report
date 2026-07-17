@@ -1,0 +1,618 @@
+openapi: 3.0.3
+info:
+  title: CSRS Report API
+  version: 1.0.0
+  description: API metier versionnee pour l'interface React CSRS Report.
+paths:
+  /api/v1/dashboard/:
+    get:
+      operationId: dashboard_retrieve
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - dashboard
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/planning/options/:
+    get:
+      operationId: planning_options_retrieve
+      tags:
+      - planning
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/planning/preview/:
+    post:
+      operationId: planning_preview_create
+      tags:
+      - planning
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanningPreview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlanningPreview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlanningPreview'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/proposals/:
+    get:
+      operationId: proposals_retrieve
+      tags:
+      - proposals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: proposals_create
+      tags:
+      - proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/proposals/{id}/decision/:
+    post:
+      operationId: proposals_decision_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalDecision'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/session/:
+    get:
+      operationId: session_retrieve
+      description: Expose the current session and seed the CSRF cookie for unsafe
+        calls.
+      tags:
+      - session
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/session/logout/:
+    post:
+      operationId: session_logout_create
+      tags:
+      - session
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tasks/:
+    post:
+      operationId: tasks_create
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/tasks/{id}/:
+    get:
+      operationId: tasks_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - tasks
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    patch:
+      operationId: tasks_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/tasks/{id}/observations/:
+    post:
+      operationId: tasks_observations_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Observation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Observation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Observation'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/tasks/{id}/progress/:
+    post:
+      operationId: tasks_progress_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Progress'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Progress'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Progress'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/tasks/{id}/transition/:
+    post:
+      operationId: tasks_transition_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Transition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Transition'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/team/:
+    get:
+      operationId: team_overview
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - team
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/team/{id}/:
+    get:
+      operationId: team_employee_detail
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - team
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components:
+  schemas:
+    DecisionEnum:
+      enum:
+      - accept
+      - reject
+      type: string
+      description: |-
+        * `accept` - accept
+        * `reject` - reject
+    Observation:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        message:
+          type: string
+      required:
+      - message
+      - revision
+    PatchedTaskUpdate:
+      type: object
+      description: Shared, server-validated assignment schedule.
+      properties:
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        estimated_work_days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+        revision:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        action_id:
+          type: integer
+          minimum: 1
+          nullable: true
+    PlanningPreview:
+      type: object
+      properties:
+        calendar_id:
+          type: integer
+          minimum: 1
+        start_date:
+          type: string
+          format: date
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        due_date:
+          type: string
+          format: date
+        estimated_work_days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+      required:
+      - calendar_id
+      - source
+      - start_date
+    Progress:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        entry_date:
+          type: string
+          format: date
+        percentage:
+          type: integer
+          maximum: 100
+          minimum: 0
+        note:
+          type: string
+          default: ''
+        blocked:
+          type: boolean
+          default: false
+      required:
+      - entry_date
+      - percentage
+      - revision
+    ProposalCreate:
+      type: object
+      description: Shared, server-validated assignment schedule.
+      properties:
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        estimated_work_days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        action_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        calendar_id:
+          type: integer
+          minimum: 1
+      required:
+      - description
+      - due_date
+      - estimated_work_days
+      - start_date
+      - title
+    ProposalDecision:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+        reason:
+          type: string
+          default: ''
+      required:
+      - decision
+      - revision
+    SourceEnum:
+      enum:
+      - workload
+      - due
+      type: string
+      description: |-
+        * `workload` - workload
+        * `due` - due
+    TaskCreate:
+      type: object
+      description: Shared, server-validated assignment schedule.
+      properties:
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        estimated_work_days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        employee_id:
+          type: integer
+          minimum: 1
+        action_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        calendar_id:
+          type: integer
+          minimum: 1
+      required:
+      - description
+      - due_date
+      - employee_id
+      - estimated_work_days
+      - start_date
+      - title
+    Transition:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        transition:
+          $ref: '#/components/schemas/TransitionEnum'
+        reason:
+          type: string
+          default: ''
+      required:
+      - revision
+      - transition
+    TransitionEnum:
+      enum:
+      - validate
+      - reject
+      - close_early
+      type: string
+      description: |-
+        * `validate` - validate
+        * `reject` - reject
+        * `close_early` - close_early
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
