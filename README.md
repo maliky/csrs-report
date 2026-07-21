@@ -6,15 +6,21 @@ Le cycle métier est documenté dans [`docs/task-lifecycle.org`](docs/task-lifec
 
 ## Développement local
 
+Créer d'abord un environnement Python isolé. Python 3.13 est la version de
+référence :
+
 ```bash
-pyenv activate csrs
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Le virtualenv `csrs` utilise Python 3.13.2 et `.python-version` l'active automatiquement dans ce dépôt. Sans `DATABASE_URL`, Django utilise une base SQLite locale ignorée par Git. `python manage.py seed_demo` ajoute uniquement des comptes et tâches fictifs, sans mot de passe utilisable.
+Si `pyenv` est installé, `.python-version` peut aussi activer l'environnement
+`csrs`. Sans `DATABASE_URL`, Django utilise une base SQLite locale ignorée par
+Git. `python manage.py seed_demo` ajoute uniquement des données fictives.
 
 Contrôles :
 
@@ -53,6 +59,11 @@ cd frontend
 VITE_USE_MOCKS=true npm run dev
 ```
 
+Ce parcours avec les mocks est le moyen le plus rapide de travailler sur React.
+Pour tester React contre Django, lancer Django sur `127.0.0.1:8000` dans un
+premier terminal, puis `npm run dev` dans `frontend/` dans un second terminal.
+Vite sert alors l'interface sur `http://127.0.0.1:5173`.
+
 Le contrat OpenAPI et les types TypeScript sont reproductibles :
 
 ```bash
@@ -66,12 +77,40 @@ La compilation Docker est multi-étape : Node produit les fichiers React, puis
 WhiteNoise les sert avec les autres fichiers statiques. Aucun changement Nginx
 n'est nécessaire pour `/app/`.
 
+## Git et preproduction psiaka
+
+La branche de travail et de preproduction est `dev`. Depuis la machine locale :
+
+```bash
+git clone ssh://psiaka@tuvs.koba.sarl/home/jil/git/csrs_report.git
+cd csrs_report
+git switch dev
+git pull --ff-only
+# modifier et tester
+git add .
+git commit -m "description claire"
+git push origin dev
+```
+
+Dans le compte serveur `psiaka`, mettre à jour la copie de preproduction :
+
+```bash
+cd /srv/apps/psiaka/app
+git switch dev
+git pull --ff-only
+```
+
+Le site est publié sur `https://psiaka.koba.sarl/`. Le code Python et les
+assets React sont intégrés dans l'image : après un pull, l'administrateur doit
+reconstruire le stack avec `./scripts/deploy_preprod.sh`. Le compte `psiaka`
+n'est volontairement pas membre du groupe `docker`, qui donnerait des droits
+équivalents à root.
+
 ## Conteneurs et déploiement
 
 ```bash
 ./scripts/bootstrap_env.sh
-docker-compose -p csrs -f compose.yml up -d --build
-docker-compose -p csrs -f compose.yml exec web python manage.py createsuperuser
+./scripts/deploy_preprod.sh
 ./scripts/backup_db.sh
 ```
 
@@ -82,7 +121,12 @@ Le chargeur de population fictive exige temporairement deux variables distinctes
 Pour actualiser uniquement les 73 scénarios et leurs conversations sur une base où les 16 comptes historiques existent déjà, sans créer les comptes d'extension ni demander ou modifier un mot de passe :
 
 ```bash
-docker-compose -p csrs -f compose.yml exec -T web python manage.py seed_pilot_users --refresh-scenarios-only
+docker-compose -p "$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env)" -f compose.yml exec -T web python manage.py seed_pilot_users --refresh-scenarios-only
 ```
 
-L'application écoute uniquement sur `127.0.0.1:18005`. Le modèle du vhost HTTPS se trouve dans `deploy/nginx/`. Les sauvegardes validées par `pg_restore --list` sont conservées localement pendant 14 jours dans un dossier ignoré par Git. Aucun secret ni donnée personnelle réelle ne doit être ajouté au dépôt ou aux données de démonstration.
+Par défaut, l'application écoute sur `127.0.0.1:18005`. La preproduction
+`psiaka` utilise `CSRS_PORT=18006` et le projet `csrs_psiaka`. Les modèles de
+vhost se trouvent dans `deploy/nginx/`. Les sauvegardes validées par
+`pg_restore --list` sont conservées localement pendant 14 jours dans un dossier
+ignoré par Git. Aucun secret ni donnée personnelle réelle ne doit être ajouté
+au dépôt ou aux données de démonstration.

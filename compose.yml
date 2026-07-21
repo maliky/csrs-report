@@ -24,7 +24,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:18005:8000"
+      - "${CSRS_BIND_ADDRESS:-127.0.0.1}:${CSRS_PORT:-18005}:8000"
     command: >-
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
@@ -34,7 +34,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/connexion/', headers={'Host':'csrs.koba.sarl','X-Forwarded-Proto':'https'}); assert urllib.request.urlopen(r).status == 200"
+        - "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/connexion/', headers={'Host':'${CSRS_HOST:-csrs.koba.sarl}','X-Forwarded-Proto':'https'}); assert urllib.request.urlopen(r).status == 200"
       interval: 10s
       timeout: 5s
       retries: 12

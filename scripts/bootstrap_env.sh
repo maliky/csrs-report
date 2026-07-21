@@ -6,15 +6,24 @@ if [[ -e .env ]]; then
     exit 0
 fi
 
-secret_key="$(python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')"
-db_password="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+python_command="${PYTHON:-python3}"
+host="${CSRS_HOST:-csrs.koba.sarl}"
+bind_address="${CSRS_BIND_ADDRESS:-127.0.0.1}"
+port="${CSRS_PORT:-18005}"
+project="${COMPOSE_PROJECT_NAME:-csrs}"
+secret_key="$(${python_command} -c 'import secrets; print(secrets.token_urlsafe(50))')"
+db_password="$(${python_command} -c 'import secrets; print(secrets.token_urlsafe(32))')"
 
 umask 077
 {
+    echo "COMPOSE_PROJECT_NAME=${project}"
+    echo "CSRS_BIND_ADDRESS=${bind_address}"
+    echo "CSRS_PORT=${port}"
+    echo "CSRS_HOST=${host}"
     echo "DJANGO_SECRET_KEY=${secret_key}"
     echo "DJANGO_DEBUG=0"
-    echo "DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,csrs.koba.sarl"
-    echo "DJANGO_CSRF_TRUSTED_ORIGINS=https://csrs.koba.sarl"
+    echo "DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,${host}"
+    echo "DJANGO_CSRF_TRUSTED_ORIGINS=https://${host}"
     echo "DJANGO_SECURE_SSL_REDIRECT=1"
     echo "DJANGO_SECURE_HSTS_SECONDS=3600"
     echo "POSTGRES_DB=csrs"
