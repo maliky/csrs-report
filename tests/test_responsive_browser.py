@@ -1,4 +1,3 @@
-import shutil
 from datetime import timedelta
 from decimal import Decimal
 
@@ -31,10 +30,6 @@ from work.models import (
 
 
 @pytest.mark.selenium
-@pytest.mark.skipif(
-    shutil.which("chromedriver") is None,
-    reason="chromedriver systeme indisponible",
-)
 class ResponsiveSmokeTest(StaticLiveServerTestCase):
     def setUp(self) -> None:
         self.password = f"Browser9!{get_random_string(18)}"
@@ -55,6 +50,11 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             action_plan=action_plan, name="Action navigateur", code="ACT-BROWSER"
         )
         calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
+        unit = OrganizationUnit.objects.create(
+            code="BROWSER",
+            short_name="Equipe navigateur",
+            long_name="Equipe utilisee par la verification navigateur",
+        )
         personal_start = timezone.localdate() - timedelta(days=14)
         task = Task.objects.create(
             code="BROWSER-01",
@@ -67,6 +67,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             task=task,
             employee=self.user,
             manager=self.user,
+            organization_unit=unit,
             start_date=personal_start,
             due_date=calendar.due_date_for(personal_start, Decimal("2.0")),
             estimated_work_days=Decimal("2.0"),
@@ -92,6 +93,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             task=closed_task,
             employee=self.user,
             manager=self.user,
+            organization_unit=unit,
             start_date=closed_start,
             due_date=calendar.due_date_for(closed_start, Decimal("20.0")),
             estimated_work_days=Decimal("20.0"),
@@ -113,11 +115,6 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             percentage_after=60,
         )
         member = User.objects.create_user("member@example.test")
-        unit = OrganizationUnit.objects.create(
-            code="BROWSER",
-            short_name="Equipe navigateur",
-            long_name="Equipe utilisee par la verification navigateur",
-        )
         ReportingLine.objects.create(
             employee=member,
             supervisor=self.user,
@@ -145,6 +142,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             task=team_task,
             employee=member,
             manager=self.user,
+            organization_unit=unit,
             start_date=team_start,
             due_date=calendar.due_date_for(team_start, Decimal("5.0")),
             estimated_work_days=Decimal("5.0"),
@@ -280,9 +278,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             assert activity.value_of_css_property("flex-direction") == "row"
             driver.set_window_size(390, 800)
             assert activity.value_of_css_property("flex-direction") == "column"
-            driver.get(
-                f"{self.live_server_url}/taches/{self.closed_assignment.pk}/"
-            )
+            driver.get(f"{self.live_server_url}/taches/{self.closed_assignment.pk}/")
             closed_chart = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".task-history-chart[data-chart-end]")

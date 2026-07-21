@@ -17,10 +17,10 @@ mkdir -p backups
 chmod 700 backups
 output="backups/csrs_$(date -u +%Y%m%dT%H%M%SZ).dump"
 
-docker-compose -p csrs -f compose.yml exec -T db \
+docker compose -p csrs -f compose.yml exec -T db \
     pg_dump --format=custom --no-owner --username "$POSTGRES_USER" "$POSTGRES_DB" > "$output"
 chmod 600 "$output"
-docker-compose -p csrs -f compose.yml exec -T db pg_restore --list < "$output" > /dev/null
+docker compose -p csrs -f compose.yml exec -T db pg_restore --list < "$output" > /dev/null
 find backups -type f -name 'csrs_*.dump' -mtime +14 -delete
 
 echo "Sauvegarde verifiee : $output"

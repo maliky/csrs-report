@@ -219,7 +219,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     )
     assert len(messages) == len(set(messages))
     assert any("(formation)" in message for message in messages)
-    assert not any("Direction administrative et financiere" in message for message in messages)
+    assert not any(
+        "Direction administrative et financiere" in message for message in messages
+    )
     assert not any(" a ete " in message or " apres " in message for message in messages)
     assert TaskActivity.objects.filter(kind="reopened").exists()
     assert (
@@ -265,9 +267,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         )
     )
     User.objects.exclude(login_alias__in=retained_aliases).delete()
-    TaskProposal.objects.filter(
-        title="Formaliser le tableau de priorités"
-    ).update(title="Formaliser le tableau de priorites")
+    TaskProposal.objects.filter(title="Formaliser le tableau de priorités").update(
+        title="Formaliser le tableau de priorites"
+    )
     monkeypatch.delenv("CSRS_DEMO_PASSWORD")
     monkeypatch.delenv("CSRS_ADMIN_PASSWORD")
 

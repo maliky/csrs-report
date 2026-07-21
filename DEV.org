@@ -1,7 +1,8 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
-
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: Exports/dev
 * <2026-07-17 ven. 06:05> Appartenances, roles et delegations par service
 ** Besoins confirmes
 

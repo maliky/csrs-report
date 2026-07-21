@@ -151,7 +151,9 @@ class RoleGrant(models.Model):
                     {"revoke_reason": "Le motif de revocation est obligatoire."}
                 )
         elif self.revoked_by_id is not None or self.revoke_reason.strip():
-            raise ValidationError("Une revocation doit avoir une date, un auteur et un motif.")
+            raise ValidationError(
+                "Une revocation doit avoir une date, un auteur et un motif."
+            )
         if self.user_id and self.role_id and self.unit_id and self.revoked_at is None:
             overlaps = RoleGrant.objects.filter(
                 user_id=self.user_id,

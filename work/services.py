@@ -703,9 +703,7 @@ def can_view_assignment(user: User, assignment: TaskAssignment) -> bool:
         assignment.employee_id in hierarchy_employee_ids(user)
         or user.is_it_admin
         or user.is_superuser
-        or has_scoped_permission(
-            user, VIEW_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, VIEW_PERMISSION, assignment.organization_unit_id)
     )
 
 
@@ -724,9 +722,7 @@ def can_manage_assignment(user: User, assignment: TaskAssignment) -> bool:
         user.is_it_admin
         or user.is_superuser
         or self_managed
-        or has_scoped_permission(
-            user, MANAGE_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, MANAGE_PERMISSION, assignment.organization_unit_id)
         or (
             assignment.manager_id == user.pk
             and is_primary_supervisor(user, assignment.employee)
@@ -740,9 +736,7 @@ def can_comment_assignment(user: User, assignment: TaskAssignment) -> bool:
         or user.is_it_admin
         or user.is_superuser
         or is_direct_supervisor(user, assignment.employee)
-        or has_scoped_permission(
-            user, MANAGE_PERMISSION, assignment.organization_unit_id
-        )
+        or has_scoped_permission(user, MANAGE_PERMISSION, assignment.organization_unit_id)
     )
 
 
@@ -752,9 +746,11 @@ def can_assign_employee(manager: User, employee: User, on_day: date) -> bool:
         return True
     if manager == employee and can_self_assign(manager):
         return True
-    if active_lines(on_day).filter(
-        supervisor=manager, employee=employee, is_primary=True
-    ).exists():
+    if (
+        active_lines(on_day)
+        .filter(supervisor=manager, employee=employee, is_primary=True)
+        .exists()
+    ):
         return True
     return has_scoped_permission(
         manager,
@@ -1235,9 +1231,7 @@ def accept_proposal(
 ) -> TaskAssignment:
     """Turn an employee proposal into a managed task assignment."""
     if not can_review_proposal(user, proposal):
-        raise PermissionDenied(
-            "Vous ne pouvez pas accepter cette proposition."
-        )
+        raise PermissionDenied("Vous ne pouvez pas accepter cette proposition.")
     unit_id = proposal.organization_unit_id or organization_unit_for_employee(
         proposal.employee, proposal.start_date
     )
@@ -1287,9 +1281,7 @@ def accept_proposal(
 @transaction.atomic
 def reject_proposal(user: User, proposal: TaskProposal, reason: str) -> None:
     if not can_review_proposal(user, proposal):
-        raise PermissionDenied(
-            "Vous ne pouvez pas refuser cette proposition."
-        )
+        raise PermissionDenied("Vous ne pouvez pas refuser cette proposition.")
     cleaned_reason = reason.strip()
     if not cleaned_reason:
         raise ValidationError("Un motif de rejet est obligatoire.")
@@ -1308,9 +1300,7 @@ def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
         user.is_it_admin
         or user.is_superuser
         or is_primary_supervisor(user, proposal.employee)
-        or has_scoped_permission(
-            user, PROPOSAL_PERMISSION, proposal.organization_unit_id
-        )
+        or has_scoped_permission(user, PROPOSAL_PERMISSION, proposal.organization_unit_id)
     )
 
 
@@ -1319,13 +1309,14 @@ def reviewable_proposals(user: User) -> QuerySet[TaskProposal]:
     queryset = TaskProposal.objects.exclude(employee=user)
     if user.is_it_admin or user.is_superuser:
         return queryset
-    direct_ids = active_lines().filter(
-        supervisor=user, is_primary=True
-    ).values_list("employee_id", flat=True)
+    direct_ids = (
+        active_lines()
+        .filter(supervisor=user, is_primary=True)
+        .values_list("employee_id", flat=True)
+    )
     delegated_units = scoped_unit_ids(user, PROPOSAL_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=direct_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=direct_ids) | Q(organization_unit_id__in=delegated_units)
     )
 
 
@@ -1334,13 +1325,14 @@ def visible_team_proposals(user: User) -> QuerySet[TaskProposal]:
     queryset = TaskProposal.objects.exclude(employee=user)
     if user.is_it_admin or user.is_superuser:
         return queryset
-    direct_ids = active_lines().filter(
-        supervisor=user, is_primary=True
-    ).values_list("employee_id", flat=True)
+    direct_ids = (
+        active_lines()
+        .filter(supervisor=user, is_primary=True)
+        .values_list("employee_id", flat=True)
+    )
     delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=direct_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=direct_ids) | Q(organization_unit_id__in=delegated_units)
     )
 
 
@@ -1382,8 +1374,9 @@ def period_assignments(
     if viewer is not None:
         queryset = queryset.filter(pk__in=visible_assignments(viewer).values("pk"))
     return (
-        queryset
-        .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
+        queryset.filter(
+            Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start)
+        )
         .select_related(*related)
         .prefetch_related("calendar__days", "progress_entries", "activities__actor")
     )
@@ -1612,7 +1605,8 @@ def team_tree_overview(
     employee_ids = visible_ids
     task_counts = {
         item["employee_id"]: item["task_count"]
-        for item in visible_assignments(manager).filter(
+        for item in visible_assignments(manager)
+        .filter(
             employee_id__in=employee_ids,
             start_date__lte=period.end,
         )
@@ -1665,6 +1659,5 @@ def visible_assignments(user: User) -> QuerySet[TaskAssignment]:
     hierarchy_ids = hierarchy_employee_ids(user)
     delegated_units = scoped_unit_ids(user, VIEW_PERMISSION)
     return queryset.filter(
-        Q(employee_id__in=hierarchy_ids)
-        | Q(organization_unit_id__in=delegated_units)
+        Q(employee_id__in=hierarchy_ids) | Q(organization_unit_id__in=delegated_units)
     )

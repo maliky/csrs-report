@@ -12,7 +12,7 @@ fi
 export CSRS_DEMO_PASSWORD CSRS_ADMIN_PASSWORD
 trap 'unset CSRS_DEMO_PASSWORD CSRS_ADMIN_PASSWORD' EXIT
 
-base=(docker-compose -p csrs -f compose.yml run --rm -T)
+base=(docker compose -p csrs -f compose.yml run --rm -T)
 environment=(-e CSRS_DEMO_PASSWORD -e CSRS_ADMIN_PASSWORD)
 command=(web python manage.py seed_pilot_users --replace-legacy --reset-password)
 

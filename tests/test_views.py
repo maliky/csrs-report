@@ -442,9 +442,7 @@ def test_self_managed_task_uses_first_person_labels_and_five_percent_step(
     root = User.objects.create_user("dg-ui@example.test")
     from work.services import set_primary_membership
 
-    set_primary_membership(
-        user=root, unit_id=unit.pk, start_date=timezone.localdate()
-    )
+    set_primary_membership(user=root, unit_id=unit.pk, start_date=timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     task = root.created_tasks.create(
         code="DG-UI",

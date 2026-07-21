@@ -101,7 +101,6 @@ class Command(BaseCommand):
         suffix = " (simulation annulee)" if options["dry_run"] else ""
         self.stdout.write(
             self.style.SUCCESS(
-                f"delegations responsables: creees={created} conservees={skipped}"
-                f"{suffix}"
+                f"delegations responsables: creees={created} conservees={skipped}{suffix}"
             )
         )

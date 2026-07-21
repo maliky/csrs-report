@@ -450,9 +450,7 @@ def team_member_progress_json(request: HttpRequest, employee_id: int) -> JsonRes
     if not can_view_employee(user, employee):
         raise Http404
     period = selected_period(request)
-    return JsonResponse(
-        employee_profile_dataset(employee, period, viewer=user).as_json()
-    )
+    return JsonResponse(employee_profile_dataset(employee, period, viewer=user).as_json())
 
 
 @login_required
@@ -509,12 +507,12 @@ def proposal_list(request: HttpRequest) -> HttpResponse:
         "work/proposal_list.html",
         {
             "own_proposals": own.select_related(*common).order_by(*ordering),
-            "manageable_team_proposals": manageable_team.select_related(
-                *common
-            ).order_by(*ordering),
-            "read_only_team_proposals": read_only_team.select_related(
-                *common
-            ).order_by(*ordering),
+            "manageable_team_proposals": manageable_team.select_related(*common).order_by(
+                *ordering
+            ),
+            "read_only_team_proposals": read_only_team.select_related(*common).order_by(
+                *ordering
+            ),
             "selected_status": status,
             "status_filter_query": f"&status={status}",
             "has_team": has_team,

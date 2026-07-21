@@ -262,9 +262,7 @@ def test_root_user_can_manage_and_validate_personal_assignment(
     unit: OrganizationUnit,
 ) -> None:
     root = User.objects.create_user("root@example.test")
-    set_primary_membership(
-        user=root, unit_id=unit.pk, start_date=timezone.localdate()
-    )
+    set_primary_membership(user=root, unit_id=unit.pk, start_date=timezone.localdate())
     calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
     task = root.created_tasks.create(
         code="ROOT-01",
