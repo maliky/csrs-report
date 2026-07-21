@@ -1113,10 +1113,14 @@ class Command(BaseCommand):
         users: dict[str, User], demo_password: str | None = None
     ) -> None:
         """Verify representative dashboards without requiring stored credentials."""
-        host = (
-            "csrs.koba.sarl"
-            if "csrs.koba.sarl" in settings.ALLOWED_HOSTS
-            else "testserver"
+        host = next(
+            (
+                value
+                for value in settings.ALLOWED_HOSTS
+                if value not in {"localhost", "127.0.0.1", "testserver", "*"}
+                and not value.startswith(".")
+            ),
+            "testserver",
         )
         storage = {
             "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
