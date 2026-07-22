@@ -1818,6 +1818,7 @@ def team_tree_overview(
             start_date__lte=period.end,
         )
         .filter(Q(completed_at__isnull=True) | Q(completed_at__date__gte=period.start))
+        .order_by()
         .values("employee_id")
         .annotate(task_count=Count("pk"))
     }

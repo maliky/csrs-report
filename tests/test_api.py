@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from api.exceptions import api_exception_handler
-from work.models import ProgressEntry, TaskAssignment, TaskProposal
+from work.models import ProgressEntry, Task, TaskAssignment, TaskProposal
 
 
 pytestmark = pytest.mark.django_db
@@ -69,6 +69,46 @@ def test_session_and_dashboard_expose_current_user_and_period(
     assert session.cookies["csrftoken"]
     assert dashboard.status_code == 200
     assert dashboard.json()["period"]["kind"] == "month"
+
+
+def test_team_count_matches_multiple_tasks_in_employee_profile(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    second_task = Task.objects.create(
+        code="TSK-TEST-2",
+        title="Vérifier le second prototype",
+        description="Seconde tâche fictive.",
+        action=assignment.task.action,
+        created_by=people["manager"],
+    )
+    TaskAssignment.objects.create(
+        task=second_task,
+        employee=assignment.employee,
+        manager=assignment.manager,
+        organization_unit=assignment.organization_unit,
+        calendar=assignment.calendar,
+        start_date=assignment.start_date,
+        due_date=assignment.due_date,
+        estimated_work_days=assignment.estimated_work_days,
+        status="active",
+    )
+    client = api_client(people["manager"])
+    period = {"week": assignment.start_date.isoformat()}
+
+    team = client.get(reverse("api:team"), period)
+    profile = client.get(
+        reverse("api:team-employee", args=[assignment.employee_id]), period
+    )
+
+    assert team.status_code == 200
+    employee_node = next(
+        node
+        for node in team.json()["nodes"]
+        if node["employee"]["id"] == assignment.employee_id
+    )
+    assert employee_node["task_count"] == 2
+    assert profile.status_code == 200
+    assert len(profile.json()["tasks"]) == 2
 
 
 def test_task_detail_hides_an_assignment_from_an_outsider(
