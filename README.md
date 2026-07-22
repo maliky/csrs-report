@@ -86,29 +86,55 @@ VITE_USE_MOCKS=true npm run dev
 ```
 
 Ce parcours avec les mocks est le moyen le plus rapide de travailler sur React.
+Il ne nécessite aucun conteneur. Ouvrir impérativement
+`http://127.0.0.1:5173/app/` : la racine `http://127.0.0.1:5173/` ne contient
+pas l'application. Si Vite était déjà lancé, l'arrêter puis le redémarrer avec
+la variable `VITE_USE_MOCKS=true`.
+
+Sous PowerShell, la commande équivalente est :
+
+```powershell
+cd frontend
+$env:VITE_USE_MOCKS = "true"
+npm run dev
+```
+
 Il permet de modifier les composants et scénarios de `frontend/src/mocks/`,
 mais ne valide ni les permissions réelles, ni les migrations, ni le backend.
 
-Pour tester React contre le vrai backend, lancer Django dans un premier
-terminal :
+Pour tester React contre le vrai backend, lancer la stack Docker sur le port
+attendu par le proxy Vite dans un premier terminal :
+
+```bash
+CSRS_PORT=8000 docker compose -p csrs -f compose.yml up -d --build
+```
+
+Sous PowerShell :
+
+```powershell
+$env:CSRS_PORT = "8000"
+docker compose -p csrs -f compose.yml up -d --build
+```
+
+Se connecter d'abord sur `http://127.0.0.1:8000/connexion/`, puis lancer Vite
+sans mocks dans un second terminal :
+
+```bash
+cd frontend
+npm run dev
+```
+
+Ouvrir ensuite `http://127.0.0.1:5173/app/`. Vite sert React et transmet les
+requêtes `/api/` à Django dans le conteneur sur le port 8000.
+
+Django peut aussi être lancé nativement, notamment pour déboguer le code
+Python :
 
 ```bash
 source .venv/bin/activate
 python manage.py migrate
 python manage.py runserver 127.0.0.1:8000
 ```
-
-Se connecter d'abord sur `http://127.0.0.1:8000/connexion/`, puis lancer Vite
-dans un second terminal :
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-Ouvrir ensuite `http://127.0.0.1:5173/app/`. Vite sert React et transmet les
-requêtes `/api/` à Django sur le port 8000.
 
 Le contrat OpenAPI et les types TypeScript sont reproductibles :
 
