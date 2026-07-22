@@ -242,13 +242,28 @@ doivent jamais être réutilisés en production.
 
 Le chargeur de population fictive exige temporairement deux variables distinctes, `CSRS_DEMO_PASSWORD` et `CSRS_ADMIN_PASSWORD`. Il accepte `--dry-run`, `--replace-legacy` et `--reset-password`. Ces variables ne doivent rester ni dans `.env` ni dans les conteneurs après le chargement.
 
-`./scripts/seed_pilot.sh` demande les deux mots de passe sans les afficher, exécute d'abord une simulation annulée puis le chargement réel. L'option `--dry-run-only` limite le script à la simulation.
+`./scripts/seed_pilot.sh` demande les deux mots de passe sans les afficher, exécute d'abord une simulation annulée puis le chargement réel. L'option `--dry-run-only` limite le script à la simulation. Ce script complet sert à créer ou remplacer la population initiale; il ne doit pas être utilisé pour une simple actualisation périodique.
 
-Pour actualiser uniquement les 73 scénarios et leurs conversations sur une base où les 16 comptes historiques existent déjà, sans créer les comptes d'extension ni demander ou modifier un mot de passe :
+### Actualiser les scénarios pilotes existants
+
+Sur une base où les comptes pilotes existent déjà, `--refresh-scenarios-only` recale les données fictives sur les douze dernières semaines sans créer de compte ni modifier de mot de passe. La commande reconstruit les historiques, observations et caches des 73 affectations `PIL-*`, puis remet les 42 propositions pilotes dans leurs états de référence. Elle exige les 15 acteurs des scénarios, mais pas les variables de mot de passe.
+
+Depuis le checkout de déploiement, avec un compte autorisé à utiliser Docker, sauvegarder la base puis exécuter d'abord la simulation transactionnelle :
 
 ```bash
-docker-compose -p "$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env)" -f compose.yml exec -T web python manage.py seed_pilot_users --refresh-scenarios-only
+./scripts/backup_db.sh
+
+project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -n 1)"
+docker-compose -p "$project" -f compose.yml exec -T web \
+  python manage.py seed_pilot_users --refresh-scenarios-only --dry-run
+
+docker-compose -p "$project" -f compose.yml exec -T web \
+  python manage.py seed_pilot_users --refresh-scenarios-only
 ```
+
+Les deux dernières commandes doivent annoncer `users=15 assignments=73 proposals=42`; la première ajoute `simulation annulee`. Une erreur ou un autre total doit être examiné avant de lancer l'écriture réelle.
+
+Dans `Mon équipe`, le nombre affiché sur une personne ne représente ni ses cinq scénarios historiques ni le cumul de sa sous-équipe. Il compte uniquement ses propres tâches pertinentes pour la semaine ou le mois sélectionné. Il est donc normal que certains responsables affichent zéro ou une tâche alors que leurs collaborateurs repliés possèdent des scénarios. Ouvrir la sous-équipe, changer de période ou suivre `Voir la progression` permet d'examiner les autres données.
 
 Par défaut, l'application écoute sur `127.0.0.1:18005`. La preproduction
 `psiaka` utilise `CSRS_PORT=18006` et le projet `csrs_psiaka`. Les modèles de

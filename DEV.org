@@ -2,6 +2,28 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-22 mer.> Actualisation de la population pilote sur psiaka
+** Execution
+
+La base de =psiaka.koba.sarl= contenait deja les 73 affectations =PIL-=, mais les donnees ont ete recalees sur la semaine courante avec le mode idempotent dedie. La procedure executee est :
+
+1. sauvegarde PostgreSQL verifiee avec =scripts/backup_db.sh=;
+2. =seed_pilot_users --refresh-scenarios-only --dry-run= dans le conteneur web;
+3. meme commande sans =--dry-run= apres succes de la simulation;
+4. controle des volumes, de la tache non pilote et de la vue equipe de =dg=.
+
+Les deux passages ont confirme =users=15 assignments=73 proposals=42=. Le chargement a reconstruit les progressions, conversations et caches des scenarios sans recreer les comptes et sans modifier leurs mots de passe.
+
+** Lecture de la vue equipe
+
+Les 73 affectations ne doivent pas apparaitre simultanement sur les cartes de =Mon equipe=. Elles couvrent douze semaines, cinq scenarios pour chacun des quatorze collaborateurs concernes et trois taches propres a =dg=. Le compteur d'une carte :
+
+- est limite a la semaine ou au mois selectionne;
+- compte les taches de la personne, pas celles de ses descendants;
+- ne remplace pas le detail charge par =Voir la progression=.
+
+Il est donc attendu que plusieurs responsables directs de =dg= affichent zero tache dans la semaine courante alors que leurs sous-equipes repliees contiennent les collaborateurs peuples. La procedure reproductible et ces regles de lecture sont documentees dans =README.md=, section /Actualiser les scenarios pilotes existants/.
+
 * <2026-07-22 mer.> Detail, filtres et cycle React des propositions
 ** Realisation
 
