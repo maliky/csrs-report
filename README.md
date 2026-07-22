@@ -159,6 +159,42 @@ python manage.py migrate
 python manage.py runserver 127.0.0.1:8000
 ```
 
+### Windows avec PowerShell
+
+Docker Desktop doit être démarré avec le moteur WSL 2. Depuis un clone neuf,
+PowerShell dispose des mêmes opérations que les scripts Bash :
+
+```powershell
+.\scripts\bootstrap_env.ps1
+docker compose -p csrs -f compose.yml up -d --build
+.\scripts\seed_pilot.ps1
+
+cd frontend
+npm ci
+Remove-Item Env:VITE_USE_MOCKS -ErrorAction SilentlyContinue
+npm run dev
+```
+
+Le bootstrap PowerShell crée un `.env` local avec des secrets aléatoires, le
+port Django `8000`, HTTP sans redirection TLS et les origines `8000` et `5173`
+requises par Django et Vite. Il ne remplace jamais un `.env` existant. Se
+connecter sur `http://127.0.0.1:8000/connexion/`, puis ouvrir
+`http://127.0.0.1:5173/app/`.
+
+`seed_pilot.ps1` demande les deux mots de passe sans les afficher, exécute la
+simulation puis le chargement réel et retire les variables de mot de passe de
+la session. `-DryRunOnly` limite l'exécution à la simulation. Si l'exécution
+des scripts locaux est bloquée, autoriser les scripts signés ou locaux pour le
+compte courant :
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Dans un terminal WSL, utiliser directement les scripts `.sh` et les commandes
+Linux. Il ne faut pas exécuter simultanément les bootstraps Bash et PowerShell :
+ils ciblent le même fichier `.env` et refusent tous deux de l'écraser.
+
 Le contrat OpenAPI et les types TypeScript sont reproductibles :
 
 ```bash
@@ -242,15 +278,32 @@ doivent jamais être réutilisés en production.
 
 ## Conteneurs et déploiement
 
+Sous Linux ou WSL :
+
 ```bash
 ./scripts/bootstrap_env.sh
 ./scripts/deploy_preprod.sh
 ./scripts/backup_db.sh
 ```
 
+Sous Windows PowerShell :
+
+```powershell
+.\scripts\bootstrap_env.ps1
+.\scripts\deploy_preprod.ps1
+.\scripts\backup_db.ps1
+```
+
+Les variantes PowerShell utilisent `docker compose` v2. La preproduction
+`psiaka` reste administrée sur son hôte Linux avec les scripts Bash; le script
+PowerShell de déploiement sert aux stacks Docker exécutées depuis Windows.
+
 Le chargeur de population fictive exige temporairement deux variables distinctes, `CSRS_DEMO_PASSWORD` et `CSRS_ADMIN_PASSWORD`. Il accepte `--dry-run`, `--replace-legacy` et `--reset-password`. Ces variables ne doivent rester ni dans `.env` ni dans les conteneurs après le chargement.
 
 `./scripts/seed_pilot.sh` demande les deux mots de passe sans les afficher, exécute d'abord une simulation annulée puis le chargement réel. L'option `--dry-run-only` limite le script à la simulation. Ce script complet sert à créer ou remplacer la population initiale; il ne doit pas être utilisé pour une simple actualisation périodique.
+
+Sous PowerShell, les commandes équivalentes sont
+`.\scripts\seed_pilot.ps1` et `.\scripts\seed_pilot.ps1 -DryRunOnly`.
 
 ### Actualiser les scénarios pilotes existants
 
@@ -269,9 +322,6 @@ docker-compose -p "$project" -f compose.yml exec -T web \
   python manage.py seed_pilot_users --refresh-scenarios-only
 ```
 
-Les deux dernières commandes doivent annoncer `users=15 assignments=73 proposals=42`; la première ajoute `simulation annulee`. Une erreur ou un autre total doit être examiné avant de lancer l'écriture réelle.
-
-Dans `Mon équipe`, le nombre affiché sur une personne ne représente ni ses cinq scénarios historiques ni le cumul de sa sous-équipe. Il compte uniquement ses propres tâches pertinentes pour la semaine ou le mois sélectionné. Il est donc normal que certains responsables affichent zéro ou une tâche alors que leurs collaborateurs repliés possèdent des scénarios. Ouvrir la sous-équipe, changer de période ou suivre `Voir la progression` permet d'examiner les autres données.
 
 Par défaut, l'application écoute sur `127.0.0.1:18005`. La preproduction
 `psiaka` utilise `CSRS_PORT=18006` et le projet `csrs_psiaka`. Les modèles de

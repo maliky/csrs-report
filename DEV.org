@@ -2,6 +2,15 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-22 mer.> Scripts Docker pour Windows PowerShell
+** Realisation
+
+- les quatre scripts Docker Bash possedent maintenant un equivalent PowerShell 5.1 compatible sous =scripts/=;
+- =bootstrap_env.ps1= genere sans Python un =.env= local, des secrets aleatoires, le port Django 8000, les origines Vite 5173 et desactive les redirections TLS locales;
+- =seed_pilot.ps1= masque les deux mots de passe, execute la simulation avant l'ecriture puis retire les variables sensibles de la session;
+- =backup_db.ps1= produit et valide le dump dans le conteneur avant de le copier sur Windows, ce qui evite la corruption binaire par une redirection PowerShell;
+- les scripts utilisent Docker Compose v2; la preproduction =psiaka= reste administree sur Linux avec les scripts Bash.
+
 * <2026-07-22 mer.> Profils integres et filtre de l'equipe React
 ** Realisation
 
