@@ -30,6 +30,8 @@ from api.serializers import (
     ProgressSerializer,
     ProposalCreateSerializer,
     ProposalDecisionSerializer,
+    ProposalResubmitSerializer,
+    ProposalUpdateSerializer,
     TaskCreateSerializer,
     TaskUpdateSerializer,
     TransitionSerializer,
@@ -47,6 +49,7 @@ from work.services import (
     add_observation,
     assignable_employee_ids,
     can_self_assign,
+    can_review_proposal,
     can_view_assignment,
     can_view_employee,
     close_early,
@@ -56,10 +59,12 @@ from work.services import (
     record_progress,
     reject_completion,
     reject_proposal,
+    resubmit_proposal,
     reporting_period,
     reviewable_proposals,
     team_tree_overview,
     update_assignment_details,
+    update_proposal,
     validate_completion,
     visible_team_proposals,
     visible_employee_ids,
@@ -97,6 +102,27 @@ def assignment_for_viewer(user: User, pk: int) -> TaskAssignment:
     if not can_view_assignment(user, assignment):
         raise Http404
     return assignment
+
+
+def proposal_for_viewer(user: User, pk: int) -> TaskProposal:
+    """Load one proposal while hiding it from unauthorized users."""
+    proposal = get_object_or_404(
+        TaskProposal.objects.select_related(
+            "employee",
+            "reviewed_by",
+            "action",
+            "calendar",
+            "accepted_assignment",
+        ),
+        pk=pk,
+    )
+    if (
+        proposal.employee_id != user.pk
+        and not can_review_proposal(user, proposal)
+        and not visible_team_proposals(user).filter(pk=proposal.pk).exists()
+    ):
+        raise Http404
+    return proposal
 
 
 class SessionView(APIView):
@@ -335,10 +361,16 @@ class TaskTransitionView(APIView):
 
 
 class ProposalListCreateView(APIView):
-    @extend_schema(responses=OpenApiTypes.OBJECT)
+    @extend_schema(operation_id="proposal_list", responses=OpenApiTypes.OBJECT)
     def get(self, request: Request) -> Response:
         user = request_user(request)
-        common = ("employee", "reviewed_by", "action", "calendar")
+        common = (
+            "employee",
+            "reviewed_by",
+            "action",
+            "calendar",
+            "accepted_assignment",
+        )
         own = TaskProposal.objects.filter(employee=user).select_related(*common)
         reviewable = reviewable_proposals(user).select_related(*common)
         reviewable_ids = set(reviewable.values_list("pk", flat=True))
@@ -355,7 +387,11 @@ class ProposalListCreateView(APIView):
             }
         )
 
-    @extend_schema(request=ProposalCreateSerializer, responses={201: OpenApiTypes.OBJECT})
+    @extend_schema(
+        operation_id="proposal_create",
+        request=ProposalCreateSerializer,
+        responses={201: OpenApiTypes.OBJECT},
+    )
     def post(self, request: Request) -> Response:
         serializer = ProposalCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -395,25 +431,86 @@ class ProposalListCreateView(APIView):
         return Response(proposal_payload(proposal, user), status=status.HTTP_201_CREATED)
 
 
+class ProposalDetailView(APIView):
+    @extend_schema(operation_id="proposal_detail", responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request, pk: int) -> Response:
+        user = request_user(request)
+        return Response(proposal_payload(proposal_for_viewer(user, pk), user))
+
+    @extend_schema(
+        operation_id="proposal_update",
+        request=ProposalUpdateSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def patch(self, request: Request, pk: int) -> Response:
+        serializer = ProposalUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data: dict[str, Any] = serializer.validated_data
+        user = request_user(request)
+        proposal = proposal_for_viewer(user, pk)
+        action = (
+            get_object_or_404(InstitutionalAction, pk=data["action_id"], active=True)
+            if data.get("action_id")
+            else None
+        )
+        calendar = get_object_or_404(
+            WorkCalendar,
+            pk=data.get("calendar_id", proposal.calendar_id),
+            active=True,
+        )
+        update_proposal(
+            user=user,
+            proposal=proposal,
+            title=data["title"],
+            description=data["description"],
+            action=action,
+            calendar=calendar,
+            start_date=data["start_date"],
+            due_date=data["due_date"],
+            estimated_work_days=data["estimated_work_days"],
+            expected_revision=data["revision"],
+        )
+        return Response(proposal_payload(proposal_for_viewer(user, pk), user))
+
+
+class ProposalResubmitView(APIView):
+    @extend_schema(
+        operation_id="proposal_resubmit",
+        request=ProposalResubmitSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def post(self, request: Request, pk: int) -> Response:
+        serializer = ProposalResubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request_user(request)
+        proposal = proposal_for_viewer(user, pk)
+        resubmit_proposal(
+            user=user,
+            proposal=proposal,
+            expected_revision=serializer.validated_data["revision"],
+        )
+        return Response(proposal_payload(proposal_for_viewer(user, pk), user))
+
+
 class ProposalDecisionView(APIView):
-    @extend_schema(request=ProposalDecisionSerializer, responses=OpenApiTypes.OBJECT)
+    @extend_schema(
+        operation_id="proposal_decision",
+        request=ProposalDecisionSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
     def post(self, request: Request, pk: int) -> Response:
         serializer = ProposalDecisionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data: dict[str, Any] = serializer.validated_data
         user = request_user(request)
-        proposal = get_object_or_404(
-            TaskProposal.objects.select_related("employee", "action", "calendar"),
-            pk=pk,
-        )
+        proposal = proposal_for_viewer(user, pk)
         if data["decision"] == "accept":
             accept_proposal(user, proposal, expected_revision=data["revision"])
         else:
             reject_proposal(
                 user, proposal, data["reason"], expected_revision=data["revision"]
             )
-        proposal.refresh_from_db()
-        return Response(proposal_payload(proposal, user))
+        return Response(proposal_payload(proposal_for_viewer(user, pk), user))
 
 
 def team_node_payload(node: Any) -> dict[str, object]:

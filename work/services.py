@@ -1333,11 +1333,10 @@ def accept_proposal(
     expected_revision: int | None = None,
 ) -> TaskAssignment:
     """Turn an employee proposal into a managed task assignment."""
-    proposal = (
-        TaskProposal.objects.select_for_update()
-        .select_related("employee", "action", "calendar")
-        .get(pk=proposal.pk)
-    )
+    # PostgreSQL cannot lock the nullable side of the action LEFT JOIN.
+    # Lock the proposal row only; related objects are loaded lazily while the
+    # transaction keeps that row locked.
+    proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
     if not can_review_proposal(user, proposal):
         raise PermissionDenied("Vous ne pouvez pas accepter cette proposition.")
     ensure_revision(proposal.revision, expected_revision)
@@ -1398,11 +1397,7 @@ def reject_proposal(
     reason: str,
     expected_revision: int | None = None,
 ) -> None:
-    proposal = (
-        TaskProposal.objects.select_for_update()
-        .select_related("employee")
-        .get(pk=proposal.pk)
-    )
+    proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
     if not can_review_proposal(user, proposal):
         raise PermissionDenied("Vous ne pouvez pas refuser cette proposition.")
     ensure_revision(proposal.revision, expected_revision)
@@ -1427,6 +1422,81 @@ def reject_proposal(
     )
 
 
+@transaction.atomic
+def update_proposal(
+    *,
+    user: User,
+    proposal: TaskProposal,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    calendar: WorkCalendar,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None = None,
+) -> TaskProposal:
+    """Let an author correct a submitted or rejected proposal."""
+    proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
+    if proposal.employee_id != user.pk:
+        raise PermissionDenied("Seul l'auteur peut modifier cette proposition.")
+    ensure_revision(proposal.revision, expected_revision)
+    if proposal.status not in (ProposalStatus.SUBMITTED, ProposalStatus.REJECTED):
+        raise ValidationError("Une proposition validée ne peut plus être modifiée.")
+    proposal.title = title.strip()
+    proposal.description = description.strip()
+    proposal.action = action
+    proposal.calendar = calendar
+    proposal.start_date = start_date
+    proposal.due_date = due_date
+    proposal.estimated_work_days = estimated_work_days
+    proposal.revision += 1
+    proposal.save(
+        update_fields=[
+            "title",
+            "description",
+            "action",
+            "calendar",
+            "start_date",
+            "due_date",
+            "estimated_work_days",
+            "revision",
+        ]
+    )
+    return proposal
+
+
+@transaction.atomic
+def resubmit_proposal(
+    *,
+    user: User,
+    proposal: TaskProposal,
+    expected_revision: int | None = None,
+) -> TaskProposal:
+    """Return an author's rejected proposal to the review queue."""
+    proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
+    if proposal.employee_id != user.pk:
+        raise PermissionDenied("Seul l'auteur peut resoumettre cette proposition.")
+    ensure_revision(proposal.revision, expected_revision)
+    if proposal.status != ProposalStatus.REJECTED:
+        raise ValidationError("Seule une proposition rejetée peut être resoumise.")
+    proposal.status = ProposalStatus.SUBMITTED
+    proposal.reviewed_by = None
+    proposal.decision_note = ""
+    proposal.decided_at = None
+    proposal.revision += 1
+    proposal.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "decision_note",
+            "decided_at",
+            "revision",
+        ]
+    )
+    return proposal
+
+
 def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
     """Authorize proposal decisions through hierarchy or scoped management."""
     if proposal.employee_id == user.pk and not (user.is_it_admin or user.is_superuser):
@@ -1441,7 +1511,9 @@ def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
 
 def reviewable_proposals(user: User) -> QuerySet[TaskProposal]:
     """Return proposals the user may decide, without including mere readers."""
-    queryset = TaskProposal.objects.exclude(employee=user)
+    queryset = TaskProposal.objects.filter(status=ProposalStatus.SUBMITTED).exclude(
+        employee=user
+    )
     if user.is_it_admin or user.is_superuser:
         return queryset
     direct_ids = (

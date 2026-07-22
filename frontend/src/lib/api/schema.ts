@@ -59,13 +59,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["proposals_retrieve"];
+        get: operations["proposal_list"];
         put?: never;
-        post: operations["proposals_create"];
+        post: operations["proposal_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["proposal_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["proposal_update"];
         trace?: never;
     };
     "/api/v1/proposals/{id}/decision/": {
@@ -77,7 +93,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["proposals_decision_create"];
+        post: operations["proposal_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{id}/resubmit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["proposal_resubmit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -244,6 +276,20 @@ export interface components {
             message: string;
         };
         /** @description Shared, server-validated assignment schedule. */
+        PatchedProposalUpdate: {
+            /** Format: date */
+            start_date?: string;
+            /** Format: date */
+            due_date?: string;
+            /** Format: decimal */
+            estimated_work_days?: string;
+            title?: string;
+            description?: string;
+            action_id?: number | null;
+            calendar_id?: number;
+            revision?: number;
+        };
+        /** @description Shared, server-validated assignment schedule. */
         PatchedTaskUpdate: {
             /** Format: date */
             start_date?: string;
@@ -294,6 +340,9 @@ export interface components {
             decision: components["schemas"]["DecisionEnum"];
             /** @default  */
             reason: string;
+        };
+        ProposalResubmit: {
+            revision: number;
         };
         /**
          * @description * `workload` - workload
@@ -409,7 +458,7 @@ export interface operations {
             };
         };
     };
-    proposals_retrieve: {
+    proposal_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -430,7 +479,7 @@ export interface operations {
             };
         };
     };
-    proposals_create: {
+    proposal_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -457,7 +506,59 @@ export interface operations {
             };
         };
     };
-    proposals_decision_create: {
+    proposal_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    proposal_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProposalUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProposalUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedProposalUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    proposal_decision: {
         parameters: {
             query?: never;
             header?: never;
@@ -471,6 +572,35 @@ export interface operations {
                 "application/json": components["schemas"]["ProposalDecision"];
                 "application/x-www-form-urlencoded": components["schemas"]["ProposalDecision"];
                 "multipart/form-data": components["schemas"]["ProposalDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    proposal_resubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalResubmit"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalResubmit"];
+                "multipart/form-data": components["schemas"]["ProposalResubmit"];
             };
         };
         responses: {

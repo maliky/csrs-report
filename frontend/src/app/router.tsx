@@ -5,6 +5,7 @@ import { TaskDetailPage } from "../features/tasks/TaskDetailPage";
 import { TaskFormPage } from "../features/tasks/TaskFormPage";
 import { ProposalsPage } from "../features/proposals/ProposalsPage";
 import { ProposalFormPage } from "../features/proposals/ProposalFormPage";
+import { ProposalDetailPage } from "../features/proposals/ProposalDetailPage";
 import { TeamPage } from "../features/team/TeamPage";
 import { EmployeePage } from "../features/team/EmployeePage";
 import { ErrorState } from "../components/ui";
@@ -32,7 +33,18 @@ export const router = createBrowserRouter(
           element: <TaskFormPage mode="edit" />,
         },
         { path: "propositions", element: <ProposalsPage /> },
-        { path: "propositions/nouvelle", element: <ProposalFormPage /> },
+        {
+          path: "propositions/nouvelle",
+          element: <ProposalFormPage mode="create" />,
+        },
+        {
+          path: "propositions/:proposalId",
+          element: <ProposalDetailPage />,
+        },
+        {
+          path: "propositions/:proposalId/modifier",
+          element: <ProposalFormPage mode="edit" />,
+        },
         { path: "equipe", element: <TeamPage /> },
         { path: "equipe/:employeeId", element: <EmployeePage /> },
       ],

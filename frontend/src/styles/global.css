@@ -188,15 +188,29 @@ h2 {
 
 .activity {
   display: grid;
-  grid-template-columns: max-content max-content minmax(12rem, 1fr);
-  gap: 0.65rem;
+  grid-template-columns: minmax(8.5rem, 11rem) minmax(0, 1fr);
+  gap: 1rem;
   padding: 0.9rem 0;
   border-bottom: 1px solid var(--color-border);
 }
+.activity-summary {
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+}
 .activity time,
+.activity-author,
 .activity-meta {
   color: var(--color-muted);
   font-size: 0.85rem;
+}
+.activity-author {
+  color: var(--color-ink);
+  font-weight: 750;
+}
+.activity-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .error-banner {
@@ -222,7 +236,7 @@ h2 {
   }
   .activity {
     grid-template-columns: 1fr;
-    gap: 0.2rem;
+    gap: 0.6rem;
   }
   .grid {
     gap: var(--space-4);

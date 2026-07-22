@@ -2,6 +2,29 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-22 mer.> Detail, filtres et cycle React des propositions
+** Realisation
+
+- le menu place maintenant =Propositions= apres =Mon equipe=;
+- le dashboard filtre les propositions par statut, collaborateur et periode chevauchante; les criteres appliques restent dans l'URL;
+- une carte validee ouvre directement la progression de la tache creee; les autres cartes ouvrent le detail de la proposition;
+- l'auteur peut corriger une proposition soumise ou rejetee. Une proposition rejetee doit ensuite etre resoumise explicitement;
+- seul un responsable autorise peut valider ou rejeter. Les capacites =edit=, =resubmit= et =review= sont renvoyees par Django et controlees a nouveau par les services metier;
+- les controles de decision occupent une rangee flexible sous le motif et ne depassent plus de la carte dans une grille etroite;
+- les activites d'une tache empilent date, auteur et progression a gauche, avant le texte de l'observation a droite.
+
+Les routes =GET/PATCH /api/v1/proposals/{id}/= et =POST /api/v1/proposals/{id}/resubmit/= completent le contrat existant. Une proposition validee expose =accepted_assignment_id= afin que React ouvre =/app/taches/{id}= sans reconstruire le lien.
+
+** Incident PostgreSQL corrige
+
+L'acceptation de la proposition =Formaliser le tableau de priorites= recevait un statut 500 puis React affichait =JSON.parse: unexpected character=. Le service combinait =select_for_update()= et =select_related("action")= alors que l'action est facultative. PostgreSQL refusait de verrouiller le cote nullable du =LEFT JOIN=. Le service verrouille maintenant uniquement la ligne =TaskProposal= et charge les relations sous la meme transaction. Les erreurs inattendues de l'API conservent aussi une enveloppe JSON generique; le client React sait signaler une reponse non JSON sans exposer une erreur de parseur.
+
+** Verification
+
+- [X] Tests API : acceptation, lien d'affectation, correction, resoumission, revision et permissions.
+- [X] Tests React : filtres, destinations des cartes, validation, detail, resoumission, ordre du menu et reponse non JSON.
+- [X] Selenium : vraie API Django, validation de proposition et absence de debordement a 360 et 1440 pixels.
+
 * <2026-07-22 mer.> Preproduction psiaka et parcours developpeur
 ** Etat operationnel
 

@@ -13,6 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
@@ -27,6 +28,7 @@ from work.models import (
     Task,
     TaskActivity,
     TaskAssignment,
+    TaskProposal,
     WorkCalendar,
     default_work_calendar_id,
 )
@@ -128,6 +130,20 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             unit=unit,
             start_date=timezone.localdate(),
             is_primary=True,
+        )
+        proposal_start = timezone.localdate()
+        while not calendar.is_working_day(proposal_start):
+            proposal_start += timedelta(days=1)
+        self.proposal = TaskProposal.objects.create(
+            employee=member,
+            organization_unit=unit,
+            title="Formaliser le tableau de priorités",
+            description="Préparer une version arbitrée des engagements.",
+            action=action,
+            calendar=calendar,
+            start_date=proposal_start,
+            due_date=calendar.due_date_for(proposal_start, Decimal("3.0")),
+            estimated_work_days=Decimal("3.0"),
         )
         subordinate = User.objects.create_user("subordinate@example.test")
         ReportingLine.objects.create(
@@ -321,6 +337,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             driver.find_element(By.NAME, "username").send_keys("BROWSER")
             driver.find_element(By.NAME, "password").send_keys(self.password)
             driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+            WebDriverWait(driver, 10).until(EC.url_to_be(f"{self.live_server_url}/"))
             for width in (360, 1440):
                 driver.set_window_size(width, 900)
                 driver.get(
@@ -419,5 +436,55 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             )
             assert "Contrôle complémentaire nécessaire." in driver.page_source
             assert "Aperçu non enregistré" not in driver.page_source
+            driver.set_window_size(360, 900)
+            driver.get(f"{self.live_server_url}/app/propositions")
+            proposal_link = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        f"a[href='/app/propositions/{self.proposal.pk}']",
+                    )
+                )
+            )
+            card = proposal_link.find_element(By.XPATH, "ancestor::section[1]")
+            validate = card.find_element(
+                By.XPATH, ".//button[normalize-space()='Valider']"
+            )
+            card_box = card.rect
+            button_box = validate.rect
+            assert button_box["x"] >= card_box["x"]
+            assert button_box["x"] + button_box["width"] <= (
+                card_box["x"] + card_box["width"]
+            )
+            driver.execute_script("arguments[0].click();", validate)
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.XPATH, "//*[normalize-space()='Validée']")
+                    )
+                )
+            except TimeoutException as error:
+                self.proposal.refresh_from_db()
+                banners = [
+                    item.text
+                    for item in driver.find_elements(By.CSS_SELECTOR, "[role='alert']")
+                ]
+                raise AssertionError(
+                    f"status={self.proposal.status}; erreurs={banners}"
+                ) from error
+            self.proposal.refresh_from_db()
+            assert self.proposal.status == "accepted"
+            assert self.proposal.accepted_assignment_id is not None
+            accepted_link = driver.find_element(
+                By.CSS_SELECTOR,
+                f"a[aria-label='Ouvrir {self.proposal.title}']",
+            )
+            assert accepted_link.get_attribute("href").endswith(
+                f"/app/taches/{self.proposal.accepted_assignment_id}"
+            )
+            assert (
+                driver.execute_script("return document.documentElement.scrollWidth")
+                <= 360
+            )
         finally:
             driver.quit()

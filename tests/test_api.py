@@ -8,7 +8,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from work.models import ProgressEntry, TaskAssignment
+from api.exceptions import api_exception_handler
+from work.models import ProgressEntry, TaskAssignment, TaskProposal
 
 
 pytestmark = pytest.mark.django_db
@@ -21,11 +22,38 @@ def api_client(user: User) -> Client:
     return client
 
 
+def proposal_for_assignment(assignment: TaskAssignment) -> TaskProposal:
+    return TaskProposal.objects.create(
+        employee=assignment.employee,
+        organization_unit=assignment.organization_unit,
+        title="Formaliser le tableau de priorités",
+        description="Préparer une version arbitrée.",
+        action=assignment.task.action,
+        calendar=assignment.calendar,
+        start_date=assignment.start_date,
+        due_date=assignment.due_date,
+        estimated_work_days=assignment.estimated_work_days,
+    )
+
+
 def test_api_rejects_anonymous_sessions() -> None:
     response = Client().get(reverse("api:session"))
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "not_authenticated"
+
+
+def test_unexpected_api_errors_keep_the_json_contract() -> None:
+    response = api_exception_handler(RuntimeError("private detail"), {})
+
+    assert response.status_code == 500
+    assert response.data == {
+        "error": {
+            "code": "server_error",
+            "message": "Le serveur n'a pas pu traiter cette demande.",
+            "fields": {},
+        }
+    }
 
 
 def test_session_and_dashboard_expose_current_user_and_period(
@@ -159,6 +187,83 @@ def test_manager_can_create_an_unclassified_task(
     assert response.status_code == 201, response.content
     assert response.json()["action"] is None
     assert response.json()["estimated_work_days"] == "5"
+
+
+def test_manager_accepts_a_proposal_and_receives_the_assignment_link(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    proposal = proposal_for_assignment(assignment)
+    response = api_client(people["manager"]).post(
+        reverse("api:proposal-decision", args=[proposal.pk]),
+        {"revision": proposal.revision, "decision": "accept", "reason": ""},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    payload = response.json()
+    assert payload["status"] == "accepted"
+    assert payload["accepted_assignment_id"] is not None
+    assert payload["capabilities"] == {
+        "edit": False,
+        "resubmit": False,
+        "review": False,
+    }
+
+
+def test_author_corrects_and_resubmits_a_rejected_proposal(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    proposal = proposal_for_assignment(assignment)
+    rejected = api_client(people["manager"]).post(
+        reverse("api:proposal-decision", args=[proposal.pk]),
+        {
+            "revision": proposal.revision,
+            "decision": "reject",
+            "reason": "Préciser le résultat attendu.",
+        },
+        content_type="application/json",
+    )
+    employee = api_client(people["employee"])
+    corrected = employee.patch(
+        reverse("api:proposal-detail", args=[proposal.pk]),
+        {
+            "revision": rejected.json()["revision"],
+            "title": "Formaliser les priorités arbitrées",
+            "description": "Préparer le tableau et sa note de synthèse.",
+            "action_id": assignment.task.action_id,
+            "calendar_id": assignment.calendar_id,
+            "start_date": assignment.start_date.isoformat(),
+            "due_date": assignment.due_date.isoformat(),
+            "estimated_work_days": str(assignment.estimated_work_days),
+        },
+        content_type="application/json",
+    )
+    resubmitted = employee.post(
+        reverse("api:proposal-resubmit", args=[proposal.pk]),
+        {"revision": corrected.json()["revision"]},
+        content_type="application/json",
+    )
+
+    assert rejected.status_code == 200
+    assert corrected.status_code == 200
+    assert corrected.json()["status"] == "rejected"
+    assert corrected.json()["decision_note"] == "Préciser le résultat attendu."
+    assert resubmitted.status_code == 200
+    assert resubmitted.json()["status"] == "submitted"
+    assert resubmitted.json()["decision_note"] == ""
+    assert resubmitted.json()["capabilities"]["edit"] is True
+
+
+def test_proposal_detail_hides_itself_from_an_outsider(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    proposal = proposal_for_assignment(assignment)
+    response = api_client(people["outsider"]).get(
+        reverse("api:proposal-detail", args=[proposal.pk])
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
 
 
 def test_task_creation_validates_authorization_on_the_server(

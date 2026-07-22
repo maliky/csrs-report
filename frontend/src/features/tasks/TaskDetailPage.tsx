@@ -149,19 +149,20 @@ export function TaskDetailPage() {
               <div>
                 {data.activities.map((activity) => (
                   <article className="activity" key={activity.id}>
-                    <time dateTime={activity.occurred_at}>
-                      {formatDateTime(activity.occurred_at)}
-                    </time>
-                    <span className="activity-meta">
-                      {activity.actor_short_name} ·{" "}
-                      {activity.kind === "progress"
-                        ? "Progression"
-                        : "Observation"}
-                      {activity.percentage_after !== null
-                        ? ` ${activity.percentage_after} %`
-                        : ""}
-                    </span>
-                    <div>{activity.message}</div>
+                    <div className="activity-summary">
+                      <time dateTime={activity.occurred_at}>
+                        {formatDateTime(activity.occurred_at)}
+                      </time>
+                      <span className="activity-author">
+                        {activity.actor.name}
+                      </span>
+                      <span className="activity-meta">
+                        {activity.kind === "progress"
+                          ? `Progression ${activity.percentage_after ?? 0} %`
+                          : "Observation"}
+                      </span>
+                    </div>
+                    <div className="activity-message">{activity.message}</div>
                   </article>
                 ))}
               </div>

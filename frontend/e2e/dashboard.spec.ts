@@ -52,3 +52,32 @@ test("prévisualise et enregistre une régression", async ({ page }) => {
   await expect(page.getByText("80 % réalisé")).toBeVisible();
   await expect(page.getByText(/aperçu non enregistré/i)).toHaveCount(0);
 });
+
+test("filtre et valide une proposition sans débordement", async ({ page }) => {
+  await page.goto("propositions");
+  await expect(
+    page.getByRole("heading", { name: "Propositions de tâches" }),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "Validées" }).uncheck();
+  await page.getByRole("checkbox", { name: "Rejetées" }).uncheck();
+  await page.getByRole("button", { name: /appliquer/i }).click();
+  await expect(
+    page.getByText("Formaliser le tableau de priorités"),
+  ).toBeVisible();
+  const card = page
+    .getByRole("link", { name: "Ouvrir Formaliser le tableau de priorités" })
+    .locator("xpath=ancestor::section[1]");
+  const validate = card.getByRole("button", { name: "Valider" });
+  const [cardBox, buttonBox] = await Promise.all([
+    card.boundingBox(),
+    validate.boundingBox(),
+  ]);
+  expect(cardBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(buttonBox!.x).toBeGreaterThanOrEqual(cardBox!.x);
+  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(
+    cardBox!.x + cardBox!.width,
+  );
+  await validate.click();
+  await expect(card.getByText("Validée")).toBeVisible();
+});

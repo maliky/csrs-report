@@ -196,10 +196,75 @@ export const planningFixture: PlanningOptions = {
   },
 };
 
+const proposalBase = {
+  revision: 2,
+  description: "Structurer les livrables et préciser le résultat attendu.",
+  estimated_work_days: "5",
+  action: { id: 4, label: "ACT-GOUV — Renforcer le pilotage institutionnel" },
+  calendar: { id: 1, label: "Côte d'Ivoire (2026.1)" },
+  created_at: "2026-07-10T10:00:00Z",
+};
+
 export const proposalsFixture: ProposalGroups = {
-  own: [],
-  reviewable: [],
-  read_only: [],
+  own: [
+    {
+      ...proposalBase,
+      id: 41,
+      title: "Clarifier la note de cadrage",
+      status: "rejected",
+      status_label: "Rejetée",
+      start_date: "2026-07-13",
+      due_date: "2026-07-17",
+      employee: sessionFixture.user,
+      accepted_assignment_id: null,
+      decision_note: "Préciser les destinataires et le format attendu.",
+      can_review: false,
+      capabilities: { edit: true, resubmit: true, review: false },
+    },
+  ],
+  reviewable: [
+    {
+      ...proposalBase,
+      id: 45,
+      revision: 1,
+      title: "Formaliser le tableau de priorités",
+      status: "submitted",
+      status_label: "Soumise",
+      start_date: "2026-07-21",
+      due_date: "2026-07-27",
+      employee: {
+        id: 48,
+        name: "Awa Finance",
+        position: "Directrice administrative et financière",
+        login_alias: "daf",
+      },
+      accepted_assignment_id: null,
+      decision_note: "",
+      can_review: true,
+      capabilities: { edit: false, resubmit: false, review: true },
+    },
+  ],
+  read_only: [
+    {
+      ...proposalBase,
+      id: 38,
+      title: "Consolider le tableau des engagements",
+      status: "accepted",
+      status_label: "Validée",
+      start_date: "2026-06-22",
+      due_date: "2026-07-03",
+      employee: {
+        id: 11,
+        name: "Mariam Atall",
+        position: "Responsable TSI",
+        login_alias: "tsi",
+      },
+      accepted_assignment_id: 31,
+      decision_note: "",
+      can_review: false,
+      capabilities: { edit: false, resubmit: false, review: false },
+    },
+  ],
 };
 export const teamFixture: Team = {
   period: dashboardFixture.period,

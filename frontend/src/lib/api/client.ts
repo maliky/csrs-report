@@ -43,9 +43,23 @@ export async function apiFetch<T>(
     credentials: "same-origin",
   });
   if (response.status === 204) return undefined as T;
-  const payload = (await response.json()) as T | ApiErrorBody;
+  const raw = await response.text();
+  let payload: T | ApiErrorBody | undefined;
+  if (raw) {
+    try {
+      payload = JSON.parse(raw) as T | ApiErrorBody;
+    } catch {
+      throw new ApiError(
+        response.ok
+          ? "Le serveur a renvoyé une réponse inexploitable."
+          : "Le serveur n'a pas pu traiter cette demande.",
+        response.status,
+        "invalid_response",
+      );
+    }
+  }
   if (!response.ok) {
-    const error = (payload as ApiErrorBody).error;
+    const error = (payload as ApiErrorBody | undefined)?.error;
     if (response.status === 401) {
       window.location.assign(
         `/connexion/?next=${encodeURIComponent(window.location.pathname)}`,

@@ -1,15 +1,36 @@
 .proposal {
+  position: relative;
+  min-width: 0;
   display: grid;
   gap: 1rem;
 }
+.proposal:has(.cardLink:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
 .header {
+  min-width: 0;
   display: flex;
   align-items: start;
   justify-content: space-between;
   gap: 1rem;
 }
+.header > div {
+  min-width: 0;
+}
 .header h3 {
   margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.cardLink {
+  color: inherit;
+  text-decoration: none;
+}
+.cardLink::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
 }
 .meta {
   display: flex;
@@ -21,14 +42,105 @@
 .section {
   margin-top: 2.5rem;
 }
+.decision,
+.reviewPanel,
+.detailActions {
+  position: relative;
+  z-index: 2;
+}
 .decision {
+  min-width: 0;
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) auto auto;
-  align-items: end;
+  gap: 0.75rem;
+}
+.decision input {
+  width: 100%;
+  min-width: 0;
+}
+.decisionActions,
+.filterActions,
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
-@media (max-width: 700px) {
-  .decision {
+.decisionActions > * {
+  min-width: 0;
+  flex: 1 1 8rem;
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1.5fr) repeat(3, minmax(10rem, 1fr));
+  align-items: end;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 1.25rem 0;
+  border-block: 1px solid var(--color-border);
+}
+.statusFilters {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.statusFilters legend {
+  width: 100%;
+  margin-bottom: 0.35rem;
+  font-weight: 750;
+}
+.statusFilters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.filterActions,
+.filterError {
+  grid-column: 1 / -1;
+}
+.filterError {
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: 700;
+}
+.resultCount {
+  margin: 1.25rem 0 0;
+  color: var(--color-muted);
+}
+.detailCard {
+  margin-top: 1.5rem;
+}
+.detailActions {
+  margin-top: 1rem;
+}
+.reviewPanel {
+  max-width: 44rem;
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 1050px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .filters {
     grid-template-columns: 1fr;
+  }
+  .filterActions,
+  .filterError {
+    grid-column: auto;
+  }
+  .filterActions > *,
+  .detailActions > * {
+    width: 100%;
+  }
+  .header {
+    flex-direction: column;
   }
 }

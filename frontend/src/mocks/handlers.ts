@@ -1,5 +1,5 @@
 import { delay, http, HttpResponse } from "msw";
-import type { ProposalGroups, TaskDetail } from "../lib/api/types";
+import type { Proposal, ProposalGroups, TaskDetail } from "../lib/api/types";
 import {
   dashboardFixture,
   planningFixture,
@@ -33,6 +33,32 @@ function taskGroups() {
             workload: taskState.workload,
           }
         : task,
+    ),
+  };
+}
+
+function allProposals(): Proposal[] {
+  return [
+    ...proposalState.own,
+    ...proposalState.reviewable,
+    ...proposalState.read_only,
+  ];
+}
+
+function proposalById(id: number): Proposal | undefined {
+  return allProposals().find((proposal) => proposal.id === id);
+}
+
+function replaceProposal(updated: Proposal) {
+  proposalState = {
+    own: proposalState.own.map((item) =>
+      item.id === updated.id ? updated : item,
+    ),
+    reviewable: proposalState.reviewable.map((item) =>
+      item.id === updated.id ? updated : item,
+    ),
+    read_only: proposalState.read_only.map((item) =>
+      item.id === updated.id ? updated : item,
     ),
   };
 }
@@ -209,6 +235,12 @@ export const handlers = [
     return HttpResponse.json(taskState);
   }),
   http.get("/api/v1/proposals/", () => HttpResponse.json(proposalState)),
+  http.get("/api/v1/proposals/:id/", ({ params }) => {
+    const proposal = proposalById(Number(params.id));
+    return proposal
+      ? HttpResponse.json(proposal)
+      : apiError(404, "not_found", "Proposition introuvable.");
+  }),
   http.post("/api/v1/proposals/", async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
     const proposal = {
@@ -221,34 +253,87 @@ export const handlers = [
       start_date: String(body.start_date),
       due_date: String(body.due_date),
       estimated_work_days: String(body.estimated_work_days),
+      action: null,
+      calendar: planningFixture.calendars[0],
       employee: sessionFixture.user,
+      accepted_assignment_id: null,
       decision_note: "",
       created_at: `${taskState.today}T12:00:00Z`,
       can_review: false,
+      capabilities: { edit: true, resubmit: false, review: false },
     };
     proposalState = { ...proposalState, own: [proposal, ...proposalState.own] };
     return HttpResponse.json(proposal, { status: 201 });
   }),
+  http.patch("/api/v1/proposals/:id/", async ({ request, params }) => {
+    const proposal = proposalById(Number(params.id));
+    if (!proposal)
+      return apiError(404, "not_found", "Proposition introuvable.");
+    const body = (await request.json()) as Record<string, unknown>;
+    if (body.revision !== proposal.revision)
+      return apiError(
+        409,
+        "stale_revision",
+        "Cette ressource a été modifiée depuis son chargement.",
+      );
+    const updated: Proposal = {
+      ...proposal,
+      revision: proposal.revision + 1,
+      title: String(body.title),
+      description: String(body.description),
+      start_date: String(body.start_date),
+      due_date: String(body.due_date),
+      estimated_work_days: String(body.estimated_work_days),
+    };
+    replaceProposal(updated);
+    return HttpResponse.json(updated);
+  }),
+  http.post("/api/v1/proposals/:id/resubmit/", async ({ request, params }) => {
+    const proposal = proposalById(Number(params.id));
+    if (!proposal)
+      return apiError(404, "not_found", "Proposition introuvable.");
+    const body = (await request.json()) as { revision: number };
+    if (body.revision !== proposal.revision)
+      return apiError(
+        409,
+        "stale_revision",
+        "Cette ressource a été modifiée depuis son chargement.",
+      );
+    const updated: Proposal = {
+      ...proposal,
+      revision: proposal.revision + 1,
+      status: "submitted",
+      status_label: "Soumise",
+      decision_note: "",
+      can_review: false,
+      capabilities: { edit: true, resubmit: false, review: false },
+    };
+    replaceProposal(updated);
+    return HttpResponse.json(updated);
+  }),
   http.post("/api/v1/proposals/:id/decision/", async ({ request, params }) => {
     const body = (await request.json()) as { decision: string; reason: string };
-    const update = (proposal: ProposalGroups["reviewable"][number]) =>
-      proposal.id === Number(params.id)
-        ? {
-            ...proposal,
-            revision: proposal.revision + 1,
-            status: body.decision === "accept" ? "accepted" : "rejected",
-            status_label: body.decision === "accept" ? "Validée" : "Rejetée",
-            decision_note: body.reason,
-            can_review: false,
-          }
-        : proposal;
+    const proposal = proposalById(Number(params.id));
+    if (!proposal)
+      return apiError(404, "not_found", "Proposition introuvable.");
+    const updated: Proposal = {
+      ...proposal,
+      revision: proposal.revision + 1,
+      status: body.decision === "accept" ? "accepted" : "rejected",
+      status_label: body.decision === "accept" ? "Validée" : "Rejetée",
+      accepted_assignment_id: body.decision === "accept" ? taskState.id : null,
+      decision_note: body.reason,
+      can_review: false,
+      capabilities: { edit: false, resubmit: false, review: false },
+    };
     proposalState = {
       ...proposalState,
-      reviewable: proposalState.reviewable.map(update),
+      reviewable: proposalState.reviewable.filter(
+        (item) => item.id !== proposal.id,
+      ),
+      read_only: [updated, ...proposalState.read_only],
     };
-    return HttpResponse.json(
-      proposalState.reviewable.find((item) => item.id === Number(params.id)),
-    );
+    return HttpResponse.json(updated);
   }),
   http.get("/api/v1/team/", () => HttpResponse.json(teamFixture)),
   http.get("/api/v1/team/:id/", () =>

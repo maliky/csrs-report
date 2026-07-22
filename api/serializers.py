@@ -56,6 +56,14 @@ class ProposalCreateSerializer(ScheduleSerializer):
     calendar_id = serializers.IntegerField(min_value=1, required=False)
 
 
+class ProposalUpdateSerializer(ProposalCreateSerializer):
+    revision = serializers.IntegerField(min_value=1)
+
+
+class ProposalResubmitSerializer(serializers.Serializer):
+    revision = serializers.IntegerField(min_value=1)
+
+
 class ProposalDecisionSerializer(serializers.Serializer):
     revision = serializers.IntegerField(min_value=1)
     decision = serializers.ChoiceField(choices=("accept", "reject"))

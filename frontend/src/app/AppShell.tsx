@@ -151,16 +151,16 @@ export function AppShell() {
             <ClipboardList size={iconSize} aria-hidden="true" />
             <span className={styles.navLabel}>Mes tâches</span>
           </NavLink>
-          <NavLink to="/propositions" className={navClass} title="Propositions">
-            <Lightbulb size={iconSize} aria-hidden="true" />
-            <span className={styles.navLabel}>Propositions</span>
-          </NavLink>
           {session.capabilities.view_team && (
             <NavLink to="/equipe" className={navClass} title="Mon équipe">
               <Users size={iconSize} aria-hidden="true" />
               <span className={styles.navLabel}>Mon équipe</span>
             </NavLink>
           )}
+          <NavLink to="/propositions" className={navClass} title="Propositions">
+            <Lightbulb size={iconSize} aria-hidden="true" />
+            <span className={styles.navLabel}>Propositions</span>
+          </NavLink>
           {session.capabilities.create_task && (
             <NavLink
               to="/taches/nouvelle"

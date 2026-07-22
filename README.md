@@ -72,6 +72,13 @@ envoie ensuite la progression à Django; une baisse exige une observation. La
 réponse serveur actualise le pourcentage, l'historique et le graphique sans
 rechargement de page.
 
+Le dashboard `/app/propositions` filtre par statut, collaborateur et période
+chevauchante. Une proposition validée mène à la progression de la tâche créée;
+une proposition soumise ou rejetée mène à son détail. L'auteur peut corriger
+ses propositions et resoumettre un rejet, tandis que les décisions restent
+réservées aux responsables autorisés. Les écritures utilisent toujours une
+révision optimiste et les erreurs API gardent une enveloppe JSON stable.
+
 ### Deux modes de développement React
 
 Le frontend demande Node 24 (version indiquée dans `frontend/.node-version`) :
