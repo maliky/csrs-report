@@ -148,10 +148,25 @@ git switch psiaka
 git pull --ff-only
 ```
 
+Ce pull actualise uniquement les fichiers dans le checkout. Il ne modifie pas
+les conteneurs déjà en cours. Après revue du commit, l'administrateur lance :
+
+```bash
+cd /srv/apps/psiaka/app
+./scripts/deploy_preprod.sh
+```
+
+Le script exécute `docker-compose up -d --build`. Docker réutilise ses couches
+en cache. Si le frontend a changé, l'étape Node relance `npm run build`; elle ne
+relance `npm ci` que si `package.json` ou `package-lock.json` a changé. Le bundle
+produit est copié dans `static/react` de la nouvelle image, puis servi par le
+conteneur web avec WhiteNoise. Aucune copie manuelle dans un conteneur en cours
+n'est nécessaire.
+
 Le site est publié sur `https://psiaka.koba.sarl/`. Le code Python et les
-assets React sont intégrés dans l'image : après un pull, l'administrateur doit
-reconstruire le stack avec `./scripts/deploy_preprod.sh`. Le compte `psiaka`
-n'est volontairement pas membre du groupe `docker`.
+assets React sont intégrés dans l'image. Le compte `psiaka` n'est volontairement
+pas membre du groupe `docker` : lui-même pousse et tire les commits, puis un
+administrateur contrôle et exécute le déploiement.
 
 Le développeur travaille et teste normalement sur sa machine, pousse ses
 commits sur la branche `psiaka`, puis informe l'administrateur du serveur en

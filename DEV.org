@@ -66,6 +66,20 @@ fusionne les changements de =psiaka= vers =dev=. Les nouveaux changements de
 separation permet au developpeur de travailler sans lui accorder les privileges
 Docker de l'hote.
 
+La sequence operationnelle est donc strictement :
+
+1. l'etudiant pousse son commit local vers =origin/psiaka=;
+2. le checkout VPS tire ce commit avec =git pull --ff-only=;
+3. apres revue, l'administrateur lance =./scripts/deploy_preprod.sh=.
+
+Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les
+couches inchangees. Une modification de =frontend/= relance =npm run build=;
+=npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le
+bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur
+web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un
+conteneur existant n'est requise. Un changement de documentation seul ne
+necessite pas de redeploiement.
+
 * <2026-07-22 mer.> Scenario guide React : modifier la progression et actualiser le graphique D3
 ** Ou nous en sommes
 
