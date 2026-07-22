@@ -6,7 +6,7 @@
 ** Etat operationnel
 
 - la preproduction est publiee sur =https://psiaka.koba.sarl/= avec un certificat Let's Encrypt;
-- la branche partagee de developpement et de preproduction est =dev=;
+- la branche de travail et de preproduction de l'etudiant est =psiaka=; =dev= reste la branche d'integration apres revue administrateur;
 - le checkout serveur est =/srv/apps/psiaka/app= et le depot bare partage est =/home/jil/git/csrs_report.git=;
 - le projet Compose est =csrs_psiaka= et le service web n'est expose a l'hote que sur =127.0.0.1:18006=, derriere Nginx;
 - le compte systeme =psiaka= peut cloner, tirer et pousser le depot, mais n'appartient pas au groupe =docker=;
@@ -48,20 +48,23 @@ executer les tests concernes.
 
 ** Flux Git et mise en preproduction
 
-Le developpeur clone le depot sur sa machine, travaille sur =dev=, teste,
-committe puis pousse vers =/home/jil/git/csrs_report.git=. Il transmet ensuite a
-l'administrateur :
+Le developpeur clone le depot sur sa machine, suit =origin/psiaka=, teste,
+committe puis pousse sa branche =psiaka= vers =/home/jil/git/csrs_report.git=.
+Il ne pousse pas directement sur =dev=. Il transmet ensuite a l'administrateur :
 
 - le hash ou le message du commit a deployer;
 - les migrations ou nouvelles variables d'environnement attendues;
 - les tests et controles executes;
 - les points particuliers a verifier sur =https://psiaka.koba.sarl/=.
 
-Le compte =psiaka= peut tirer les commits, mais le pull ne modifie pas les
-conteneurs deja en cours. L'administrateur controle le diff, sauvegarde la base
-si necessaire, lance le script de deploiement, puis verifie la sante Compose,
-la connexion, =/app/= et les journaux. Cette separation permet au developpeur
-de travailler sans lui accorder les privileges Docker de l'hote.
+Le checkout =/srv/apps/psiaka/app= suit lui aussi la branche =psiaka=. Le pull ne
+modifie pas les conteneurs deja en cours. L'administrateur controle le diff,
+sauvegarde la base si necessaire, lance le script de deploiement, puis verifie
+la sante Compose, la connexion, =/app/= et les journaux. Apres validation, il
+fusionne les changements de =psiaka= vers =dev=. Les nouveaux changements de
+=dev= sont reintegres dans =psiaka= avec un merge de =origin/dev=. Cette
+separation permet au developpeur de travailler sans lui accorder les privileges
+Docker de l'hote.
 
 * <2026-07-22 mer.> Scenario guide React : modifier la progression et actualiser le graphique D3
 ** Ou nous en sommes

@@ -125,24 +125,26 @@ n'est nécessaire pour `/app/`.
 
 ## Git et preproduction psiaka
 
-La branche de travail et de preproduction est `dev`. Depuis la machine locale :
+La branche de travail et de preproduction de l'étudiant est `psiaka`. La
+branche `dev` reste la branche d'intégration : l'administrateur y fusionne les
+changements validés après revue. Depuis la machine locale :
 
 ```bash
 git clone ssh://psiaka@tuvs.koba.sarl/home/jil/git/csrs_report.git
 cd csrs_report
-git switch dev
+git switch --track origin/psiaka
 git pull --ff-only
 # modifier et tester
 git add .
 git commit -m "description claire"
-git push origin dev
+git push origin psiaka
 ```
 
 Dans le compte serveur `psiaka`, mettre à jour la copie de preproduction :
 
 ```bash
 cd /srv/apps/psiaka/app
-git switch dev
+git switch psiaka
 git pull --ff-only
 ```
 
@@ -152,10 +154,21 @@ reconstruire le stack avec `./scripts/deploy_preprod.sh`. Le compte `psiaka`
 n'est volontairement pas membre du groupe `docker`.
 
 Le développeur travaille et teste normalement sur sa machine, pousse ses
-commits sur la branche `dev`, puis informe l'administrateur du serveur en
+commits sur la branche `psiaka`, puis informe l'administrateur du serveur en
 précisant le commit, les migrations éventuelles et les contrôles exécutés.
-L'administrateur effectue le pull et le redéploiement. Une modification n'est
-donc pas visible sur le site public immédiatement après le push.
+L'administrateur revoit les changements, actualise la preproduction depuis
+`psiaka`, effectue le redéploiement puis fusionne les changements validés vers
+`dev`. Une modification n'est donc pas visible sur le site public
+immédiatement après le push. L'étudiant ne pousse pas directement sur `dev`.
+
+Pour reprendre dans `psiaka` les changements ajoutés entre-temps à `dev` :
+
+```bash
+git fetch origin
+git switch psiaka
+git merge origin/dev
+git push origin psiaka
+```
 
 La preproduction contient des comptes fictifs, notamment `dev`, `dg` et les
 comptes de la hiérarchie pilote. Leurs mots de passe ne sont pas versionnés :
