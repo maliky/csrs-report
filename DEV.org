@@ -2,6 +2,67 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-22 mer.> Preproduction psiaka et parcours developpeur
+** Etat operationnel
+
+- la preproduction est publiee sur =https://psiaka.koba.sarl/= avec un certificat Let's Encrypt;
+- la branche partagee de developpement et de preproduction est =dev=;
+- le checkout serveur est =/srv/apps/psiaka/app= et le depot bare partage est =/home/jil/git/csrs_report.git=;
+- le projet Compose est =csrs_psiaka= et le service web n'est expose a l'hote que sur =127.0.0.1:18006=, derriere Nginx;
+- le compte systeme =psiaka= peut cloner, tirer et pousser le depot, mais n'appartient pas au groupe =docker=;
+- la population pilote contient 45 comptes, 43 liens hierarchiques, 73 affectations et 42 propositions;
+- les comptes =dev=, =dg= et les autres alias pilotes sont actifs. Les mots de passe de demonstration restent uniquement dans le guide prive =/home/psiaka/CSRS_README.org= et ne doivent pas entrer dans Git.
+
+Une modification de documentation seule peut etre tiree dans le checkout sans
+reconstruire les conteneurs. Toute modification de code Python, de dependances,
+de migrations ou du frontend compile exige en revanche un redeploiement par
+l'administrateur avec =./scripts/deploy_preprod.sh=.
+
+** Avec quoi React interagit
+
+React ne parle pas directement a PostgreSQL. Le chemin normal est :
+
+#+begin_example
+navigateur React (/app/)
+  -> JSON /api/v1/
+  -> session et CSRF Django
+  -> vues de api/
+  -> services de work/ et access/
+  -> base configuree (PostgreSQL en preproduction, SQLite local par defaut)
+#+end_example
+
+Django demeure la source de verite pour l'authentification, les autorisations,
+les regles metier, les revisions optimistes et la trace d'audit. React gere la
+presentation, la navigation et l'etat local de l'interface. En preproduction,
+la connexion, React et l'API partagent la meme origine; aucun JWT ni acces
+direct a la base n'est necessaire.
+
+Deux parcours locaux sont supportes :
+
+1. =VITE_USE_MOCKS=true npm run dev= sous =frontend/= pour travailler vite sur les composants et les scenarios MSW, sans Django ni PostgreSQL;
+2. Django sur =127.0.0.1:8000= et Vite sur =127.0.0.1:5173= pour verifier les vraies sessions, permissions, ecritures et reponses de l'API.
+
+Le premier parcours ne valide pas les regles du serveur. Avant de proposer une
+modification metier, le developpeur doit donc utiliser le second parcours et
+executer les tests concernes.
+
+** Flux Git et mise en preproduction
+
+Le developpeur clone le depot sur sa machine, travaille sur =dev=, teste,
+committe puis pousse vers =/home/jil/git/csrs_report.git=. Il transmet ensuite a
+l'administrateur :
+
+- le hash ou le message du commit a deployer;
+- les migrations ou nouvelles variables d'environnement attendues;
+- les tests et controles executes;
+- les points particuliers a verifier sur =https://psiaka.koba.sarl/=.
+
+Le compte =psiaka= peut tirer les commits, mais le pull ne modifie pas les
+conteneurs deja en cours. L'administrateur controle le diff, sauvegarde la base
+si necessaire, lance le script de deploiement, puis verifie la sante Compose,
+la connexion, =/app/= et les journaux. Cette separation permet au developpeur
+de travailler sans lui accorder les privileges Docker de l'hote.
+
 * <2026-07-17 ven.> Parcours frontend React pour un etudiant
 ** Objectif et diagnostic
 

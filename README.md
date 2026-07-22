@@ -40,6 +40,32 @@ session Django et les mêmes autorisations serveur que l'interface classique,
 qui reste accessible à la racine. L'administration Django continue de gérer
 les comptes, services, rôles et délégations.
 
+### Avec quoi React interagit
+
+React n'accède jamais directement à PostgreSQL. Le parcours d'une action est :
+
+```text
+navigateur React (/app/)
+  -> requête JSON /api/v1/
+  -> session et protection CSRF Django
+  -> vues API Django
+  -> services métier work/ et access/
+  -> base configurée (PostgreSQL en preproduction, SQLite local par défaut)
+```
+
+Django reste donc responsable de l'authentification, des permissions, des
+règles métier, de l'audit et de la base. React présente les données et envoie
+les actions autorisées. Le client conserve les cookies de session et transmet
+le jeton CSRF pour les écritures. En preproduction, React, l'API et la page de
+connexion sont servis par la même origine `https://psiaka.koba.sarl/`.
+
+Les principaux points d'entrée sont `frontend/src/lib/api/` pour le client et
+les types, `frontend/src/features/` pour les écrans métier, `api/urls.py` et
+`api/views.py` pour l'API, puis `work/services.py` et `access/services.py` pour
+les règles applicatives.
+
+### Deux modes de développement React
+
 Le frontend demande Node 24 (version indiquée dans `frontend/.node-version`) :
 
 ```bash
@@ -60,9 +86,29 @@ VITE_USE_MOCKS=true npm run dev
 ```
 
 Ce parcours avec les mocks est le moyen le plus rapide de travailler sur React.
-Pour tester React contre Django, lancer Django sur `127.0.0.1:8000` dans un
-premier terminal, puis `npm run dev` dans `frontend/` dans un second terminal.
-Vite sert alors l'interface sur `http://127.0.0.1:5173`.
+Il permet de modifier les composants et scénarios de `frontend/src/mocks/`,
+mais ne valide ni les permissions réelles, ni les migrations, ni le backend.
+
+Pour tester React contre le vrai backend, lancer Django dans un premier
+terminal :
+
+```bash
+source .venv/bin/activate
+python manage.py migrate
+python manage.py runserver 127.0.0.1:8000
+```
+
+Se connecter d'abord sur `http://127.0.0.1:8000/connexion/`, puis lancer Vite
+dans un second terminal :
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Ouvrir ensuite `http://127.0.0.1:5173/app/`. Vite sert React et transmet les
+requêtes `/api/` à Django sur le port 8000.
 
 Le contrat OpenAPI et les types TypeScript sont reproductibles :
 
@@ -103,8 +149,19 @@ git pull --ff-only
 Le site est publié sur `https://psiaka.koba.sarl/`. Le code Python et les
 assets React sont intégrés dans l'image : après un pull, l'administrateur doit
 reconstruire le stack avec `./scripts/deploy_preprod.sh`. Le compte `psiaka`
-n'est volontairement pas membre du groupe `docker`, qui donnerait des droits
-équivalents à root.
+n'est volontairement pas membre du groupe `docker`.
+
+Le développeur travaille et teste normalement sur sa machine, pousse ses
+commits sur la branche `dev`, puis informe l'administrateur du serveur en
+précisant le commit, les migrations éventuelles et les contrôles exécutés.
+L'administrateur effectue le pull et le redéploiement. Une modification n'est
+donc pas visible sur le site public immédiatement après le push.
+
+La preproduction contient des comptes fictifs, notamment `dev`, `dg` et les
+comptes de la hiérarchie pilote. Leurs mots de passe ne sont pas versionnés :
+sur le serveur, ils sont indiqués dans le guide privé
+`/home/psiaka/CSRS_README.org`. Ces identifiants sont réservés aux essais et ne
+doivent jamais être réutilisés en production.
 
 ## Conteneurs et déploiement
 
