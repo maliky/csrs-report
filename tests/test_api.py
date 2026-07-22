@@ -81,6 +81,56 @@ def test_progress_update_increments_revision_and_rejects_stale_write(
     }
 
 
+def test_progress_regression_requires_note_and_returns_updated_chart(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    client = api_client(people["employee"])
+    endpoint = reverse("api:task-progress", args=[assignment.pk])
+    today = timezone.localdate().isoformat()
+    first = client.post(
+        endpoint,
+        {
+            "revision": assignment.revision,
+            "entry_date": today,
+            "percentage": 50,
+            "note": "Premier état contrôlé.",
+            "blocked": False,
+        },
+        content_type="application/json",
+    )
+    rejected = client.post(
+        endpoint,
+        {
+            "revision": first.json()["revision"],
+            "entry_date": today,
+            "percentage": 40,
+            "note": "",
+            "blocked": False,
+        },
+        content_type="application/json",
+    )
+    saved = client.post(
+        endpoint,
+        {
+            "revision": first.json()["revision"],
+            "entry_date": today,
+            "percentage": 40,
+            "note": "Contrôle complémentaire nécessaire.",
+            "blocked": False,
+        },
+        content_type="application/json",
+    )
+
+    assert rejected.status_code == 400
+    assert saved.status_code == 200
+    payload = saved.json()
+    assert payload["percentage"] == 40
+    assert payload["chart"][-1]["day"] == today
+    assert payload["chart"][-1]["percentage"] == 40
+    assert payload["chart"][-1]["observed"] is True
+    assert payload["activities"][0]["message"] == ("Contrôle complémentaire nécessaire.")
+
+
 def test_manager_can_create_an_unclassified_task(
     people: dict[str, User], assignment: TaskAssignment
 ) -> None:

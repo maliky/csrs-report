@@ -7,15 +7,30 @@ test("expose les dates réelles et une alternative textuelle", () => {
     <ProgressChart
       points={taskDetailFixture.chart}
       today={taskDetailFixture.today}
+      status={taskDetailFixture.status}
     />,
   );
   expect(
     screen.getByRole("img", { name: /progression réelle/i }),
   ).toBeInTheDocument();
   expect(
-    screen.getAllByRole("button", { name: /progression observée/i }),
-  ).toHaveLength(8);
-  expect(
     screen.getByText("Afficher les données du graphique"),
   ).toBeInTheDocument();
+});
+
+test("distingue un aperçu de progression de la valeur serveur", () => {
+  const { container } = render(
+    <ProgressChart
+      points={taskDetailFixture.chart}
+      today={taskDetailFixture.today}
+      status={taskDetailFixture.status}
+      previewPercentage={40}
+    />,
+  );
+
+  expect(screen.getByText(/aperçu non enregistré : 40 %/i)).toBeInTheDocument();
+  expect(container.querySelector("path[class*='previewLine']")).toHaveAttribute(
+    "d",
+  );
+  expect(screen.getByText(/valeur serveur 90 %/i)).toBeInTheDocument();
 });

@@ -64,6 +64,14 @@ les types, `frontend/src/features/` pour les écrans métier, `api/urls.py` et
 `api/views.py` pour l'API, puis `work/services.py` et `access/services.py` pour
 les règles applicatives.
 
+La navigation React utilise une barre latérale gauche. Elle est ouverte et
+rétractable sur ordinateur, avec préférence conservée dans le navigateur, et
+fermée par défaut sur téléphone. Dans le détail d'une tâche, déplacer le
+curseur affiche un aperçu D3 sans modifier la base. Le bouton d'enregistrement
+envoie ensuite la progression à Django; une baisse exige une observation. La
+réponse serveur actualise le pourcentage, l'historique et le graphique sans
+rechargement de page.
+
 ### Deux modes de développement React
 
 Le frontend demande Node 24 (version indiquée dans `frontend/.node-version`) :

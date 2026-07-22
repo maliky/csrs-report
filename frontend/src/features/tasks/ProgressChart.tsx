@@ -1,77 +1,264 @@
-import { useId, useMemo, useState } from "react";
+import { area, bisector, curveStepAfter, line, scaleLinear } from "d3";
+import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import type { ChartPoint } from "../../lib/api/types";
 import { dayLabel, formatDate } from "../../lib/format";
 import styles from "./tasks.module.css";
 
 const WIDTH = 760;
-const HEIGHT = 250;
-const MARGIN = { top: 18, right: 20, bottom: 42, left: 42 };
+const HEIGHT = 300;
+const MARGIN = { top: 46, right: 22, bottom: 46, left: 46 };
+const NON_WORKING_DAY_WEIGHT = 0.18;
+
+type CalendarSegment = {
+  day: string;
+  isWorkingDay: boolean;
+  startUnit: number;
+  endUnit: number;
+};
+
+type PlotPoint = ChartPoint & {
+  unit: number;
+};
+
+function parseDay(value: string): Date {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+function isoDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function calendarDays(start: string, end: string): string[] {
+  const days: string[] = [];
+  const cursor = parseDay(start);
+  const last = parseDay(end);
+  while (cursor <= last) {
+    days.push(isoDay(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
+function weightedCalendar(
+  points: ChartPoint[],
+  start: string,
+  end: string,
+): CalendarSegment[] {
+  const explicitDays = new Map(
+    points.map((point) => [point.day, point.is_working_day]),
+  );
+  let unit = 0;
+  return calendarDays(start, end).map((day) => {
+    const date = parseDay(day);
+    const isWorkingDay =
+      explicitDays.get(day) ?? ![0, 6].includes(date.getUTCDay());
+    const weight = isWorkingDay ? 1 : NON_WORKING_DAY_WEIGHT;
+    const segment = {
+      day,
+      isWorkingDay,
+      startUnit: unit,
+      endUnit: unit + weight,
+    };
+    unit += weight;
+    return segment;
+  });
+}
 
 export function ProgressChart({
   points,
   today,
+  status,
+  previewPercentage,
 }: {
   points: ChartPoint[];
   today: string;
+  status: string;
+  previewPercentage?: number;
 }) {
   const titleId = useId();
   const [active, setActive] = useState<number | null>(null);
-  const data = useMemo(
-    () =>
-      points.map((point) => ({
-        ...point,
-        timestamp: new Date(`${point.day}T12:00:00`).getTime(),
-      })),
-    [points],
-  );
-  if (!data.length)
+  const chart = useMemo(() => {
+    if (!points.length) return null;
+    const start = points[0].start_date;
+    const due = points[0].due_date;
+    const last = points[points.length - 1].day;
+    const isOpen = !["completed", "closed_early"].includes(status);
+    const end = isOpen ? ([today, due, last].sort().at(-1) ?? last) : last;
+    const calendar = weightedCalendar(points, start, end);
+    const segmentByDay = new Map(
+      calendar.map((segment) => [segment.day, segment]),
+    );
+    const totalUnits = calendar.at(-1)?.endUnit ?? 1;
+    const xScale = scaleLinear()
+      .domain([0, Math.max(1, totalUnits)])
+      .range([MARGIN.left, WIDTH - MARGIN.right]);
+    const yScale = scaleLinear()
+      .domain([0, 100])
+      .range([HEIGHT - MARGIN.bottom, MARGIN.top]);
+    const position = (day: string) => {
+      const segment = segmentByDay.get(day);
+      return xScale(
+        segment ? (segment.startUnit + segment.endUnit) / 2 : totalUnits,
+      );
+    };
+    const serverPoints: PlotPoint[] = points.map((point) => ({
+      ...point,
+      unit: position(point.day),
+    }));
+    const previewActive =
+      previewPercentage !== undefined &&
+      previewPercentage !== points[points.length - 1].percentage;
+    const displayPoints = serverPoints.map((point) =>
+      previewActive && point.day === today
+        ? { ...point, percentage: previewPercentage }
+        : point,
+    );
+    const lineGenerator = line<PlotPoint>()
+      .x((point) => point.unit)
+      .y((point) => yScale(point.percentage))
+      .curve(curveStepAfter);
+    const areaGenerator = area<PlotPoint>()
+      .x((point) => point.unit)
+      .y0(yScale(0))
+      .y1((point) => yScale(point.percentage))
+      .curve(curveStepAfter);
+    const labelsEvery = Math.max(1, Math.ceil(calendar.length / 6));
+    const labels = calendar.filter(
+      (_segment, index) =>
+        index === 0 ||
+        index === calendar.length - 1 ||
+        index % labelsEvery === 0,
+    );
+    return {
+      start,
+      due,
+      isOpen,
+      calendar,
+      xScale,
+      yScale,
+      position,
+      serverPoints,
+      displayPoints,
+      previewActive,
+      serverPath: lineGenerator(serverPoints) ?? "",
+      displayPath: lineGenerator(displayPoints) ?? "",
+      displayArea: areaGenerator(displayPoints) ?? "",
+      labels,
+    };
+  }, [points, previewPercentage, status, today]);
+
+  if (!chart)
     return <p className="muted">Aucune progression n'est encore disponible.</p>;
 
-  const min = data[0].timestamp;
-  const max = data[data.length - 1].timestamp;
-  const span = Math.max(1, max - min);
-  const x = (timestamp: number) =>
-    MARGIN.left +
-    ((timestamp - min) / span) * (WIDTH - MARGIN.left - MARGIN.right);
-  const y = (percentage: number) =>
-    HEIGHT -
-    MARGIN.bottom -
-    (percentage / 100) * (HEIGHT - MARGIN.top - MARGIN.bottom);
-  const path = data
-    .map(
-      (point, index) =>
-        `${index ? "L" : "M"}${x(point.timestamp).toFixed(1)},${y(point.percentage).toFixed(1)}`,
+  const renderedChart = chart;
+  const selected = active === null ? null : chart.displayPoints[active];
+  const todayIndex = chart.displayPoints.findIndex(
+    (point) => point.day === today,
+  );
+  const markerData = [
+    { day: chart.start, label: "Début", className: styles.startLine },
+    { day: today, label: "Aujourd'hui", className: styles.todayLine },
+    { day: chart.due, label: "Fin prévue", className: styles.dueLine },
+  ].filter((marker) =>
+    chart.calendar.some((segment) => segment.day === marker.day),
+  );
+  const lastPercentage = chart.displayPoints.at(-1)?.percentage ?? 0;
+  const showOverrun = chart.isOpen && today > chart.due && lastPercentage < 100;
+
+  function moveSelection(event: KeyboardEvent<HTMLDivElement>) {
+    if (
+      !["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)
     )
-    .join(" ");
-  const labels = [
-    data[0],
-    data[Math.floor((data.length - 1) / 2)],
-    data[data.length - 1],
-  ];
-  const todayPoint = new Date(`${today}T12:00:00`).getTime();
-  const selected = active === null ? null : data[active];
+      return;
+    event.preventDefault();
+    if (event.key === "Escape") {
+      setActive(null);
+      return;
+    }
+    if (event.key === "Home") {
+      setActive(0);
+      return;
+    }
+    if (event.key === "End") {
+      setActive(renderedChart.displayPoints.length - 1);
+      return;
+    }
+    setActive((current) => {
+      const start = current ?? renderedChart.displayPoints.length - 1;
+      const delta = event.key === "ArrowLeft" ? -1 : 1;
+      return Math.max(
+        0,
+        Math.min(renderedChart.displayPoints.length - 1, start + delta),
+      );
+    });
+  }
+
+  function selectFromPointer(clientX: number, element: SVGSVGElement) {
+    const bounds = element.getBoundingClientRect();
+    const svgX = ((clientX - bounds.left) / Math.max(1, bounds.width)) * WIDTH;
+    const index = bisector((point: PlotPoint) => point.unit).center(
+      renderedChart.displayPoints,
+      svgX,
+    );
+    setActive(
+      Math.max(0, Math.min(renderedChart.displayPoints.length - 1, index)),
+    );
+  }
 
   return (
-    <div className={styles.chartWrap}>
+    <div
+      className={styles.chartWrap}
+      tabIndex={0}
+      onKeyDown={moveSelection}
+      onFocus={() =>
+        setActive((current) => current ?? chart.displayPoints.length - 1)
+      }
+      onBlur={() => setActive(null)}
+      aria-label="Graphique de progression. Utilisez les flèches gauche et droite pour parcourir les dates."
+    >
+      {chart.previewActive && (
+        <p className={styles.previewNotice} role="status">
+          Aperçu non enregistré : {previewPercentage} %
+        </p>
+      )}
       <svg
         className={styles.chart}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
         aria-labelledby={titleId}
+        onPointerMove={(event) =>
+          selectFromPointer(event.clientX, event.currentTarget)
+        }
+        onPointerLeave={() => setActive(null)}
       >
         <title id={titleId}>
-          Progression réelle de la tâche du {formatDate(data[0].day)} au{" "}
-          {formatDate(data[data.length - 1].day)}
+          Progression réelle de la tâche du {formatDate(chart.start)} au{" "}
+          {formatDate(chart.displayPoints.at(-1)?.day ?? chart.start)}
         </title>
-        {data
-          .filter((point) => !point.is_working_day)
-          .map((point) => (
+        {showOverrun && (
+          <rect
+            className={styles.overrun}
+            x={chart.position(chart.due)}
+            y={MARGIN.top}
+            width={Math.max(
+              0,
+              chart.position(today) - chart.position(chart.due),
+            )}
+            height={HEIGHT - MARGIN.top - MARGIN.bottom}
+          />
+        )}
+        {chart.calendar
+          .filter((segment) => !segment.isWorkingDay)
+          .map((segment) => (
             <rect
-              key={point.day}
+              key={segment.day}
               className={styles.weekend}
-              x={x(point.timestamp) - 2}
+              x={chart.xScale(segment.startUnit)}
               y={MARGIN.top}
-              width={4}
+              width={Math.max(
+                1,
+                chart.xScale(segment.endUnit) - chart.xScale(segment.startUnit),
+              )}
               height={HEIGHT - MARGIN.top - MARGIN.bottom}
             />
           ))}
@@ -81,52 +268,88 @@ export function ProgressChart({
               className={styles.gridLine}
               x1={MARGIN.left}
               x2={WIDTH - MARGIN.right}
-              y1={y(value)}
-              y2={y(value)}
+              y1={chart.yScale(value)}
+              y2={chart.yScale(value)}
             />
-            <text className={styles.axisLabel} x={4} y={y(value) + 4}>
+            <text
+              className={styles.axisLabel}
+              x={4}
+              y={chart.yScale(value) + 4}
+            >
               {value} %
             </text>
           </g>
         ))}
-        {todayPoint >= min && todayPoint <= max && (
-          <line
-            className={styles.todayLine}
-            x1={x(todayPoint)}
-            x2={x(todayPoint)}
-            y1={MARGIN.top}
-            y2={HEIGHT - MARGIN.bottom}
+        {markerData.map((marker, index) => (
+          <g key={marker.label}>
+            <line
+              className={marker.className}
+              x1={chart.position(marker.day)}
+              x2={chart.position(marker.day)}
+              y1={MARGIN.top}
+              y2={HEIGHT - MARGIN.bottom}
+            />
+            <text
+              className={styles.markerLabel}
+              x={chart.position(marker.day)}
+              y={18 + (index % 2) * 14}
+              textAnchor="middle"
+            >
+              {marker.label}
+            </text>
+          </g>
+        ))}
+        <path className={styles.area} d={chart.displayArea} />
+        {chart.previewActive && (
+          <path className={styles.serverLine} d={chart.serverPath} />
+        )}
+        <path
+          className={chart.previewActive ? styles.previewLine : styles.line}
+          d={chart.displayPath}
+        />
+        {chart.serverPoints.map((point) => (
+          <circle
+            key={point.day}
+            className={point.observed ? styles.dotObserved : styles.dotCarried}
+            cx={point.unit}
+            cy={chart.yScale(point.percentage)}
+            r={point.observed ? 4.2 : 2.4}
+          />
+        ))}
+        {chart.previewActive && todayIndex >= 0 && (
+          <circle
+            className={styles.previewDot}
+            cx={chart.displayPoints[todayIndex].unit}
+            cy={chart.yScale(chart.displayPoints[todayIndex].percentage)}
+            r={6}
           />
         )}
-        <path className={styles.line} d={path} />
-        {data.map(
-          (point, index) =>
-            point.observed && (
-              <circle
-                key={point.day}
-                className={styles.dot}
-                cx={x(point.timestamp)}
-                cy={y(point.percentage)}
-                r={5}
-                tabIndex={0}
-                role="button"
-                aria-label={`${formatDate(point.day)}, progression observée ${point.percentage} %`}
-                onFocus={() => setActive(index)}
-                onBlur={() => setActive(null)}
-                onMouseEnter={() => setActive(index)}
-                onMouseLeave={() => setActive(null)}
-              />
-            ),
+        {selected && (
+          <>
+            <line
+              className={styles.focusLine}
+              x1={selected.unit}
+              x2={selected.unit}
+              y1={MARGIN.top}
+              y2={HEIGHT - MARGIN.bottom}
+            />
+            <circle
+              className={styles.focusDot}
+              cx={selected.unit}
+              cy={chart.yScale(selected.percentage)}
+              r={6}
+            />
+          </>
         )}
-        {labels.map((point, index) => (
+        {chart.labels.map((segment) => (
           <text
-            key={`${point.day}-${index}`}
+            key={segment.day}
             className={styles.axisLabel}
-            x={x(point.timestamp)}
+            x={chart.position(segment.day)}
             y={HEIGHT - 12}
-            textAnchor={index === 0 ? "start" : index === 2 ? "end" : "middle"}
+            textAnchor="middle"
           >
-            {dayLabel(point.day)}
+            {dayLabel(segment.day)}
           </text>
         ))}
       </svg>
@@ -135,8 +358,8 @@ export function ProgressChart({
           className={styles.tooltip}
           role="status"
           style={{
-            left: `${(x(selected.timestamp) / WIDTH) * 100}%`,
-            top: `${(y(selected.percentage) / HEIGHT) * 100}%`,
+            left: `${(selected.unit / WIDTH) * 100}%`,
+            top: `${(chart.yScale(selected.percentage) / HEIGHT) * 100}%`,
           }}
         >
           <strong>{selected.percentage} %</strong>
@@ -144,6 +367,8 @@ export function ProgressChart({
           {formatDate(selected.day)}
           <br />
           {selected.is_working_day ? "Jour ouvré" : "Jour non ouvré"}
+          <br />
+          {selected.observed ? "Saisie réelle" : "Valeur reportée"}
         </div>
       )}
       <details>
@@ -159,14 +384,25 @@ export function ProgressChart({
               </tr>
             </thead>
             <tbody>
-              {data.map((point) => (
-                <tr key={point.day}>
-                  <td>{formatDate(point.day)}</td>
-                  <td>{point.is_working_day ? "Ouvré" : "Non ouvré"}</td>
-                  <td>{point.percentage} %</td>
-                  <td>{point.observed ? "Saisie" : "Reportée"}</td>
-                </tr>
-              ))}
+              {chart.displayPoints.map((point, index) => {
+                const isPreview = chart.previewActive && point.day === today;
+                return (
+                  <tr key={point.day}>
+                    <td>{formatDate(point.day)}</td>
+                    <td>{point.is_working_day ? "Ouvré" : "Non ouvré"}</td>
+                    <td>
+                      {point.percentage} %{isPreview ? " (aperçu)" : ""}
+                    </td>
+                    <td>
+                      {isPreview
+                        ? `Non enregistré, valeur serveur ${chart.serverPoints[index].percentage} %`
+                        : point.observed
+                          ? "Saisie"
+                          : "Reportée"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

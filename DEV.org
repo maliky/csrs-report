@@ -58,18 +58,22 @@ La sequence operationnelle est donc strictement :
 Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=;
 =npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
 
-* <2026-07-22 mer.> Scenario guide React : modifier la progression et actualiser le graphique D3
-** Ou nous en sommes
+* <2026-07-22 mer.> Progression React, graphique D3 et navigation laterale
+** Realisation
 
-La branche =dev= contient deja le parcours complet de modification d'une progression dans la nouvelle interface :
+La branche =psiaka= reprend le parcours complet de modification d'une progression dans la nouvelle interface et le raccorde au graphique D3 :
 
 - =/app/taches/:taskId= affiche =TaskDetailPage=;
 - =ProgressForm= propose un curseur de 0 a 100 par pas de 5 et le bouton =Enregistrer la progression=;
 - =POST /api/v1/tasks/{id}/progress/= applique la session, CSRF, les permissions, les regles metier et la revision optimiste dans Django;
 - la reponse renvoie le detail actualise de la tache, y compris la progression, la charge, le statut, le fil d'activite et les points du graphique;
-- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la vue sans rechargement de page.
+- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la vue sans rechargement de page;
+- le deplacement du curseur affiche d'abord un apercu local distinct de la valeur serveur;
+- une baisse ou un point d'attention rend l'observation obligatoire dans React, puis Django applique encore la meme validation;
+- le graphique utilise D3 pour les echelles, la courbe en escalier et la selection du point le plus proche, tout en laissant React proprietaire du DOM;
+- la navigation horizontale est remplacee par une barre laterale gauche, retractable et persistante sur ordinateur, fermee par defaut sur telephone.
 
-Le graphique de =ProgressChart.tsx= est actuellement un SVG construit en React. Il n'utilise pas encore D3 et ne reprend pas toute la richesse du graphique classique produit par =renderProgressChart= dans =static/js/app.js=.
+Le composant =ProgressChart.tsx= reprend les jours non ouvres comprimes, les points pleins observes et creux reportes, les reperes debut, aujourd'hui et fin prevue, la zone de retard, la navigation clavier et la table textuelle alternative. Son apercu n'est jamais presente comme une donnee enregistree : apres sauvegarde, seule la nouvelle reponse =TaskDetail= de Django actualise le graphique et le fil d'activite.
 
 ** Scenario vertical a suivre
 
@@ -94,13 +98,12 @@ Exemple : un collaborateur ouvre =/app/taches/31=, fait passer la progression de
 6. Django renvoie un nouveau =TaskDetail=. La fonction =mutate= appelle =setData=; le pourcentage, la charge, le fil d'activite et le graphique sont alors recalcules depuis cette reponse serveur unique.
 7. Le graphique doit montrer un point plein =observed=true= a la date du jour et une courbe passant de 60 a 65 %, sans fabriquer d'observation intermediaire.
 
-** Exercice React et portage D3
+** Regles d'extension
 
-Le developpeur peut commencer par modifier le libelle, l'etat d'enregistrement ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas creer un second endpoint ni dupliquer =record_progress= dans React.
+Le developpeur peut modifier le libelle, l'etat d'enregistrement ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas creer un second endpoint ni dupliquer =record_progress= dans React.
 
-Pour integrer le graphique D3 classique dans la vue React :
+Pour etendre le graphique D3 dans la vue React :
 
-- ajouter =d3= et ses types aux dependances du frontend;
 - conserver React comme proprietaire du DOM et utiliser D3 pour les echelles, les calculs et le generateur de courbe, plutot que monter directement le renderer imperatif de =static/js/app.js= dans un =ref=;
 - porter la courbe en escalier =curveStepAfter=, les jours non ouvres comprimes, les points pleins observes et creux reportes, les reperes debut, aujourd'hui et fin prevue, ainsi que la zone rose de retard;
 - conserver l'infobulle, la navigation clavier et la table textuelle alternative deja attendues pour l'accessibilite;
@@ -113,12 +116,12 @@ Pour integrer le graphique D3 classique dans la vue React :
 - une ancienne =revision= recoit =409 stale_revision= et propose de recharger la tache avant de recommencer;
 - une tache cloturee ne peut plus recevoir de progression.
 
-** Criteres de verification du futur exercice
+** Criteres de verification
 
-- [ ] Le test React simule avec MSW le clic, le JSON envoye et la reponse actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
-- [ ] Le test du graphique couvre la courbe en escalier, les jours non ouvres, les points observes/reportes et l'alternative textuelle.
-- [ ] Le test API conserve les controles de permission, CSRF, validation et conflit de revision.
-- [ ] Playwright valide le parcours contre la vraie API aux largeurs telephone et ordinateur, avec mise a jour du graphique sans rechargement complet.
+- [X] Le test React simule avec MSW le clic, le JSON envoye et la reponse actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
+- [X] Le test du graphique couvre les donnees datees, les points observes/reportes, l'apercu et l'alternative textuelle.
+- [X] Le test API conserve les controles de permission, CSRF, validation et conflit de revision et verifie explicitement la regression.
+- [X] Selenium valide le bundle de production contre la vraie API aux largeurs telephone et ordinateur, avec mise a jour du graphique sans rechargement complet; le test API Django valide separement les regles serveur.
 
 * <2026-07-17 ven.> Parcours frontend React pour un etudiant
 ** Objectif et diagnostic
