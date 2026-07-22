@@ -13,10 +13,7 @@
 - la population pilote contient 45 comptes, 43 liens hierarchiques, 73 affectations et 42 propositions;
 - les comptes =dev=, =dg= et les autres alias pilotes sont actifs. Les mots de passe de demonstration restent uniquement dans le guide prive =/home/psiaka/CSRS_README.org= et ne doivent pas entrer dans Git.
 
-Une modification de documentation seule peut etre tiree dans le checkout sans
-reconstruire les conteneurs. Toute modification de code Python, de dependances,
-de migrations ou du frontend compile exige en revanche un redeploiement par
-l'administrateur avec =./scripts/deploy_preprod.sh=.
+Une modification de documentation seule peut etre tiree dans le checkout sans reconstruire les conteneurs. Toute modification de code Python, de dependances, de migrations ou du frontend compile exige en revanche un redeploiement par l'administrateur avec =./scripts/deploy_preprod.sh=.
 
 ** Avec quoi React interagit
 
@@ -31,40 +28,26 @@ navigateur React (/app/)
   -> base configuree (PostgreSQL en preproduction, SQLite local par defaut)
 #+end_example
 
-Django demeure la source de verite pour l'authentification, les autorisations,
-les regles metier, les revisions optimistes et la trace d'audit. React gere la
-presentation, la navigation et l'etat local de l'interface. En preproduction,
-la connexion, React et l'API partagent la meme origine; aucun JWT ni acces
-direct a la base n'est necessaire.
+Django demeure la source de verite pour l'authentification, les autorisations, les regles metier, les revisions optimistes et la trace d'audit. React gere la presentation, la navigation et l'etat local de l'interface. En preproduction, la connexion, React et l'API partagent la meme origine; aucun JWT ni acces direct a la base n'est necessaire.
 
 Deux parcours locaux sont supportes :
 
 1. =VITE_USE_MOCKS=true npm run dev= sous =frontend/= pour travailler vite sur les composants et les scenarios MSW, sans Django ni PostgreSQL;
 2. Django sur =127.0.0.1:8000= et Vite sur =127.0.0.1:5173= pour verifier les vraies sessions, permissions, ecritures et reponses de l'API.
 
-Le premier parcours ne valide pas les regles du serveur. Avant de proposer une
-modification metier, le developpeur doit donc utiliser le second parcours et
-executer les tests concernes.
+Le premier parcours ne valide pas les regles du serveur. Avant de proposer une modification metier, le developpeur doit donc utiliser le second parcours et executer les tests concernes.
 
 ** Flux Git et mise en preproduction
 
-Le developpeur clone le depot sur sa machine, suit =origin/psiaka=, teste,
-committe puis pousse sa branche =psiaka= vers =/home/jil/git/csrs_report.git=.
-Il ne pousse pas directement sur =dev=. Il transmet ensuite a l'administrateur :
+Le developpeur clone le depot sur sa machine, suit =origin/psiaka=, teste, committe puis pousse sa branche =psiaka= vers =/home/jil/git/csrs_report.git=. Il ne pousse pas directement sur =dev=. Il transmet ensuite a l'administrateur :
 
 - le hash ou le message du commit a deployer;
 - les migrations ou nouvelles variables d'environnement attendues;
 - les tests et controles executes;
 - les points particuliers a verifier sur =https://psiaka.koba.sarl/=.
 
-Le checkout =/srv/apps/psiaka/app= suit lui aussi la branche =psiaka=. Le pull ne
-modifie pas les conteneurs deja en cours. L'administrateur controle le diff,
-sauvegarde la base si necessaire, lance le script de deploiement, puis verifie
-la sante Compose, la connexion, =/app/= et les journaux. Apres validation, il
-fusionne les changements de =psiaka= vers =dev=. Les nouveaux changements de
-=dev= sont reintegres dans =psiaka= avec un merge de =origin/dev=. Cette
-separation permet au developpeur de travailler sans lui accorder les privileges
-Docker de l'hote.
+
+Le checkout =/srv/apps/psiaka/app= suit lui aussi la branche =psiaka=. Le pull ne modifie pas les conteneurs deja en cours. L'administrateur controle le diff, sauvegarde la base si necessaire, lance le script de deploiement, puis verifie la sante Compose, la connexion, =/app/= et les journaux. Apres validation, il fusionne les changements de =psiaka= vers =dev=. Les nouveaux changements de =dev= sont reintegres dans =psiaka= avec un merge de =origin/dev=. 
 
 La sequence operationnelle est donc strictement :
 
@@ -72,44 +55,29 @@ La sequence operationnelle est donc strictement :
 2. le checkout VPS tire ce commit avec =git pull --ff-only=;
 3. apres revue, l'administrateur lance =./scripts/deploy_preprod.sh=.
 
-Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les
-couches inchangees. Une modification de =frontend/= relance =npm run build=;
-=npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le
-bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur
-web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un
-conteneur existant n'est requise. Un changement de documentation seul ne
-necessite pas de redeploiement.
+Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=;
+=npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
 
 * <2026-07-22 mer.> Scenario guide React : modifier la progression et actualiser le graphique D3
 ** Ou nous en sommes
 
-La branche =dev= contient deja le parcours complet de modification d'une
-progression dans la nouvelle interface :
+La branche =dev= contient deja le parcours complet de modification d'une progression dans la nouvelle interface :
 
 - =/app/taches/:taskId= affiche =TaskDetailPage=;
-- =ProgressForm= propose un curseur de 0 a 100 par pas de 5 et le bouton
-  =Enregistrer la progression=;
-- =POST /api/v1/tasks/{id}/progress/= applique la session, CSRF, les permissions,
-  les regles metier et la revision optimiste dans Django;
-- la reponse renvoie le detail actualise de la tache, y compris la progression,
-  la charge, le statut, le fil d'activite et les points du graphique;
-- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la
-  vue sans rechargement de page.
+- =ProgressForm= propose un curseur de 0 a 100 par pas de 5 et le bouton =Enregistrer la progression=;
+- =POST /api/v1/tasks/{id}/progress/= applique la session, CSRF, les permissions, les regles metier et la revision optimiste dans Django;
+- la reponse renvoie le detail actualise de la tache, y compris la progression, la charge, le statut, le fil d'activite et les points du graphique;
+- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la vue sans rechargement de page.
 
-Le graphique de =ProgressChart.tsx= est actuellement un SVG construit en React.
-Il n'utilise pas encore D3 et ne reprend pas toute la richesse du graphique
-classique produit par =renderProgressChart= dans =static/js/app.js=.
+Le graphique de =ProgressChart.tsx= est actuellement un SVG construit en React. Il n'utilise pas encore D3 et ne reprend pas toute la richesse du graphique classique produit par =renderProgressChart= dans =static/js/app.js=.
 
 ** Scenario vertical a suivre
 
-Exemple : un collaborateur ouvre =/app/taches/31=, fait passer la progression de
-60 a 65 %, ajoute une observation, puis clique sur =Enregistrer la progression=.
+Exemple : un collaborateur ouvre =/app/taches/31=, fait passer la progression de 60 a 65 %, ajoute une observation, puis clique sur =Enregistrer la progression=.
 
 1. =TaskDetailPage= charge =GET /api/v1/tasks/31/= avec =useApi=.
-2. La capacite =update_progress= renvoyee par Django determine si le formulaire
-   React est affiche; elle ne remplace jamais le controle serveur.
-3. =ProgressForm= garde la valeur du curseur dans son etat local puis construit
-   la requete suivante :
+2. La capacite =update_progress= renvoyee par Django determine si le formulaire React est affiche; elle ne remplace jamais le controle serveur.
+3. =ProgressForm= garde la valeur du curseur dans son etat local puis construit la requete suivante :
 
 #+begin_src json
 {
@@ -121,56 +89,36 @@ Exemple : un collaborateur ouvre =/app/taches/31=, fait passer la progression de
 }
 #+end_src
 
-4. =apiFetch= envoie la session et le jeton CSRF a
-   =POST /api/v1/tasks/31/progress/=.
-5. =TaskProgressView= valide le JSON puis appelle =record_progress=, qui conserve
-   l'audit, invalide la projection et incremente la revision.
-6. Django renvoie un nouveau =TaskDetail=. La fonction =mutate= appelle
-   =setData=; le pourcentage, la charge, le fil d'activite et le graphique sont
-   alors recalcules depuis cette reponse serveur unique.
-7. Le graphique doit montrer un point plein =observed=true= a la date du jour et
-   une courbe passant de 60 a 65 %, sans fabriquer d'observation intermediaire.
+4. =apiFetch= envoie la session et le jeton CSRF a =POST /api/v1/tasks/31/progress/=.
+5. =TaskProgressView= valide le JSON puis appelle =record_progress=, qui conserve l'audit, invalide la projection et incremente la revision.
+6. Django renvoie un nouveau =TaskDetail=. La fonction =mutate= appelle =setData=; le pourcentage, la charge, le fil d'activite et le graphique sont alors recalcules depuis cette reponse serveur unique.
+7. Le graphique doit montrer un point plein =observed=true= a la date du jour et une courbe passant de 60 a 65 %, sans fabriquer d'observation intermediaire.
 
 ** Exercice React et portage D3
 
-Le developpeur peut commencer par modifier le libelle, l'etat d'enregistrement
-ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans
-les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas
-creer un second endpoint ni dupliquer =record_progress= dans React.
+Le developpeur peut commencer par modifier le libelle, l'etat d'enregistrement ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas creer un second endpoint ni dupliquer =record_progress= dans React.
 
 Pour integrer le graphique D3 classique dans la vue React :
 
 - ajouter =d3= et ses types aux dependances du frontend;
-- conserver React comme proprietaire du DOM et utiliser D3 pour les echelles,
-  les calculs et le generateur de courbe, plutot que monter directement le
-  renderer imperatif de =static/js/app.js= dans un =ref=;
-- porter la courbe en escalier =curveStepAfter=, les jours non ouvres comprimes,
-  les points pleins observes et creux reportes, les reperes debut, aujourd'hui
-  et fin prevue, ainsi que la zone rose de retard;
-- conserver l'infobulle, la navigation clavier et la table textuelle alternative
-  deja attendues pour l'accessibilite;
+- conserver React comme proprietaire du DOM et utiliser D3 pour les echelles, les calculs et le generateur de courbe, plutot que monter directement le renderer imperatif de =static/js/app.js= dans un =ref=;
+- porter la courbe en escalier =curveStepAfter=, les jours non ouvres comprimes, les points pleins observes et creux reportes, les reperes debut, aujourd'hui et fin prevue, ainsi que la zone rose de retard;
+- conserver l'infobulle, la navigation clavier et la table textuelle alternative deja attendues pour l'accessibilite;
 - alimenter exclusivement le composant avec =data.chart= renvoye par Django.
 
 ** Erreurs a observer
 
-- sans =update_progress=, le formulaire est masque et le serveur refuse tout de
-  meme une requete forcee;
-- une regression ou un point d'attention sans note recoit une erreur de
-  validation affichee pres du formulaire;
-- une ancienne =revision= recoit =409 stale_revision= et propose de recharger la
-  tache avant de recommencer;
+- sans =update_progress=, le formulaire est masque et le serveur refuse tout de meme une requete forcee;
+- une regression ou un point d'attention sans note recoit une erreur de validation affichee pres du formulaire;
+- une ancienne =revision= recoit =409 stale_revision= et propose de recharger la tache avant de recommencer;
 - une tache cloturee ne peut plus recevoir de progression.
 
 ** Criteres de verification du futur exercice
 
-- [ ] Le test React simule avec MSW le clic, le JSON envoye et la reponse
-  actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
-- [ ] Le test du graphique couvre la courbe en escalier, les jours non ouvres,
-  les points observes/reportes et l'alternative textuelle.
-- [ ] Le test API conserve les controles de permission, CSRF, validation et
-  conflit de revision.
-- [ ] Playwright valide le parcours contre la vraie API aux largeurs telephone
-  et ordinateur, avec mise a jour du graphique sans rechargement complet.
+- [ ] Le test React simule avec MSW le clic, le JSON envoye et la reponse actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
+- [ ] Le test du graphique couvre la courbe en escalier, les jours non ouvres, les points observes/reportes et l'alternative textuelle.
+- [ ] Le test API conserve les controles de permission, CSRF, validation et conflit de revision.
+- [ ] Playwright valide le parcours contre la vraie API aux largeurs telephone et ordinateur, avec mise a jour du graphique sans rechargement complet.
 
 * <2026-07-17 ven.> Parcours frontend React pour un etudiant
 ** Objectif et diagnostic
@@ -186,40 +134,21 @@ La decision est donc de preparer une migration progressive, et non de reecrire i
 
 ** Realisation du <2026-07-17 ven.>
 
-Le plan a ete realise au-dela du premier dashboard en lecture seule, tout en
-conservant une adoption progressive et reversible :
+Le plan a ete realise au-dela du premier dashboard en lecture seule, tout en conservant une adoption progressive et reversible :
 
-- l'interface React couvre le dashboard, le detail, la creation et la
-  modification des taches, les progressions, les observations, les transitions,
-  les propositions et l'equipe;
-- elle est montee sous =/app/=; l'interface Django reste la destination de
-  connexion et demeure accessible a la racine;
-- l'administration Django reste la surface de gestion des comptes, services,
-  roles et delegations;
-- l'API =/api/v1/= applique les sessions, CSRF et autorisations Django et renvoie
-  un format d'erreur stable;
-- =TaskAssignment= et =TaskProposal= possedent une revision incrementale. Une
-  ecriture issue d'une ancienne page recoit =409 stale_revision= au lieu
-  d'ecraser une modification plus recente;
-- React 19, TypeScript strict, Vite 7, React Router 7, Storybook 9, MSW 2,
-  Vitest, Testing Library, Playwright et axe sont installes sous =frontend/=;
-- le graphique React utilise les dates et lignes journalieres issues de
-  l'historique serveur, distingue les jours ouvres et expose une table
-  alternative navigable;
-- l'arbre d'equipe reste replie. Son premier appel ne calcule aucun graphique;
-  le detail des taches est charge seulement lorsque le collaborateur est ouvert;
-- le Dockerfile multi-etape epingle Node 24.18.0, compile React puis remet les
-  fichiers produits a WhiteNoise. Aucune modification Nginx n'est necessaire.
+- l'interface React couvre le dashboard, le detail, la creation et la modification des taches, les progressions, les observations, les transitions, les propositions et l'equipe;
+- elle est montee sous =/app/=; l'interface Django reste la destination de connexion et demeure accessible a la racine;
+- l'administration Django reste la surface de gestion des comptes, services, roles et delegations;
+- l'API =/api/v1/= applique les sessions, CSRF et autorisations Django et renvoie un format d'erreur stable;
+- =TaskAssignment= et =TaskProposal= possedent une revision incrementale. Une ecriture issue d'une ancienne page recoit =409 stale_revision= au lieu d'ecraser une modification plus recente;
+- React 19, TypeScript strict, Vite 7, React Router 7, Storybook 9, MSW 2, Vitest, Testing Library, Playwright et axe sont installes sous =frontend/=;
+- le graphique React utilise les dates et lignes journalieres issues de l'historique serveur, distingue les jours ouvres et expose une table alternative navigable;
+- l'arbre d'equipe reste replie. Son premier appel ne calcule aucun graphique; le detail des taches est charge seulement lorsque le collaborateur est ouvert;
+- le Dockerfile multi-etape epingle Node 24.18.0, compile React puis remet les fichiers produits a WhiteNoise. Aucune modification Nginx n'est necessaire.
 
-Les donnees MSW sont fictives, credibles et couvrent plusieurs semaines avec
-des observations propres a chaque situation. Les memes handlers alimentent les
-stories et les tests de composants. Le bundle de production a aussi ete teste
-contre la vraie API Django avec Chromium aux largeurs 360 et 1440 pixels; l'audit
-axe WCAG 2 A/AA ne signale aucune violation serieuse ou critique.
+Les donnees MSW sont fictives, credibles et couvrent plusieurs semaines avec des observations propres a chaque situation. Les memes handlers alimentent les stories et les tests de composants. Le bundle de production a aussi ete teste contre la vraie API Django avec Chromium aux largeurs 360 et 1440 pixels; l'audit axe WCAG 2 A/AA ne signale aucune violation serieuse ou critique.
 
-Questions restantes non bloquantes : aucune page Django n'est retiree dans ce
-lot. La suppression eventuelle de l'ancienne interface devra attendre une revue
-utilisateur explicite de la parite fonctionnelle.
+Questions restantes non bloquantes : aucune page Django n'est retiree dans ce lot. La suppression eventuelle de l'ancienne interface devra attendre une revue utilisateur explicite de la parite fonctionnelle.
 
 ** Parcours de lecture avant de coder
 
@@ -505,9 +434,7 @@ La synchronisation du <2026-07-17 ven. 06:27> attribue =UNIT_MANAGER= avec la po
 - Dans proposition du dg supprimer le bouton nouvlles proposition.
 - Dans proposition en general, nommer le boutton 'proposer une tache'
 
-nous avons deux types de graphique pour regarder la progression. la courbe et la barre.
-dans mes taches et dans taches utiliser la courbe avec la legende. retirer 4 saisies historiques. Les points pleins sont les saisies réelles; les points creux reportent la dernière valeur connue.' mettre chart-dates avant task-history-chart
-dans mon equipe
+nous avons deux types de graphique pour regarder la progression. la courbe et la barre. dans mes taches et dans taches utiliser la courbe avec la legende. retirer 4 saisies historiques. Les points pleins sont les saisies réelles; les points creux reportent la dernière valeur connue.' mettre chart-dates avant task-history-chart dans mon equipe
 
 - dans equipes supprimer les boutons 'supprimer toutes les taches' et les statics general sur toutes les taches.
 
@@ -897,8 +824,7 @@ Trouver des textes different pour les Observations. deux taches different n ont 
 
 vue mois ok mais ecrit le nom du mois plutot que le numero
 
-un tache terminee qui dont le taux de realisation est reduit doit devenir 'en cours' et prendre le style des autres cartes en cours
-en tant que dg, j ai reduit le % de progression et j ai du mettre une observation. tres bien, masi ensuite je ne vois pas cette observation dans un historique. le lieu ou vont les observation du jour nest pas clair.
+un tache terminee qui dont le taux de realisation est reduit doit devenir 'en cours' et prendre le style des autres cartes en cours en tant que dg, j ai reduit le % de progression et j ai du mettre une observation. tres bien, masi ensuite je ne vois pas cette observation dans un historique. le lieu ou vont les observation du jour nest pas clair.
 
 Au niveau de lq modification oou creation de tache, indique par des asterisque rouge les champs obligatoires et assurer que l un ou l qutre de echeance / charge estimee est renseigner, modifier l un doit modifier lautre. pour eviter une incoherence . ce lien entre les deux champs devrait meme etre au niveau DB/django.  debut + charge estime = echeance.
 
@@ -910,8 +836,7 @@ dans equipe plutot que d avoir des colonnes pour moyenne mediane reste cumule re
 
 Au niveau de la tache il faut remplacer la barre d'avancement par le graphique qvec lq ligne montant de 0 a 100%  elle doit etre aussi celle utilise poru montrer la collaboration des equipe.
 
-il me semble que les graphique presenter ne sont pas lies au donnee historique d evolution.  cq doit etre le cas.  le graphique ne fqit que presenter l historique des enregistrements. Il ne s agit pas de faire semblant.  la meilleur manier de faire et de generer a partir de l historique un fichier json qui contient une ligne par jour ouvrable avec pour chaque jour, date de debut de la tache, date du jour, echeance.
-A partir de cela on pourra calculer le % de progression, le nombre de jour ecouler, nombre de jour restant, ou de retartd dans le cas du depassement de l echeance.
+il me semble que les graphique presenter ne sont pas lies au donnee historique d evolution.  cq doit etre le cas.  le graphique ne fqit que presenter l historique des enregistrements. Il ne s agit pas de faire semblant.  la meilleur manier de faire et de generer a partir de l historique un fichier json qui contient une ligne par jour ouvrable avec pour chaque jour, date de debut de la tache, date du jour, echeance. A partir de cela on pourra calculer le % de progression, le nombre de jour ecouler, nombre de jour restant, ou de retartd dans le cas du depassement de l echeance.
 
 sur le graphique une ligne verticale en pointillee indique le jour courant, un ligne plein l echeance. seulement si le jour courant est plus grand que l echeance et la tache non terminee doit on mettre la partit echance jour courant en rouge/rose.   utiliser d3.js pour les graphique ou vega.  add to DEV.org an example of json for me to test the graphique crafting in observablehq.com
 
@@ -934,100 +859,66 @@ Au niveau de la navigation. le n+3 doit pouvoir voir sans modifier les taches de
    - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte.
 Pour l instant il s agit d une duree calendaire excluse sur une tache.
 
-2. [x] Lors de la creation, faut-il exiger =debut + charge= et calculer l'echeance, ou accepter =debut + echeance= et calculer la charge ?
-   Les deux sont acceptable
+2. [x] Lors de la creation, faut-il exiger =debut + charge= et calculer l'echeance, ou accepter =debut + echeance= et calculer la charge ? Les deux sont acceptable
 3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ?
 update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
 
 4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ?
 lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
-5. [x] Le calcul doit-il exclure samedi, dimanche et les jours feries configures dans =Holiday= ?
-   oui, seulement les jours ouvrables.  utiliser la calendrier ivoirien officiel, importer. le calendrier de reference doit pouvoir etre changer la l admin. il doit pouvoir ajouter ou retirer des jours ouvrable.
-6. [x] Une charge decimale comme =2,5 jours= reste-t-elle autorisee ? Si oui, l'echeance doit-elle etre arrondie au jour ouvrable superieur ?
-   oui.
-7. [x] La coherence doit-elle etre garantie par le modele Django et les services transactionnels, avec une contrainte de base seulement sur les invariants exprimables en SQL ? Une egalite utilisant les jours feries ne peut pas etre une simple =CHECK CONSTRAINT= PostgreSQL.
-   je voyais la contraite garantie au niveau du model djanog effectivement.
+5. [x] Le calcul doit-il exclure samedi, dimanche et les jours feries configures dans =Holiday= ? oui, seulement les jours ouvrables.  utiliser la calendrier ivoirien officiel, importer. le calendrier de reference doit pouvoir etre changer la l admin. il doit pouvoir ajouter ou retirer des jours ouvrable.
+6. [x] Une charge decimale comme =2,5 jours= reste-t-elle autorisee ? Si oui, l'echeance doit-elle etre arrondie au jour ouvrable superieur ? oui.
+7. [x] La coherence doit-elle etre garantie par le modele Django et les services transactionnels, avec une contrainte de base seulement sur les invariants exprimables en SQL ? Une egalite utilisant les jours feries ne peut pas etre une simple =CHECK CONSTRAINT= PostgreSQL. je voyais la contraite garantie au niveau du model djanog effectivement.
 
-8. [x] =Action institutionnelle= doit-il seulement etre renomme =Code normalise= dans l'interface, ou faut-il creer un vrai modele de code/categorie de tache distinct des plans institutionnels ?
-   garder cela pour l instant.
-9. [x] Une tache peut-elle conserver une action institutionnelle et posseder en plus un code normalise, ou le nouveau code remplace-t-il completement ce rattachement ?
-   une tache a un code unique normalize ratacher a une action institutionelle.  explique moi ce que tu veux clarifier ici ?
+8. [x] =Action institutionnelle= doit-il seulement etre renomme =Code normalise= dans l'interface, ou faut-il creer un vrai modele de code/categorie de tache distinct des plans institutionnels ? garder cela pour l instant.
+9. [x] Une tache peut-elle conserver une action institutionnelle et posseder en plus un code normalise, ou le nouveau code remplace-t-il completement ce rattachement ? une tache a un code unique normalize ratacher a une action institutionelle.  explique moi ce que tu veux clarifier ici ?
 
 10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ?
 explique moi ce que tu veux clarifier ici ?
 
 *** Etats, reouverture et observations
 
-11. [x] Lorsqu'une tache terminee repasse sous 100 %, faut-il immediatement la remettre =En cours=, vider =completed_at= et conserver l'ancienne validation uniquement dans l'audit ?
-    remettre en cours
-12. [x] Cette reouverture doit-elle creer automatiquement un evenement visible dans le fil, par exemple =Tache rouverte de 100 % a 80 %= avec l'auteur et la justification ?
-    oui. cela peut etre une observation.
-13. [x] Le responsable doit-il recevoir une notification lors de la reouverture d'une tache terminee ?
-    oui.
-14. [x] Souhaitez-vous un fil d'activite unique melangeant progressions, notes du jour, commentaires, validations, reprises et changements d'echeance ?
-    oui
-15. [x] Si oui, faut-il introduire un modele immuable =TaskActivity= comme source du fil, ou construire le fil a la lecture a partir de =ProgressEntry=, =TaskComment= et des tables d'audit existantes ?
-    ca me semble correct, mais propose des alternatives
-16. [x] Une correction de la progression du meme jour remplace-t-elle la valeur visible de ce jour, tout en gardant les versions precedentes uniquement dans l'audit, ou chaque correction doit-elle apparaitre dans le fil utilisateur ?
-    elle la remplace.  quand tu dit dans l audit je comprend dans la table history de django qui track to les changement en bd is that correct ?
+11. [x] Lorsqu'une tache terminee repasse sous 100 %, faut-il immediatement la remettre =En cours=, vider =completed_at= et conserver l'ancienne validation uniquement dans l'audit ? remettre en cours
+12. [x] Cette reouverture doit-elle creer automatiquement un evenement visible dans le fil, par exemple =Tache rouverte de 100 % a 80 %= avec l'auteur et la justification ? oui. cela peut etre une observation.
+13. [x] Le responsable doit-il recevoir une notification lors de la reouverture d'une tache terminee ? oui.
+14. [x] Souhaitez-vous un fil d'activite unique melangeant progressions, notes du jour, commentaires, validations, reprises et changements d'echeance ? oui
+15. [x] Si oui, faut-il introduire un modele immuable =TaskActivity= comme source du fil, ou construire le fil a la lecture a partir de =ProgressEntry=, =TaskComment= et des tables d'audit existantes ? ca me semble correct, mais propose des alternatives
+16. [x] Une correction de la progression du meme jour remplace-t-elle la valeur visible de ce jour, tout en gardant les versions precedentes uniquement dans l'audit, ou chaque correction doit-elle apparaitre dans le fil utilisateur ? elle la remplace.  quand tu dit dans l audit je comprend dans la table history de django qui track to les changement en bd is that correct ?
 17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ?
 dans le fil d'activie uniquement
 
 *** Historique journalier et JSON des graphiques
 
-18. [x] Le JSON doit-il etre genere a la demande par une route authentifiee, par exemple =/taches/31/progression.json=, plutot que stocke sous forme de fichier en base ou sur disque ?
-    generer
-19. [x] Cette route JSON applique-t-elle exactement les memes permissions de lecture que la page de detail de la tache ?
-    oui
-20. [x] Pour chaque jour ouvrable sans saisie, faut-il reporter le dernier pourcentage connu avec =observed: false=, plutot que creer un faux enregistrement de progression ?
-    oui
-21. [x] Avant la premiere saisie, le pourcentage journalier vaut-il explicitement 0 % ?
-    oui
-22. [x] Apres l'achevement valide, faut-il continuer les lignes journalieres a 100 % jusqu'a la fin de la periode demandee, ou arreter la serie a =completed_at= ?
-    arreter la serie a completed at
-23. [x] La courbe doit-elle etre en escalier, horizontale entre deux observations et verticale le jour d'une nouvelle saisie, afin de ne pas inventer une progression intermediaire ?
-    non elle peut etre lissee mais graphiquement il faut des point (dot) journalier
-24. [x] Le point synthetique actuellement ajoute a la date de consultation doit-il disparaitre au profit de la serie journaliere portant clairement =observed: false= ?
-    Je ne comprend pas explique.
-25. [x] Le JSON Observable doit-il contenir les notes et l'alias de l'auteur, ou uniquement les dates, pourcentages, charge, echeance et indicateurs de retard afin de minimiser les donnees exposees ?
-    uniquement les donnees utile au graphique, pas de notes ni d auteur
-26. [x] Le schema minimal suivant convient-il : =task_id=, =start_date=, =day=, =due_date=, =planned_work_days=, =elapsed_work_days=, =remaining_schedule_days=, =overdue_days=, =percentage= et =observed= ?
-    yes
-27. [x] Pour une consultation historique d'un mois passe, la ligne verticale =jour courant= represente-t-elle la vraie date du jour ou la fin de la periode consultee ?
-    lorsque la tache est terminer, il ne faut pas reprenseter le jour courant sur le graphique
+18. [x] Le JSON doit-il etre genere a la demande par une route authentifiee, par exemple =/taches/31/progression.json=, plutot que stocke sous forme de fichier en base ou sur disque ? generer
+19. [x] Cette route JSON applique-t-elle exactement les memes permissions de lecture que la page de detail de la tache ? oui
+20. [x] Pour chaque jour ouvrable sans saisie, faut-il reporter le dernier pourcentage connu avec =observed: false=, plutot que creer un faux enregistrement de progression ? oui
+21. [x] Avant la premiere saisie, le pourcentage journalier vaut-il explicitement 0 % ? oui
+22. [x] Apres l'achevement valide, faut-il continuer les lignes journalieres a 100 % jusqu'a la fin de la periode demandee, ou arreter la serie a =completed_at= ? arreter la serie a completed at
+23. [x] La courbe doit-elle etre en escalier, horizontale entre deux observations et verticale le jour d'une nouvelle saisie, afin de ne pas inventer une progression intermediaire ? non elle peut etre lissee mais graphiquement il faut des point (dot) journalier
+24. [x] Le point synthetique actuellement ajoute a la date de consultation doit-il disparaitre au profit de la serie journaliere portant clairement =observed: false= ? Je ne comprend pas explique.
+25. [x] Le JSON Observable doit-il contenir les notes et l'alias de l'auteur, ou uniquement les dates, pourcentages, charge, echeance et indicateurs de retard afin de minimiser les donnees exposees ? uniquement les donnees utile au graphique, pas de notes ni d auteur
+26. [x] Le schema minimal suivant convient-il : =task_id=, =start_date=, =day=, =due_date=, =planned_work_days=, =elapsed_work_days=, =remaining_schedule_days=, =overdue_days=, =percentage= et =observed= ? yes
+27. [x] Pour une consultation historique d'un mois passe, la ligne verticale =jour courant= represente-t-elle la vraie date du jour ou la fin de la periode consultee ? lorsque la tache est terminer, il ne faut pas reprenseter le jour courant sur le graphique
 28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ?
 non
 
 *** Navigation hierarchique
 
-29. [x] Dans =/equipe=, faut-il afficher tous les descendants dans une seule table, ou garder les collaborateurs directs puis permettre de deployer chaque sous-equipe ?
-    deployer chaque sous equipe
-30. [x] Pour =dg=, la structure souhaitee est-elle =daf -> finances / kpon -> collaborateurs= et =drv -> formation / valorisation -> collaborateurs=, avec chaque personne et chaque tache ouvrables par lien ?
-    oui
-31. [x] La profondeur maximale reste-t-elle strictement limitee a trois niveaux descendants, comme dans la permission actuelle ?
-    non, elle est uniquement limite par la profondeur de l organigrame
+29. [x] Dans =/equipe=, faut-il afficher tous les descendants dans une seule table, ou garder les collaborateurs directs puis permettre de deployer chaque sous-equipe ? deployer chaque sous equipe
+30. [x] Pour =dg=, la structure souhaitee est-elle =daf -> finances / kpon -> collaborateurs= et =drv -> formation / valorisation -> collaborateurs=, avec chaque personne et chaque tache ouvrables par lien ? oui
+31. [x] La profondeur maximale reste-t-elle strictement limitee a trois niveaux descendants, comme dans la permission actuelle ? non, elle est uniquement limite par la profondeur de l organigrame
 
-32. [x] Un responsable indirect voit-il les observations et l'historique complet des progressions, ou seulement les pourcentages, charges et echeances ?
-    historique complet
-33. [x] Les actions de modification doivent-elles rester reservees au collaborateur, au responsable principal direct et a l'administrateur, meme lorsque le N+2 ou N+3 consulte le detail ?
-    oui
+32. [x] Un responsable indirect voit-il les observations et l'historique complet des progressions, ou seulement les pourcentages, charges et echeances ? historique complet
+33. [x] Les actions de modification doivent-elles rester reservees au collaborateur, au responsable principal direct et a l'administrateur, meme lorsque le N+2 ou N+3 consulte le detail ? oui
 
 *** Realisme des donnees d'illustration
 
-34. [x] Faut-il rediger un vocabulaire propre a chaque domaine : direction, finances, informatique, formation, bibliotheque, communication, partenariats et entretien ?
-    oui, il faut aussi construire exauhstivement tout l organigrame du csrs qui doit probablement etre visible en ligne.  en y ajoutant probablement du detail comme le jardinier.
-35. [x] Combien d'observations par tache faut-il viser : deux a quatre echanges courts, ou un historique plus long sur les taches couvrant plusieurs mois ?
-    deux a quatre echanges courts
-36. [x] Les observations doivent-elles alterner de maniere credible entre le collaborateur et son responsable, avec question, reponse, blocage, resolution et validation selon le cas ?
-    oui
-37. [x] Souhaitez-vous quelques fautes legeres et styles differents pour rendre les auteurs plausibles, ou un francais institutionnel uniforme ?
-    simule des fautes commune en francais ivoirien ou pour une personne ecrivant avec un telephone,
-38. [x] Les textes doivent-ils etre deterministes pour conserver l'idempotence et faciliter les captures comparables entre deux chargements ?
-    oui
-39. [x] Les observations existantes saisies manuellement doivent-elles toujours etre preservees, le chargeur ne modifiant que les lignes qu'il identifie comme donnees d'illustration ?
-    non
-40. [x] Faut-il garantir dans les donnees chargees au moins un exemple complet par cas : progression normale, stagnation, regression justifiee, blocage resolu, retard, reouverture apres validation et achevement anticipe ?
-    oui
+34. [x] Faut-il rediger un vocabulaire propre a chaque domaine : direction, finances, informatique, formation, bibliotheque, communication, partenariats et entretien ? oui, il faut aussi construire exauhstivement tout l organigrame du csrs qui doit probablement etre visible en ligne.  en y ajoutant probablement du detail comme le jardinier.
+35. [x] Combien d'observations par tache faut-il viser : deux a quatre echanges courts, ou un historique plus long sur les taches couvrant plusieurs mois ? deux a quatre echanges courts
+36. [x] Les observations doivent-elles alterner de maniere credible entre le collaborateur et son responsable, avec question, reponse, blocage, resolution et validation selon le cas ? oui
+37. [x] Souhaitez-vous quelques fautes legeres et styles differents pour rendre les auteurs plausibles, ou un francais institutionnel uniforme ? simule des fautes commune en francais ivoirien ou pour une personne ecrivant avec un telephone,
+38. [x] Les textes doivent-ils etre deterministes pour conserver l'idempotence et faciliter les captures comparables entre deux chargements ? oui
+39. [x] Les observations existantes saisies manuellement doivent-elles toujours etre preservees, le chargeur ne modifiant que les lignes qu'il identifie comme donnees d'illustration ? non
+40. [x] Faut-il garantir dans les donnees chargees au moins un exemple complet par cas : progression normale, stagnation, regression justifiee, blocage resolu, retard, reouverture apres validation et achevement anticipe ? oui
 
 ** Decisions complementaires appliquees
 
@@ -1176,13 +1067,9 @@ Le responsable principal peut affecter, modifier, valider et clore les taches de
 
 * DONE <2026-07-11 sam. 18:47> UI
 CLOSED: [2026-07-12 dim. 04:23]
-lets imporve the ui. for the dg no need to have (je suis bloaquer). Expliquer what is decision du responsable pour le DG ? le titre doit etre plus parlant. il faut que ce soit slef referencing at the DG level. les deux  champs  observation s sur la page taches ne semble pas correctes. un seul devrait suffir non ?  sur la page home, la semain en cours n est pas assez visible.  l afficher entre les bouton de navigation. les echeances aussine sont pas tres visible.   pour la task card mettre en premier le titre, puis pastille /tag meme ligne que % realisation puis charge et echeances.  integred dans un graphic plus succing les info charege total, what is done upt to now and what is left. can be the same bar but with d3js axis indicateing the unit day, then a label for the days done, above the remaining (not as a label) the remaining. and at the end the total days... this should be readble in less space with less text.  using good hci principles.  then we have observation (not recentes they could be any time obseravations).  I do not see a different between week and month. the difference should be notable.
-dans /equipe
-discuss the possibility of small multiple to drill down direclty to the task of of each of the collaborators. the idea is to see in one spot the number of task for each collaborator and the degree of finishion.
+lets imporve the ui. for the dg no need to have (je suis bloaquer). Expliquer what is decision du responsable pour le DG ? le titre doit etre plus parlant. il faut que ce soit slef referencing at the DG level. les deux  champs  observation s sur la page taches ne semble pas correctes. un seul devrait suffir non ?  sur la page home, la semain en cours n est pas assez visible.  l afficher entre les bouton de navigation. les echeances aussine sont pas tres visible.   pour la task card mettre en premier le titre, puis pastille /tag meme ligne que % realisation puis charge et echeances.  integred dans un graphic plus succing les info charege total, what is done upt to now and what is left. can be the same bar but with d3js axis indicateing the unit day, then a label for the days done, above the remaining (not as a label) the remaining. and at the end the total days... this should be readble in less space with less text.  using good hci principles.  then we have observation (not recentes they could be any time obseravations).  I do not see a different between week and month. the difference should be notable. dans /equipe discuss the possibility of small multiple to drill down direclty to the task of of each of the collaborators. the idea is to see in one spot the number of task for each collaborator and the degree of finishion.
 
-I think the best is a stacked bar, where each part length is proportional to the task and the color proportional to the % of finition.  transparent 0% 100% opacity for 100% finished.
-on hover we have the name of the task and detail about it.
-the statis are still good, median reste cumule rest moyen..
+I think the best is a stacked bar, where each part length is proportional to the task and the color proportional to the % of finition.  transparent 0% 100% opacity for 100% finished. on hover we have the name of the task and detail about it. the statis are still good, median reste cumule rest moyen..
 
 remove the exceptions colum.
 
@@ -1194,10 +1081,8 @@ I am not convinced byt the +5pts (or it should be clarified somewhere that it is
 
 *** tache personnelle de la direction generale
 
-1. [x] pour une tache que =dg= s'est affectee, faut-il supprimer uniquement le champ =je suis bloque= ou remplacer ce signalement par une action plus adaptee, par exemple =signaler un point d'attention= ?
-   signaler un point d attention
-2. [x] lorsque =dg= est a la fois collaborateur et responsable, le bloc =decision du responsable= doit-il devenir =cloture de ma tache=, avec les actions =confirmer l'achevement= et =poursuivre le travail= ?
-   yes,
+1. [x] pour une tache que =dg= s'est affectee, faut-il supprimer uniquement le champ =je suis bloque= ou remplacer ce signalement par une action plus adaptee, par exemple =signaler un point d'attention= ? signaler un point d attention
+2. [x] lorsque =dg= est a la fois collaborateur et responsable, le bloc =decision du responsable= doit-il devenir =cloture de ma tache=, avec les actions =confirmer l'achevement= et =poursuivre le travail= ? yes,
 3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ?
 validation explicites
 
@@ -1206,19 +1091,14 @@ validation explicites
 4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ?
 conserver en clarifiant les titres
 5. [x] la note de progression reste facultative en fonctionnement normal et devient obligatoire lors d'une regression ou d'un point d'attention.
-6. [x] sur les cartes, faut-il afficher les deux dernieres observations, toutes les observations dans un bloc repliable, ou seulement un indicateur donnant acces au detail ?
-   toutes les observations dans un bloc repliable
+6. [x] sur les cartes, faut-il afficher les deux dernieres observations, toutes les observations dans un bloc repliable, ou seulement un indicateur donnant acces au detail ? toutes les observations dans un bloc repliable
 
 *** carte de tache et charge de travail
 
-7. [x] l'ordre cible est-il confirme : titre, puis sur une meme ligne statut et pourcentage, puis visualisation de la charge et echeance, puis observations ?
-   oui
-8. [x] les =jours realises= doivent-ils etre calcules comme =charge initiale x progression=, tandis que les =jours restants= utilisent la projection actuelle, ou faut-il que les deux segments proviennent du meme calcul proportionnel ?
-   les deux vient du meme calcul proportionel.
-   le slider de progression doit utiliser un pas de 5 %. c est bloque pour les utilistqeur mais ajustable par l admin.
+7. [x] l'ordre cible est-il confirme : titre, puis sur une meme ligne statut et pourcentage, puis visualisation de la charge et echeance, puis observations ? oui
+8. [x] les =jours realises= doivent-ils etre calcules comme =charge initiale x progression=, tandis que les =jours restants= utilisent la projection actuelle, ou faut-il que les deux segments proviennent du meme calcul proportionnel ? les deux vient du meme calcul proportionel. le slider de progression doit utiliser un pas de 5 %. c est bloque pour les utilistqeur mais ajustable par l admin.
 
-9. [x] la visualisation doit-elle utiliser d3.js, ou un svg/css sans dependance est-il preferable si le resultat, les axes en jours et l'accessibilite sont equivalents ?
-   svg css sans dependance est prefereable uniquement si on obtient le meme resultat ce dont je doute. donc d3.js pour plus de flexibilite.
+9. [x] la visualisation doit-elle utiliser d3.js, ou un svg/css sans dependance est-il preferable si le resultat, les axes en jours et l'accessibilite sont equivalents ? svg css sans dependance est prefereable uniquement si on obtient le meme resultat ce dont je doute. donc d3.js pour plus de flexibilite.
 
 10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ?
 titre, jours realises, jours restants, charge totale et echeance.
@@ -1228,11 +1108,9 @@ oui. une echelle presaue logarithmique du genre 50 75 90
 
 *** navigation semaine et mois
 
-12. [x] le libelle de la periode courante doit-il etre place exactement entre les boutons precedent et suivant sur toutes les vues ?
-    c est preferable mais ce qu il faut c est surtout le rendre plus visible.
+12. [x] le libelle de la periode courante doit-il etre place exactement entre les boutons precedent et suivant sur toutes les vues ? c est preferable mais ce qu il faut c est surtout le rendre plus visible.
 
-13. [x] la vue semaine doit-elle montrer le detail quotidien, tandis que la vue mois montre quatre ou cinq points hebdomadaires, afin que la difference soit immediatement perceptible ?
-    detail quotidient ?  non.  le niveau actuel des cartes est bon. mais la vue mois dois montrer plus de taches car il faut montrer les taches totalement realisee meme si grisee. ces dernier doivent rester accessible.  la diference peut etre en term de couleur de titre par exemple pour le label du mois
+13. [x] la vue semaine doit-elle montrer le detail quotidien, tandis que la vue mois montre quatre ou cinq points hebdomadaires, afin que la difference soit immediatement perceptible ? detail quotidient ?  non.  le niveau actuel des cartes est bon. mais la vue mois dois montrer plus de taches car il faut montrer les taches totalement realisee meme si grisee. ces dernier doivent rester accessible.  la diference peut etre en term de couleur de titre par exemple pour le label du mois
 
 14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ?
 oui.
@@ -1240,23 +1118,16 @@ oui.
 *** synthese de l'equipe et petits multiples
 #     meme largeur, nous parlons de pourcentage de realisation.  le nombre de jour est indique sur les x. nombre de jour ecoule depuis le debut de la tache.    ce qui nous interesse  c est le profil de progresssion.
 
-15. [x] dans la barre empilee d'un collaborateur, la largeur de chaque segment doit-elle etre proportionnelle a la charge estimee en jours ou toutes les taches doivent-elles avoir la meme largeur ?
-    pas la largeur, la longueur. la largeur est standard
+15. [x] dans la barre empilee d'un collaborateur, la largeur de chaque segment doit-elle etre proportionnelle a la charge estimee en jours ou toutes les taches doivent-elles avoir la meme largeur ? pas la largeur, la longueur. la largeur est standard
 
-16. [x] la couleur represente-t-elle une teinte differente par statut avec une intensite liee a la progression, ou une couleur unique dont l'opacite va de 0 a 100 % ?
-    une teinte different par type de tache avec un intensite/opacitee liee a la progression.
+16. [x] la couleur represente-t-elle une teinte differente par statut avec une intensite liee a la progression, ou une couleur unique dont l'opacite va de 0 a 100 % ? une teinte different par type de tache avec un intensite/opacitee liee a la progression.
 
-17. [x] comme l'opacite et le survol ne suffisent pas pour l'accessibilite et le telephone, quelles informations faut-il afficher au clic ou au clavier avant d'ouvrir directement la tache ?
-    le pourcentage de realisation, le temps restant. la charge initial
+17. [x] comme l'opacite et le survol ne suffisent pas pour l'accessibilite et le telephone, quelles informations faut-il afficher au clic ou au clavier avant d'ouvrir directement la tache ? le pourcentage de realisation, le temps restant. la charge initial
 
-18. [x] la petite courbe d'evolution doit-elle representer la progression moyenne de toutes les taches du collaborateur, ou une courbe distincte par tache dans le petit multiple ?
-    une courbe distincte par tache. une courbe par carte dediee a une tache.
+18. [x] la petite courbe d'evolution doit-elle representer la progression moyenne de toutes les taches du collaborateur, ou une courbe distincte par tache dans le petit multiple ? une courbe distincte par tache. une courbe par carte dediee a une tache.
 
-19. [x] les reperes 25 %, 50 % et 75 % doivent-ils apparaitre dans chaque petit graphique, avec une hauteur maximale d'environ 2 cm ?
-    oui, ca me semble approprie. objection ?
-20. [x] apres suppression de la colonne =exceptions=, les blocages, retards et absences de mise a jour doivent-ils rester visibles sous forme de marqueurs sur les segments ou seulement dans le detail du collaborateur ?
-    trouver une petite legende graphiaue, genre point rouge. triangle warning...
-    utiliser un point d interrogation somewhere on the page to give info on the legend maybe.
+19. [x] les reperes 25 %, 50 % et 75 % doivent-ils apparaitre dans chaque petit graphique, avec une hauteur maximale d'environ 2 cm ? oui, ca me semble approprie. objection ?
+20. [x] apres suppression de la colonne =exceptions=, les blocages, retards et absences de mise a jour doivent-ils rester visibles sous forme de marqueurs sur les segments ou seulement dans le detail du collaborateur ? trouver une petite legende graphiaue, genre point rouge. triangle warning... utiliser un point d interrogation somewhere on the page to give info on the legend maybe.
 
 *** libelles et donnees existantes
 
