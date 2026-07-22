@@ -124,6 +124,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             percentage_after=60,
         )
         member = User.objects.create_user("member@example.test")
+        self.member = member
         ReportingLine.objects.create(
             employee=member,
             supervisor=self.user,
@@ -146,6 +147,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             estimated_work_days=Decimal("3.0"),
         )
         subordinate = User.objects.create_user("subordinate@example.test")
+        self.subordinate = subordinate
         ReportingLine.objects.create(
             employee=subordinate,
             supervisor=member,
@@ -172,6 +174,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             calendar=calendar,
             status="active",
         )
+        self.team_assignment = team_assignment
         ProgressEntry.objects.create(
             assignment=team_assignment,
             entry_date=timezone.localdate(),
@@ -392,6 +395,62 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                     if item["impact"] in ("serious", "critical")
                 ]
                 assert not serious, serious
+            driver.set_window_size(360, 900)
+            driver.get(f"{self.live_server_url}/app/equipe/?week={timezone.localdate()}")
+            WebDriverWait(driver, 10).until(
+                EC.text_to_be_present_in_element(
+                    (By.TAG_NAME, "h1"), "Synthèse de l'équipe"
+                )
+            )
+            assert "Voir la progression" not in driver.page_source
+            member_branch = driver.find_element(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.member.pk}']",
+            )
+            member_summary = member_branch.find_element(
+                By.CSS_SELECTOR, ":scope > summary"
+            )
+            assert member_summary.rect["height"] >= 44
+            driver.execute_script("arguments[0].click();", member_summary)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        f"[data-team-task-id='{self.team_assignment.pk}']",
+                    )
+                )
+            )
+            assert driver.find_element(
+                By.CSS_SELECTOR,
+                f"a[href='/app/taches/{self.team_assignment.pk}']",
+            )
+            driver.find_element(
+                By.CSS_SELECTOR, "button[data-task-filter='with']"
+            ).click()
+            assert driver.find_elements(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.member.pk}']",
+            )
+            assert not driver.find_elements(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.subordinate.pk}']",
+            )
+            driver.find_element(
+                By.CSS_SELECTOR, "button[data-task-filter='without']"
+            ).click()
+            assert driver.find_elements(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.member.pk}']",
+            )
+            assert driver.find_elements(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.subordinate.pk}']",
+            )
+            assert (
+                driver.execute_script("return document.documentElement.scrollWidth")
+                <= 360
+            )
+            driver.set_window_size(1440, 900)
             driver.get(f"{self.live_server_url}/app/taches/{self.assignment.pk}/")
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "svg[role='img']"))

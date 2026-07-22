@@ -79,6 +79,14 @@ ses propositions et resoumettre un rejet, tandis que les décisions restent
 réservées aux responsables autorisés. Les écritures utilisent toujours une
 révision optimiste et les erreurs API gardent une enveloppe JSON stable.
 
+La synthèse `/app/equipe` reprend l'arbre dépliable de l'interface classique.
+Ouvrir la ligne d'un collaborateur charge une seule fois ses tâches dans la
+branche; les titres mènent ensuite au détail de progression. Le filtre segmenté
+`Tous / Avec tâches / Sans tâche` porte sur les tâches propres à chaque personne
+pour la période sélectionnée et conserve les ancêtres nécessaires à la lecture
+de la hiérarchie. Son état est conservé dans l'URL avec `tasks=with` ou
+`tasks=without`, y compris lors d'un changement de semaine ou de mois.
+
 ### Deux modes de développement React
 
 Le frontend demande Node 24 (version indiquée dans `frontend/.node-version`) :

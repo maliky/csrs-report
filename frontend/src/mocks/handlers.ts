@@ -1,5 +1,10 @@
 import { delay, http, HttpResponse } from "msw";
-import type { Proposal, ProposalGroups, TaskDetail } from "../lib/api/types";
+import type {
+  Proposal,
+  ProposalGroups,
+  TaskDetail,
+  TeamNode,
+} from "../lib/api/types";
 import {
   dashboardFixture,
   planningFixture,
@@ -47,6 +52,15 @@ function allProposals(): Proposal[] {
 
 function proposalById(id: number): Proposal | undefined {
   return allProposals().find((proposal) => proposal.id === id);
+}
+
+function teamNodeById(nodes: TeamNode[], id: number): TeamNode | undefined {
+  for (const node of nodes) {
+    if (node.employee.id === id) return node;
+    const child = teamNodeById(node.children, id);
+    if (child) return child;
+  }
+  return undefined;
 }
 
 function replaceProposal(updated: Proposal) {
@@ -336,13 +350,17 @@ export const handlers = [
     return HttpResponse.json(updated);
   }),
   http.get("/api/v1/team/", () => HttpResponse.json(teamFixture)),
-  http.get("/api/v1/team/:id/", () =>
-    HttpResponse.json({
+  http.get("/api/v1/team/:id/", ({ params }) => {
+    const node = teamNodeById(teamFixture.nodes, Number(params.id));
+    if (!node) return apiError(404, "not_found", "Collaborateur introuvable.");
+    return HttpResponse.json({
       period: teamFixture.period,
-      employee: teamFixture.nodes[0].employee,
-      tasks: taskGroups().tasks,
-    }),
-  ),
+      employee: node.employee,
+      tasks: taskGroups()
+        .tasks.slice(0, node.task_count)
+        .map((task) => ({ ...task, employee: node.employee })),
+    });
+  }),
 ];
 
 export const slowDashboardHandler = http.get("/api/v1/dashboard/", async () => {

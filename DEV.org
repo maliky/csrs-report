@@ -2,6 +2,25 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-22 mer.> Profils integres et filtre de l'equipe React
+** Realisation
+
+- chaque ligne de =/app/equipe= est maintenant une branche tactile et utilisable au clavier;
+- la premiere ouverture charge =/api/v1/team/{id}/= et affiche les taches du collaborateur directement dans l'arbre; une fermeture puis une reouverture reutilise les donnees chargees;
+- le lien explicite =Voir la progression= est retire. Le titre de chaque tache reste un lien vers son detail;
+- le controle segmente =Tous / Avec taches / Sans tache= filtre les compteurs propres a la periode;
+- lorsqu'un descendant correspond, ses ancetres restent visibles afin de conserver le chemin hierarchique;
+- le parametre =tasks=with|without= est conserve lors des changements de semaine, de mois et de periode;
+- sur telephone, toute la ligne reste une cible d'au moins 44 pixels, les profils restent dans une colonne et l'arbre ne produit aucun debordement horizontal.
+
+Le filtrage utilise les =task_count= deja fournis par l'API de synthese. Aucun modele, migration ou contrat JSON supplementaire n'est necessaire. Le detail existant fournit les =TaskSummary= charges paresseusement.
+
+** Verification
+
+- [X] Tests React : filtre recursif, ancetres conserves, URL de periode, chargement unique et absence du lien explicite.
+- [X] Build TypeScript et Vite.
+- [X] Selenium avec la vraie API Django : profil integre, filtres avec/sans tache et largeur de 360 pixels.
+
 * <2026-07-22 mer.> Actualisation de la population pilote sur psiaka
 ** Execution
 
@@ -20,9 +39,9 @@ Les 73 affectations ne doivent pas apparaitre simultanement sur les cartes de =M
 
 - est limite a la semaine ou au mois selectionne;
 - compte les taches de la personne, pas celles de ses descendants;
-- ne remplace pas le detail charge par =Voir la progression=.
+- alimente le profil charge directement lorsque la ligne est ouverte.
 
-Il est donc attendu que plusieurs responsables directs de =dg= affichent zero tache dans la semaine courante alors que leurs sous-equipes repliees contiennent les collaborateurs peuples. La procedure reproductible et ces regles de lecture sont documentees dans =README.md=, section /Actualiser les scenarios pilotes existants/.
+Il est donc attendu que plusieurs responsables directs de =dg= affichent zero tache dans la semaine courante alors que leurs sous-equipes repliees contiennent les collaborateurs peuples. La procedure reproductible et ces regles de lecture sont documentees dans =README.md=, section /Actualiser les scenarios pilotes existants/. Le filtre React conserve ces responsables lorsqu'ils sont necessaires pour atteindre un descendant correspondant.
 
 * <2026-07-22 mer.> Detail, filtres et cycle React des propositions
 ** Realisation

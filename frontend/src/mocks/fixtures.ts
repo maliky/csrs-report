@@ -272,11 +272,53 @@ export const teamFixture: Team = {
     {
       employee: {
         id: 11,
-        name: "Mariam Atall",
-        position: "Responsable TSI",
-        login_alias: "tsi",
+        name: "Direction administrative et financière",
+        position: "Directrice administrative et financière",
+        login_alias: "daf",
       },
-      task_count: 3,
+      task_count: 0,
+      children: [
+        {
+          employee: {
+            id: 12,
+            name: "Awa Finances",
+            position: "Responsable des finances",
+            login_alias: "finances",
+          },
+          task_count: 2,
+          children: [
+            {
+              employee: {
+                id: 13,
+                name: "Bamba Comptable",
+                position: "Comptable",
+                login_alias: "comptable",
+              },
+              task_count: 0,
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      employee: {
+        id: 14,
+        name: "Direction de la valorisation",
+        position: "Directeur de la valorisation",
+        login_alias: "drv",
+      },
+      task_count: 1,
+      children: [],
+    },
+    {
+      employee: {
+        id: 15,
+        name: "Contrôle interne",
+        position: "Responsable du contrôle interne",
+        login_alias: "controle",
+      },
+      task_count: 0,
       children: [],
     },
   ],

@@ -81,3 +81,53 @@ test("filtre et valide une proposition sans débordement", async ({ page }) => {
   await validate.click();
   await expect(card.getByText("Validée")).toBeVisible();
 });
+
+test("filtre l'équipe et charge les tâches dans la branche", async ({
+  page,
+}) => {
+  await page.goto("equipe?month=2026-07");
+  await expect(
+    page.getByRole("heading", { name: "Synthèse de l'équipe" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Voir la progression" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Avec tâches" }).click();
+  await expect(page).toHaveURL(/month=2026-07.*tasks=with/);
+  await expect(
+    page.locator("details[data-team-employee-id='11']"),
+  ).toBeVisible();
+  await expect(page.locator("details[data-team-employee-id='15']")).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("link", { name: "Période suivante" }),
+  ).toHaveAttribute("href", /month=2026-08.*tasks=with/);
+
+  const direction = page.locator(
+    "details[data-team-employee-id='11'] > summary",
+  );
+  await direction.click();
+  const finances = page.locator(
+    "details[data-team-employee-id='12'] > summary",
+  );
+  await finances.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("link", {
+      name: "Finaliser les priorités de la quinzaine",
+    }),
+  ).toBeVisible();
+  await expect(finances.locator("xpath=..")).toHaveAttribute("open", "");
+
+  const summaryBox = await direction.boundingBox();
+  expect(summaryBox).not.toBeNull();
+  expect(summaryBox!.height).toBeGreaterThanOrEqual(44);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});
