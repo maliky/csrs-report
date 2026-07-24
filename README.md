@@ -212,6 +212,9 @@ cd frontend
 npm run types:generate
 ```
 
+La référence complète des endpoints, des corps JSON, des erreurs, des sessions
+et du mécanisme CSRF se trouve dans [docs/api.md](docs/api.md).
+
 La compilation Docker est multi-étape : Node produit les fichiers React, puis
 WhiteNoise les sert avec les autres fichiers statiques. Aucun changement Nginx
 n'est nécessaire pour `/app/`.
