@@ -19,10 +19,8 @@
 * <2026-07-24 ven.> Installation Psycopg portable dans l'image Docker
 ** Realisation
 
-- l'image Python installe =libpq5= depuis Debian et utilise le paquet Python
-  portable =psycopg==3.2.9=;
-- le deploiement ne depend plus de la disponibilite d'une roue
-  =psycopg-binary= pour l'architecture Docker de la machine;
+- l'image Python installe =libpq5= depuis Debian et utilise le paquet Python portable =psycopg==3.2.9=;
+- le deploiement ne depend plus de la disponibilite d'une roue =psycopg-binary= pour l'architecture Docker de la machine;
 - l'API Python et la version de Psycopg restent inchangees.
 
 * <2026-07-22 mer.> Scripts Docker pour Windows PowerShell
@@ -151,8 +149,7 @@ La sequence operationnelle est donc strictement :
 2. le checkout VPS tire ce commit avec =git pull --ff-only=;
 3. apres revue, l'administrateur lance =./scripts/deploy_preprod.sh=.
 
-Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=;
-=npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
+Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=; =npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
 
 * <2026-07-22 mer.> Progression React, graphique D3 et navigation laterale
 ** Realisation
@@ -955,15 +952,12 @@ Au niveau de la navigation. le n+3 doit pouvoir voir sans modifier les taches de
 *** Dates, charge et modele de la tache
 
 1. [x] La =charge estimee= represente-t-elle une duree calendaire exclusive sur la tache, ou un effort pouvant etre reparti en parallele avec d'autres taches ?
-   - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte.
-Pour l instant il s agit d une duree calendaire excluse sur une tache.
+   - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte. Pour l instant il s agit d une duree calendaire excluse sur une tache.
 
 2. [x] Lors de la creation, faut-il exiger =debut + charge= et calculer l'echeance, ou accepter =debut + echeance= et calculer la charge ? Les deux sont acceptable
-3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ?
-update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
+3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ? update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
 
-4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ?
-lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
+4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ? lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
 5. [x] Le calcul doit-il exclure samedi, dimanche et les jours feries configures dans =Holiday= ? oui, seulement les jours ouvrables.  utiliser la calendrier ivoirien officiel, importer. le calendrier de reference doit pouvoir etre changer la l admin. il doit pouvoir ajouter ou retirer des jours ouvrable.
 6. [x] Une charge decimale comme =2,5 jours= reste-t-elle autorisee ? Si oui, l'echeance doit-elle etre arrondie au jour ouvrable superieur ? oui.
 7. [x] La coherence doit-elle etre garantie par le modele Django et les services transactionnels, avec une contrainte de base seulement sur les invariants exprimables en SQL ? Une egalite utilisant les jours feries ne peut pas etre une simple =CHECK CONSTRAINT= PostgreSQL. je voyais la contraite garantie au niveau du model djanog effectivement.
@@ -971,8 +965,7 @@ lors de la modification garder la date d echeance, mais attirer l attention de l
 8. [x] =Action institutionnelle= doit-il seulement etre renomme =Code normalise= dans l'interface, ou faut-il creer un vrai modele de code/categorie de tache distinct des plans institutionnels ? garder cela pour l instant.
 9. [x] Une tache peut-elle conserver une action institutionnelle et posseder en plus un code normalise, ou le nouveau code remplace-t-il completement ce rattachement ? une tache a un code unique normalize ratacher a une action institutionelle.  explique moi ce que tu veux clarifier ici ?
 
-10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ?
-explique moi ce que tu veux clarifier ici ?
+10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ? explique moi ce que tu veux clarifier ici ?
 
 *** Etats, reouverture et observations
 
@@ -982,8 +975,7 @@ explique moi ce que tu veux clarifier ici ?
 14. [x] Souhaitez-vous un fil d'activite unique melangeant progressions, notes du jour, commentaires, validations, reprises et changements d'echeance ? oui
 15. [x] Si oui, faut-il introduire un modele immuable =TaskActivity= comme source du fil, ou construire le fil a la lecture a partir de =ProgressEntry=, =TaskComment= et des tables d'audit existantes ? ca me semble correct, mais propose des alternatives
 16. [x] Une correction de la progression du meme jour remplace-t-elle la valeur visible de ce jour, tout en gardant les versions precedentes uniquement dans l'audit, ou chaque correction doit-elle apparaitre dans le fil utilisateur ? elle la remplace.  quand tu dit dans l audit je comprend dans la table history de django qui track to les changement en bd is that correct ?
-17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ?
-dans le fil d'activie uniquement
+17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ? dans le fil d'activie uniquement
 
 *** Historique journalier et JSON des graphiques
 
@@ -997,8 +989,7 @@ dans le fil d'activie uniquement
 25. [x] Le JSON Observable doit-il contenir les notes et l'alias de l'auteur, ou uniquement les dates, pourcentages, charge, echeance et indicateurs de retard afin de minimiser les donnees exposees ? uniquement les donnees utile au graphique, pas de notes ni d auteur
 26. [x] Le schema minimal suivant convient-il : =task_id=, =start_date=, =day=, =due_date=, =planned_work_days=, =elapsed_work_days=, =remaining_schedule_days=, =overdue_days=, =percentage= et =observed= ? yes
 27. [x] Pour une consultation historique d'un mois passe, la ligne verticale =jour courant= represente-t-elle la vraie date du jour ou la fin de la periode consultee ? lorsque la tache est terminer, il ne faut pas reprenseter le jour courant sur le graphique
-28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ?
-non
+28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ? non
 
 *** Navigation hierarchique
 
@@ -1182,13 +1173,11 @@ I am not convinced byt the +5pts (or it should be clarified somewhere that it is
 
 1. [x] pour une tache que =dg= s'est affectee, faut-il supprimer uniquement le champ =je suis bloque= ou remplacer ce signalement par une action plus adaptee, par exemple =signaler un point d'attention= ? signaler un point d attention
 2. [x] lorsque =dg= est a la fois collaborateur et responsable, le bloc =decision du responsable= doit-il devenir =cloture de ma tache=, avec les actions =confirmer l'achevement= et =poursuivre le travail= ? yes,
-3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ?
-validation explicites
+3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ? validation explicites
 
 *** progression et observations
 
-4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ?
-conserver en clarifiant les titres
+4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ? conserver en clarifiant les titres
 5. [x] la note de progression reste facultative en fonctionnement normal et devient obligatoire lors d'une regression ou d'un point d'attention.
 6. [x] sur les cartes, faut-il afficher les deux dernieres observations, toutes les observations dans un bloc repliable, ou seulement un indicateur donnant acces au detail ? toutes les observations dans un bloc repliable
 
@@ -1199,11 +1188,9 @@ conserver en clarifiant les titres
 
 9. [x] la visualisation doit-elle utiliser d3.js, ou un svg/css sans dependance est-il preferable si le resultat, les axes en jours et l'accessibilite sont equivalents ? svg css sans dependance est prefereable uniquement si on obtient le meme resultat ce dont je doute. donc d3.js pour plus de flexibilite.
 
-10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ?
-titre, jours realises, jours restants, charge totale et echeance.
+10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ? titre, jours realises, jours restants, charge totale et echeance.
 
-11. [x] l'echeance doit-elle changer de couleur lorsqu'elle approche ou est depassee, et quels seuils faut-il retenir ?
-oui. une echelle presaue logarithmique du genre 50 75 90
+11. [x] l'echeance doit-elle changer de couleur lorsqu'elle approche ou est depassee, et quels seuils faut-il retenir ? oui. une echelle presaue logarithmique du genre 50 75 90
 
 *** navigation semaine et mois
 
@@ -1211,8 +1198,7 @@ oui. une echelle presaue logarithmique du genre 50 75 90
 
 13. [x] la vue semaine doit-elle montrer le detail quotidien, tandis que la vue mois montre quatre ou cinq points hebdomadaires, afin que la difference soit immediatement perceptible ? detail quotidient ?  non.  le niveau actuel des cartes est bon. mais la vue mois dois montrer plus de taches car il faut montrer les taches totalement realisee meme si grisee. ces dernier doivent rester accessible.  la diference peut etre en term de couleur de titre par exemple pour le label du mois
 
-14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ?
-oui.
+14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ? oui.
 
 *** synthese de l'equipe et petits multiples
 #     meme largeur, nous parlons de pourcentage de realisation.  le nombre de jour est indique sur les x. nombre de jour ecoule depuis le debut de la tache.    ce qui nous interesse  c est le profil de progresssion.

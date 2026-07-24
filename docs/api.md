@@ -10,14 +10,11 @@ Référence de l'API utilisée par l'interface React de CSRS Report.
 - Schéma OpenAPI : `/api/v1/openapi/`
 - Interface Swagger : `/api/v1/documentation/`
 
-Le code Django et le schéma OpenAPI restent les sources de vérité. Cette
-référence décrit le comportement vérifié le 24 juillet 2026.
+Le code Django et le schéma OpenAPI restent les sources de vérité. Cette référence décrit le comportement vérifié le 24 juillet 2026.
 
 ## Authentification et CSRF
 
-L'utilisateur se connecte par la page Django `/connexion/`. L'API n'accepte
-pas de mot de passe ou de jeton JWT : le navigateur transmet le cookie de
-session avec chaque requête.
+L'utilisateur se connecte par la page Django `/connexion/`. L'API n'accepte pas de mot de passe ou de jeton JWT : le navigateur transmet le cookie de session avec chaque requête.
 
 Après la connexion, appeler :
 
@@ -25,8 +22,7 @@ Après la connexion, appeler :
 GET /api/v1/session/
 ```
 
-Cette requête vérifie la session existante, renvoie l'utilisateur et initialise
-le cookie `csrftoken`. Elle ne connecte pas un utilisateur anonyme.
+Cette requête vérifie la session existante, renvoie l'utilisateur et initialise le cookie `csrftoken`. Elle ne connecte pas un utilisateur anonyme.
 
 Pour chaque `POST` ou `PATCH`, envoyer le jeton du cookie dans l'en-tête :
 
@@ -55,23 +51,18 @@ await fetch("/api/v1/tasks/42/progress/", {
 });
 ```
 
-Le frontend du projet fournit déjà ce comportement dans
-`frontend/src/lib/api/client.ts`.
+Le frontend du projet fournit déjà ce comportement dans `frontend/src/lib/api/client.ts`.
 
 ## Conventions
 
 - Les dates utilisent `YYYY-MM-DD`.
 - Les horodatages utilisent ISO 8601.
-- Les charges en jours sont renvoyées sous forme de chaînes décimales, par
-  exemple `"5"` ou `"2.5"`.
+- Les charges en jours sont renvoyées sous forme de chaînes décimales, par exemple `"5"` ou `"2.5"`.
 - Les identifiants sont des entiers.
-- Une ressource non visible par l'utilisateur renvoie `404`, afin de ne pas
-  révéler son existence.
-- Les écritures sur une tâche ou une proposition utilisent une révision
-  optimiste. Le client doit envoyer la dernière valeur `revision` reçue.
+- Une ressource non visible par l'utilisateur renvoie `404`, afin de ne pas révéler son existence.
+- Les écritures sur une tâche ou une proposition utilisent une révision optimiste. Le client doit envoyer la dernière valeur `revision` reçue.
 - Une écriture réussie incrémente généralement `revision`.
-- Les `PATCH` actuels ne sont pas partiels : les champs métier obligatoires
-  doivent être renvoyés avec leur valeur courante, même si un seul champ change.
+- Les `PATCH` actuels ne sont pas partiels : les champs métier obligatoires doivent être renvoyés avec leur valeur courante, même si un seul champ change.
 
 ### Période
 
@@ -82,8 +73,7 @@ Les endpoints de dashboard et d'équipe acceptent un paramètre facultatif :
 | `week` | `YYYY-MM-DD` | Semaine du lundi au dimanche contenant cette date |
 | `month` | `YYYY-MM` | Mois civil demandé |
 
-Sans paramètre valide, l'API utilise la semaine courante. Si `week` et `month`
-sont tous deux valides, `month` est prioritaire.
+Sans paramètre valide, l'API utilise la semaine courante. Si `week` et `month` sont tous deux valides, `month` est prioritaire.
 
 Exemples :
 
@@ -184,9 +174,7 @@ Le détail reprend les champs utiles de `TaskSummary` et ajoute :
 }
 ```
 
-`chart` contient les points journaliers du graphique de progression.
-`activities` contient le journal visible des progressions, commentaires,
-changements de planification et transitions.
+`chart` contient les points journaliers du graphique de progression. `activities` contient le journal visible des progressions, commentaires, changements de planification et transitions.
 
 ### Proposal
 
@@ -291,8 +279,7 @@ Les éléments de `tasks` suivent le format `TaskSummary`.
 
 ### `GET /api/v1/team/`
 
-Accepte `week` ou `month`. Chaque nœud contient les tâches propres à la
-personne pour cette période, sans additionner celles des descendants.
+Accepte `week` ou `month`. Chaque nœud contient les tâches propres à la personne pour cette période, sans additionner celles des descendants.
 
 ```json
 {
@@ -325,8 +312,7 @@ Un utilisateur sans visibilité sur le collaborateur reçoit `404`.
 
 ### `GET /api/v1/planning/options/`
 
-Renvoie uniquement les employés affectables par l'utilisateur et les actions
-et calendriers actifs.
+Renvoie uniquement les employés affectables par l'utilisateur et les actions et calendriers actifs.
 
 ```json
 {
@@ -344,8 +330,7 @@ et calendriers actifs.
 
 ### `POST /api/v1/planning/preview/`
 
-Ce calcul ne sauvegarde rien et ne répartit pas la charge entre les membres
-d'une équipe.
+Ce calcul ne sauvegarde rien et ne répartit pas la charge entre les membres d'une équipe.
 
 Calculer l'échéance depuis une charge :
 
@@ -385,8 +370,7 @@ Réponse `200` :
 
 ### `POST /api/v1/tasks/`
 
-Crée une tâche et son affectation. L'employé doit faire partie des personnes
-que l'utilisateur courant peut gérer.
+Crée une tâche et son affectation. L'employé doit faire partie des personnes que l'utilisateur courant peut gérer.
 
 ```json
 {
@@ -416,8 +400,7 @@ Réponse `404` si la tâche n'existe pas ou n'est pas visible.
 
 ### `PATCH /api/v1/tasks/{id}/`
 
-Le corps doit contenir tous les champs ci-dessous. Cet endpoint n'accepte pas
-encore un véritable patch partiel.
+Le corps doit contenir tous les champs ci-dessous. Cet endpoint n'accepte pas encore un véritable patch partiel.
 
 ```json
 {
@@ -431,8 +414,7 @@ encore un véritable patch partiel.
 }
 ```
 
-`action_id` peut être `null`. Son omission supprime également l'action de la
-tâche. Le calendrier d'une tâche ne peut pas être changé par cet endpoint.
+`action_id` peut être `null`. Son omission supprime également l'action de la tâche. Le calendrier d'une tâche ne peut pas être changé par cet endpoint.
 
 Réponse `200` : `TaskDetail` avec une révision incrémentée.
 
@@ -450,10 +432,8 @@ Réponse `200` : `TaskDetail` avec une révision incrémentée.
 
 - `percentage` est compris entre 0 et 100.
 - Pour un utilisateur ordinaire, il évolue par pas de 5.
-- `note` est facultatif, sauf lors d'une baisse de progression ou si
-  `blocked` vaut `true`.
-- Un employé ne peut saisir que la date du jour; un responsable autorisé peut
-  corriger une autre date.
+- `note` est facultatif, sauf lors d'une baisse de progression ou si `blocked` vaut `true`.
+- Un employé ne peut saisir que la date du jour; un responsable autorisé peut corriger une autre date.
 - À `100`, le statut devient `awaiting_validation`.
 
 Réponse `200` : `TaskDetail`.
@@ -501,8 +481,7 @@ Clôture anticipée :
 }
 ```
 
-`reason` est obligatoire pour `reject` et `close_early`. Ces transitions sont
-réservées à un responsable autorisé. Réponse `200` : `TaskDetail`.
+`reason` est obligatoire pour `reject` et `close_early`. Ces transitions sont réservées à un responsable autorisé. Réponse `200` : `TaskDetail`.
 
 ## Propositions
 
@@ -548,8 +527,7 @@ Réponse `404` si la proposition n'existe pas ou n'est pas visible.
 
 ### `PATCH /api/v1/proposals/{id}/`
 
-Seul l'auteur peut modifier une proposition `submitted` ou `rejected`. Le
-corps complet est obligatoire :
+Seul l'auteur peut modifier une proposition `submitted` ou `rejected`. Le corps complet est obligatoire :
 
 ```json
 {
@@ -564,8 +542,7 @@ corps complet est obligatoire :
 }
 ```
 
-`calendar_id` est facultatif et conserve le calendrier actuel s'il est absent.
-L'omission de `action_id` supprime l'action. Réponse `200` : `Proposal`.
+`calendar_id` est facultatif et conserve le calendrier actuel s'il est absent. L'omission de `action_id` supprime l'action. Réponse `200` : `Proposal`.
 
 ### `POST /api/v1/proposals/{id}/decision/`
 
@@ -589,8 +566,7 @@ Rejet :
 }
 ```
 
-Le motif est obligatoire pour un rejet. L'acceptation crée une affectation et
-renseigne `accepted_assignment_id`. Réponse `200` : `Proposal`.
+Le motif est obligatoire pour un rejet. L'acceptation crée une affectation et renseigne `accepted_assignment_id`. Réponse `200` : `Proposal`.
 
 ### `POST /api/v1/proposals/{id}/resubmit/`
 
@@ -647,8 +623,7 @@ En cas de conflit de révision :
 }
 ```
 
-Le client doit recharger la ressource, présenter les nouvelles données puis
-laisser l'utilisateur recommencer sa modification.
+Le client doit recharger la ressource, présenter les nouvelles données puis laisser l'utilisateur recommencer sa modification.
 
 ## Vérification et génération du contrat
 
