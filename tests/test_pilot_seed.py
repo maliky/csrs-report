@@ -3,6 +3,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.db import models
 from django.db.models import Count
+from django.test import override_settings
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 import pytest
@@ -23,10 +24,23 @@ from work.models import (
     TaskProposal,
 )
 from work.management.commands.seed_pilot_users import (
+    Command,
     PILOT_USERS,
     UNIT_SHORT_NAMES,
     UNIT_SPECS,
 )
+
+
+def test_pilot_dashboard_host_is_allowed_by_local_configuration() -> None:
+    with override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1"]):
+        assert Command._dashboard_request_host() == "localhost"
+
+
+def test_pilot_dashboard_host_prefers_preproduction_configuration() -> None:
+    with override_settings(
+        ALLOWED_HOSTS=["localhost", "127.0.0.1", "preprod.example.com"]
+    ):
+        assert Command._dashboard_request_host() == "preprod.example.com"
 
 
 @pytest.mark.django_db
