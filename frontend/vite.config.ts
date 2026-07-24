@@ -1,6 +1,22 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
+export const DJANGO_PROXY_PATHS = [
+  "/api",
+  "/connexion",
+  "/deconnexion",
+  "/admin",
+  "/static",
+] as const;
+
+export function djangoProxyRoutes(
+  target = process.env.CSRS_DJANGO_URL ?? "http://127.0.0.1:8000",
+) {
+  return Object.fromEntries(
+    DJANGO_PROXY_PATHS.map((path) => [path, { target, changeOrigin: true }]),
+  );
+}
+
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   // Django serves production assets below /static; Vite development keeps
@@ -22,9 +38,7 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 5173,
-    proxy: {
-      "/api": "http://127.0.0.1:8000",
-    },
+    proxy: djangoProxyRoutes(),
   },
   test: {
     environment: "jsdom",

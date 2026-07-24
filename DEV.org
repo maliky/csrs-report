@@ -2,6 +2,20 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-24 ven.> Connexion Django depuis Vite sous Windows
+** Diagnostic et correction
+
+- un appel anonyme a =/api/v1/session/= recevait correctement =401=, mais la redirection relative vers =/connexion/= restait sur le serveur Vite 5173, qui ne transmettait jusque-la que =/api= a Django;
+- Vite transmet maintenant =/connexion=, =/deconnexion=, =/admin= et =/static= au meme backend que =/api=; le formulaire, les fichiers statiques, le cookie de session et React restent donc sur une origine unique;
+- le developpeur doit utiliser =localhost= ou =127.0.0.1= pendant toute la session, sans alterner les deux noms d'hote;
+- le proxy est couvert par un test de configuration et le parcours reel conserve Django/PostgreSQL sans =VITE_USE_MOCKS=.
+
+** Verification
+
+- [X] Les 17 tests React et le build Vite reussissent.
+- [X] Un serveur Django simule confirme le passage reel de =/connexion/= et =/static/= par Vite.
+- [X] Les tests cibles de =seed_pilot_users=, de selection de l'hote et de session API reussissent.
+
 * <2026-07-24 ven.> Installation Psycopg portable dans l'image Docker
 ** Realisation
 

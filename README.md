@@ -139,16 +139,19 @@ $env:CSRS_PORT = "8000"
 docker compose -p csrs -f compose.yml up -d --build
 ```
 
-Se connecter d'abord sur `http://127.0.0.1:8000/connexion/`, puis lancer Vite
-sans mocks dans un second terminal :
+Lancer ensuite Vite sans mocks dans un second terminal :
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Ouvrir ensuite `http://127.0.0.1:5173/app/`. Vite sert React et transmet les
-requêtes `/api/` à Django dans le conteneur sur le port 8000.
+Ouvrir `http://127.0.0.1:5173/app/`. Si aucune session n'existe, Vite transmet
+la redirection `/connexion/` à Django puis ramène le navigateur dans React
+après authentification. Les routes `/api`, `/connexion`, `/deconnexion`,
+`/admin` et `/static` restent ainsi sur la même origine visible par le
+navigateur. Utiliser le même nom d'hôte pendant toute la session : soit
+`127.0.0.1`, soit `localhost`, sans les mélanger.
 
 Django peut aussi être lancé nativement, notamment pour déboguer le code
 Python :
@@ -177,9 +180,14 @@ npm run dev
 
 Le bootstrap PowerShell crée un `.env` local avec des secrets aléatoires, le
 port Django `8000`, HTTP sans redirection TLS et les origines `8000` et `5173`
-requises par Django et Vite. Il ne remplace jamais un `.env` existant. Se
-connecter sur `http://127.0.0.1:8000/connexion/`, puis ouvrir
-`http://127.0.0.1:5173/app/`.
+requises par Django et Vite. Il ne remplace jamais un `.env` existant. Ouvrir
+directement `http://localhost:5173/app/`; la connexion Django est affichée sur
+la même origine grâce au proxy Vite, puis renvoie vers React.
+
+Après une modification de `vite.config.ts`, arrêter et relancer `npm run dev`.
+Si un `.env` a été créé avant l'ajout du script PowerShell, vérifier que
+`DJANGO_CSRF_TRUSTED_ORIGINS` contient aussi `http://localhost:5173` et
+`http://127.0.0.1:5173`.
 
 `seed_pilot.ps1` demande les deux mots de passe sans les afficher, exécute la
 simulation puis le chargement réel et retire les variables de mot de passe de
