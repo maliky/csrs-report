@@ -2,6 +2,15 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-24 ven.> Installation Psycopg portable dans l'image Docker
+** Realisation
+
+- l'image Python installe =libpq5= depuis Debian et utilise le paquet Python
+  portable =psycopg==3.2.9=;
+- le deploiement ne depend plus de la disponibilite d'une roue
+  =psycopg-binary= pour l'architecture Docker de la machine;
+- l'API Python et la version de Psycopg restent inchangees.
+
 * <2026-07-22 mer.> Scripts Docker pour Windows PowerShell
 ** Realisation
 

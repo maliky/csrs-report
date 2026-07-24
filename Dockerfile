@@ -13,7 +13,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY --from=frontend /src/static/react ./static/react
 RUN python manage.py collectstatic --noinput
