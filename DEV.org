@@ -5,54 +5,36 @@
 * <2026-07-31 ven.> Cadrage des workflows issus des quatre premiers logigrammes
 ** Objet de cette phase
 
-Cette entree prepare l'implementation des quatre premiers processus decrits dans
-=docs/Logigrams/logigrams.org= :
+Cette entree prepare l'implementation des quatre premiers processus decrits dans =docs/Logigrams/logigrams.org= :
 
 1. demande et prolongation de visa ;
 2. elaboration des ordres de mission ;
 3. bon de sortie de fonds, ou BSF ;
 4. gestion des donnees de recherche.
 
-La presente branche est une branche de conception. Elle ne modifie ni les modeles,
-ni les migrations, ni l'API, ni l'interface. Les decisions confirmees ci-dessous
-peuvent guider l'implementation ; les hypotheses et questions ouvertes ne doivent
-pas etre transformees en contraintes techniques avant leur validation.
+La presente branche est une branche de conception. Elle ne modifie ni les modeles, ni les migrations, ni l'API, ni l'interface. Les decisions confirmees ci-dessous peuvent guider l'implementation ; les hypotheses et questions ouvertes ne doivent pas etre transformees en contraintes techniques avant leur validation.
 
 ** Etat actuel constate
 
-- Django demeure la source de verite pour les donnees, les autorisations, les
-  revisions optimistes et l'audit ; React consomme l'API versionnee sous
-  =/api/v1/=.
-- =OrganizationUnit=, =OrganizationUnitLink=, =ScopedRole= et =RoleGrant=
-  fournissent deja une hierarchie et des delegations datees reutilisables.
-- Les modeles de taches et de propositions couvrent la planification et le suivi
-  de progression, mais pas un dossier passant par une suite d'etapes, de
-  controles et de boucles de correction.
-- L'application ne possede pas encore de stockage prive documente pour les
-  passeports, formulaires, lettres, TDR, factures ou autres pieces sensibles.
-- Les notifications email actuelles disposent d'une file bornee et de reprises
-  sur erreur, mais ne couvrent pas encore les echeances d'un processus.
+- Django demeure la source de verite pour les donnees, les autorisations, les revisions optimistes et l'audit ; React consomme l'API versionnee sous =/api/v1/=.
+- =OrganizationUnit=, =OrganizationUnitLink=, =ScopedRole= et =RoleGrant= fournissent deja une hierarchie et des delegations datees reutilisables.
+- Les modeles de taches et de propositions couvrent la planification et le suivi de progression, mais pas un dossier passant par une suite d'etapes, de controles et de boucles de correction.
+- L'application ne possede pas encore de stockage prive documente pour les passeports, formulaires, lettres, TDR, factures ou autres pieces sensibles.
+- Les notifications email actuelles disposent d'une file bornee et de reprises sur erreur, mais ne couvrent pas encore les echeances d'un processus.
 
 ** Decisions confirmees pour la conception
 
-- [X] Utiliser un socle hybride : un noyau commun auditable, complete par des
-  regles et formulaires types propres a chaque processus.
-- [X] Ne pas construire, dans le premier lot, un mini-BPM administrable permettant
-  de modifier librement en base les etats, formulaires et transitions.
-- [X] Realiser d'abord l'ordre de mission comme parcours vertical, avant le visa,
-  le BSF et la gestion des donnees.
-- [X] Ne pas detourner =TaskAssignment= pour representer chaque etape d'un
-  processus. Une tache de suivi pourra seulement etre reliee facultativement a
-  un dossier.
-- [X] Conserver les controles d'autorisation et de transition cote Django ; les
-  capacites affichees par React ne constituent pas une autorisation.
+- [X] Utiliser un socle hybride : un noyau commun auditable, complete par des regles et formulaires types propres a chaque processus.
+- [X] Ne pas construire, dans le premier lot, un mini-BPM administrable permettant de modifier librement en base les etats, formulaires et transitions.
+- [X] Realiser d'abord l'ordre de mission comme parcours vertical, avant le visa, le BSF et la gestion des donnees.
+- [X] Ne pas detourner =TaskAssignment= pour representer chaque etape d'un processus. Une tache de suivi pourra seulement etre reliee facultativement a un dossier.
+- [X] Conserver les controles d'autorisation et de transition cote Django ; les capacites affichees par React ne constituent pas une autorisation.
 
 ** Proposition d'architecture
 
 *** Noyau metier commun
 
-Une application Django dediee, provisoirement nommee =processes=, porterait les
-concepts suivants :
+Une application Django dediee, provisoirement nommee =processes=, porterait les concepts suivants :
 
 | Concept propose      | Responsabilite |
 |----------------------+----------------|
@@ -64,42 +46,25 @@ concepts suivants :
 | Piece                | Metadonnees, classification, empreinte et emplacement prive d'un document |
 | Evenement de dossier | Historique append-only des creations, transmissions, corrections, validations et clotures |
 
-Les graphes de transition et leurs validations resteraient en code Python type et
-versionne. La base conserverait la version utilisee par chaque dossier afin qu'une
-evolution future ne reecrive pas silencieusement les processus deja engages.
+Les graphes de transition et leurs validations resteraient en code Python type et versionne. La base conserverait la version utilisee par chaque dossier afin qu'une evolution future ne reecrive pas silencieusement les processus deja engages.
 
-Les ecritures sensibles passeraient par des services metier transactionnels. Une
-revision optimiste empecherait deux acteurs de prendre une decision concurrente
-sur une ancienne version du dossier. Les evenements metier resteraient lisibles
-independamment de l'historique technique des lignes Django.
+Les ecritures sensibles passeraient par des services metier transactionnels. Une revision optimiste empecherait deux acteurs de prendre une decision concurrente sur une ancienne version du dossier. Les evenements metier resteraient lisibles independamment de l'historique technique des lignes Django.
 
 *** Autorisations et affectations
 
-- Etendre les permissions existantes avec des droits distincts pour initier,
-  consulter, traiter, valider, administrer et exporter un processus.
-- Evaluer ces droits a travers les =RoleGrant= actifs et leur perimetre
-  organisationnel.
-- Affecter une etape a un utilisateur, a un role dans une unite, ou a une file de
-  service selon la decision encore ouverte ci-dessous.
-- Conserver l'auteur reel de chaque action, y compris lorsqu'il agit au titre
-  d'une delegation temporaire.
+- Etendre les permissions existantes avec des droits distincts pour initier, consulter, traiter, valider, administrer et exporter un processus.
+- Evaluer ces droits a travers les =RoleGrant= actifs et leur perimetre organisationnel.
+- Affecter une etape a un utilisateur, a un role dans une unite, ou a une file de service selon la decision encore ouverte ci-dessous.
+- Conserver l'auteur reel de chaque action, y compris lorsqu'il agit au titre d'une delegation temporaire.
 
 *** API et interface envisagees
 
-- =/api/v1/processes/= : liste filtree des dossiers visibles et creation selon les
-  capacites de l'utilisateur ;
-- =/api/v1/processes/{id}/= : detail, etape courante, pieces, historique et actions
-  permises ;
-- =/api/v1/processes/{id}/transitions/= : execution d'une action metier avec
-  revision attendue, donnees typees et observation ;
-- =/api/v1/processes/{id}/documents/= : depot et telechargement controles des
-  pieces, si leur stockage dans CSRS Report est confirme.
+- =/api/v1/processes/= : liste filtree des dossiers visibles et creation selon les capacites de l'utilisateur ;
+- =/api/v1/processes/{id}/= : detail, etape courante, pieces, historique et actions permises ;
+- =/api/v1/processes/{id}/transitions/= : execution d'une action metier avec revision attendue, donnees typees et observation ;
+- =/api/v1/processes/{id}/documents/= : depot et telechargement controles des pieces, si leur stockage dans CSRS Report est confirme.
 
-React ajouterait =/app/processus= avec une boite de travail, des filtres par type,
-service, statut et echeance, puis une page de dossier responsive. Les actions
-seraient presentees avec de grands controles tactiles, des erreurs proches des
-champs, un historique textuel accessible et aucun statut exprime uniquement par
-la couleur.
+React ajouterait =/app/processus= avec une boite de travail, des filtres par type, service, statut et echeance, puis une page de dossier responsive. Les actions seraient presentees avec de grands controles tactiles, des erreurs proches des champs, un historique textuel accessible et aucun statut exprime uniquement par la couleur.
 
 ** Couverture des quatre processus
 
@@ -107,124 +72,80 @@ la couleur.
 
 - Demande nationale ou internationale avec TDR et pieces conditionnelles.
 - Preparation par l'assistance, controle et decision du DG.
-- Distribution de l'original et des copies, archivage et branche eventuelle vers
-  le parc automobile.
-- Premier parcours retenu pour valider les branches, les documents, la signature,
-  les files de travail et les accuses de transmission.
+- Distribution de l'original et des copies, archivage et branche eventuelle vers le parc automobile.
+- Premier parcours retenu pour valider les branches, les documents, la signature, les files de travail et les accuses de transmission.
 
 *** Lot 2 - Visa
 
 - Distinguer la demande avant arrivee de la prolongation pendant le sejour.
-- Suivre la preparation, la verification I2A, la signature DG, les transmissions,
-  le depot au MAE, la decharge, les relances et la restitution du passeport.
-- Appliquer des restrictions particulieres aux copies de passeport, photos et
-  documents de visa.
+- Suivre la preparation, la verification I2A, la signature DG, les transmissions, le depot au MAE, la decharge, les relances et la restitution du passeport.
+- Appliquer des restrictions particulieres aux copies de passeport, photos et documents de visa.
 
 *** Lot 3 - Bon de sortie de fonds
 
 - Controler la disponibilite budgetaire et les pieces avant la creation du BSF.
-- Representer les visas successifs, les boucles de correction et la decision DG
-  sans perdre les motifs ni les versions precedentes.
-- Distinguer caisse et cheque selon le seuil applicable, puis tracer la remise au
-  beneficiaire.
+- Representer les visas successifs, les boucles de correction et la decision DG sans perdre les motifs ni les versions precedentes.
+- Distinguer caisse et cheque selon le seuil applicable, puis tracer la remise au beneficiaire.
 
 *** Lot 4 - Gestion des donnees
 
-- Suivre le plan de gestion des donnees, la validation TSI, les procedures
-  qualite, la collecte, les transferts, les traitements et les non-conformites.
-- Tracer les demandes d'acces, les decisions, le principe du moindre privilege,
-  les audits, les corrections, l'archivage et la destruction autorisee.
-- Ne pas supposer que CSRS Report hebergera lui-meme les jeux de donnees avant
-  reponse aux questions de securite et d'integration.
+- Suivre le plan de gestion des donnees, la validation TSI, les procedures qualite, la collecte, les transferts, les traitements et les non-conformites.
+- Tracer les demandes d'acces, les decisions, le principe du moindre privilege, les audits, les corrections, l'archivage et la destruction autorisee.
+- Ne pas supposer que CSRS Report hebergera lui-meme les jeux de donnees avant reponse aux questions de securite et d'integration.
 
 ** Plan de realisation apres validation des questions
 
-1. Definir le vocabulaire, les etats, les transitions, les permissions et les
-   scenarios d'acceptation de l'ordre de mission.
-2. Implementer le noyau commun, ses contraintes, son historique, ses migrations
-   et ses tests de permissions sur une base vide et une base peuplee.
-3. Exposer l'API de la boite de travail et du dossier, puis realiser le parcours
-   React responsive de l'ordre de mission.
+1. Definir le vocabulaire, les etats, les transitions, les permissions et les scenarios d'acceptation de l'ordre de mission.
+2. Implementer le noyau commun, ses contraintes, son historique, ses migrations et ses tests de permissions sur une base vide et une base peuplee.
+3. Exposer l'API de la boite de travail et du dossier, puis realiser le parcours React responsive de l'ordre de mission.
 4. Valider le parcours avec les acteurs concernes avant de generaliser le socle.
-5. Ajouter successivement visa, BSF et gestion des donnees avec leurs regles
-   typees et leurs tests de non-regression.
+5. Ajouter successivement visa, BSF et gestion des donnees avec leurs regles typees et leurs tests de non-regression.
 
 ** Questions strategiques et architecturales a trancher
 
 *** Portee et valeur du systeme
 
-1. [ ] CSRS Report devient-il le systeme faisant autorite pour ces processus, ou
-   conserve-t-il seulement la trace d'un circuit realise sur papier et par email ?
-2. [ ] Une validation ou un visa dans l'application a-t-il une valeur de signature,
-   ou faut-il produire, televerser puis conserver un document signe ?
-3. [ ] Faut-il generer les lettres, ordres de mission et BSF depuis des modeles
-   officiels, et qui gere leur numerotation ?
-4. [ ] Un dossier termine devient-il immutable ? Si une reouverture est permise,
-   quels roles peuvent l'autoriser et quel motif doit etre conserve ?
-5. [ ] Confirme-t-on l'ordre de realisation suivant : ordre de mission, visa, BSF,
-   puis gestion des donnees ?
+1. [ ] CSRS Report devient-il le systeme faisant autorite pour ces processus, ou conserve-t-il seulement la trace d'un circuit realise sur papier et par email ?
+2. [ ] Une validation ou un visa dans l'application a-t-il une valeur de signature, ou faut-il produire, televerser puis conserver un document signe ?
+3. [ ] Faut-il generer les lettres, ordres de mission et BSF depuis des modeles officiels, et qui gere leur numerotation ?
+4. [ ] Un dossier termine devient-il immutable ? Si une reouverture est permise, quels roles peuvent l'autoriser et quel motif doit etre conserve ?
+5. [ ] Confirme-t-on l'ordre de realisation suivant : ordre de mission, visa, BSF, puis gestion des donnees ?
 
 *** Acteurs, files de travail et delegations
 
-6. [ ] Une etape est-elle attribuee a une personne precise, ou a une file de
-   service dans laquelle un agent autorise prend le dossier ?
-7. [ ] Comment choisir un remplacant en cas d'absence, et une delegation en cours
-   autorise-t-elle a reprendre un dossier commence par une autre personne ?
-8. [ ] Le DG peut-il corriger le contenu d'un dossier, ou seulement valider,
-   rejeter et demander une correction motivee ?
-9. [ ] Les visiteurs, coursiers, beneficiaires et agents du MAE doivent-ils avoir
-   un compte, ou leurs actions sont-elles enregistrees par un agent interne ?
-10. [ ] Une remise de document, de passeport, de cheque ou d'especes exige-t-elle
-    un accuse de reception du destinataire ?
+6. [ ] Une etape est-elle attribuee a une personne precise, ou a une file de service dans laquelle un agent autorise prend le dossier ?
+7. [ ] Comment choisir un remplacant en cas d'absence, et une delegation en cours autorise-t-elle a reprendre un dossier commence par une autre personne ?
+8. [ ] Le DG peut-il corriger le contenu d'un dossier, ou seulement valider, rejeter et demander une correction motivee ?
+9. [ ] Les visiteurs, coursiers, beneficiaires et agents du MAE doivent-ils avoir un compte, ou leurs actions sont-elles enregistrees par un agent interne ?
+10. [ ] Une remise de document, de passeport, de cheque ou d'especes exige-t-elle un accuse de reception du destinataire ?
 
 *** Delais, notifications et pilotage
 
-11. [ ] Pour chaque delai, faut-il compter des heures, des jours calendaires ou
-    les jours ouvres du calendrier ivoirien ?
-12. [ ] Les jours de preparation des BSF et les jours de caisse sont-ils des
-    parametres administrables et dates, ou des regles fixes ?
-13. [ ] Quels rappels doivent etre envoyes avant une echeance, et a qui faut-il
-    escalader un dossier en retard ?
-14. [ ] Les notifications restent-elles limitees a l'email et a l'interface dans
-    le MVP des processus ?
-15. [ ] Quels indicateurs sont prioritaires : dossiers en attente, delai moyen,
-    retours en correction, rejets, depassements ou charge par service ?
+11. [ ] Pour chaque delai, faut-il compter des heures, des jours calendaires ou les jours ouvres du calendrier ivoirien ?
+12. [ ] Les jours de preparation des BSF et les jours de caisse sont-ils des parametres administrables et dates, ou des regles fixes ?
+13. [ ] Quels rappels doivent etre envoyes avant une echeance, et a qui faut-il escalader un dossier en retard ?
+14. [ ] Les notifications restent-elles limitees a l'email et a l'interface dans le MVP des processus ?
+15. [ ] Quels indicateurs sont prioritaires : dossiers en attente, delai moyen, retours en correction, rejets, depassements ou charge par service ?
 
 *** Documents, securite et conservation
 
-16. [ ] Les pieces sont-elles stockees dans CSRS Report ou dans un systeme
-    documentaire externe auquel le dossier conserve un lien ?
-17. [ ] Quels formats, tailles maximales et controles antivirus sont requis avant
-    d'accepter une piece ?
-18. [ ] Qui peut consulter ou telecharger les passeports, photos d'identite et
-    autres pieces sensibles, et combien de temps sont-ils conserves ?
-19. [ ] L'export d'un dossier clos doit-il produire un dossier PDF ou ZIP signe,
-    accompagne de son historique d'audit ?
-20. [ ] La duree de conservation de cinq ans du processus de gestion des donnees
-    commence-t-elle a la cloture de l'etude, a l'archivage ou a une autre date ?
-21. [ ] Faut-il pouvoir suspendre une destruction planifiee en cas d'audit, de
-    litige ou d'obligation scientifique ?
+16. [ ] Les pieces sont-elles stockees dans CSRS Report ou dans un systeme documentaire externe auquel le dossier conserve un lien ?
+17. [ ] Quels formats, tailles maximales et controles antivirus sont requis avant d'accepter une piece ?
+18. [ ] Qui peut consulter ou telecharger les passeports, photos d'identite et autres pieces sensibles, et combien de temps sont-ils conserves ?
+19. [ ] L'export d'un dossier clos doit-il produire un dossier PDF ou ZIP signe, accompagne de son historique d'audit ?
+20. [ ] La duree de conservation de cinq ans du processus de gestion des donnees commence-t-elle a la cloture de l'etude, a l'archivage ou a une autre date ?
+21. [ ] Faut-il pouvoir suspendre une destruction planifiee en cas d'audit, de litige ou d'obligation scientifique ?
 
 *** Decisions propres aux processus
 
-22. [ ] Pour une mission internationale, le billet d'avion est-il obligatoire
-    avant la preparation du projet ou peut-il etre ajoute avant la signature ?
-23. [ ] La branche parc automobile doit-elle seulement notifier le service, ou
-    reserver effectivement un vehicule et enregistrer sa disponibilite ?
-24. [ ] Pour le BSF, le controle budgetaire reste-t-il une confirmation manuelle
-    ou doit-il interroger un systeme comptable ?
-25. [ ] Le seuil de paiement en especes de 200 000 FCFA est-il configurable et
-    historise afin qu'un dossier conserve la regle applicable a sa date ?
-26. [ ] Faut-il interdire qu'une meme personne cumule, sur un BSF, plusieurs
-    controles normalement separes ?
-27. [ ] Pour la gestion des donnees, CSRS Report conserve-t-il les jeux de donnees
-    ou uniquement leur identifiant, leur classification et les operations de
-    gouvernance ?
-28. [ ] Une autorisation d'acces validee doit-elle configurer techniquement les
-    droits dans les systemes TSI, ou seulement creer une action a executer et a
-    confirmer par TSI ?
-29. [ ] Quels modeles officiels de plan de gestion des donnees, de controle qualite
-    et de preuve de destruction doivent etre versionnes avec le processus ?
+22. [ ] Pour une mission internationale, le billet d'avion est-il obligatoire avant la preparation du projet ou peut-il etre ajoute avant la signature ?
+23. [ ] La branche parc automobile doit-elle seulement notifier le service, ou reserver effectivement un vehicule et enregistrer sa disponibilite ?
+24. [ ] Pour le BSF, le controle budgetaire reste-t-il une confirmation manuelle ou doit-il interroger un systeme comptable ?
+25. [ ] Le seuil de paiement en especes de 200 000 FCFA est-il configurable et historise afin qu'un dossier conserve la regle applicable a sa date ?
+26. [ ] Faut-il interdire qu'une meme personne cumule, sur un BSF, plusieurs controles normalement separes ?
+27. [ ] Pour la gestion des donnees, CSRS Report conserve-t-il les jeux de donnees ou uniquement leur identifiant, leur classification et les operations de gouvernance ?
+28. [ ] Une autorisation d'acces validee doit-elle configurer techniquement les droits dans les systemes TSI, ou seulement creer une action a executer et a confirmer par TSI ?
+29. [ ] Quels modeles officiels de plan de gestion des donnees, de controle qualite et de preuve de destruction doivent etre versionnes avec le processus ?
 
 ** Criteres de sortie du cadrage
 
@@ -232,8 +153,7 @@ la couleur.
 - [ ] Les etats et transitions de l'ordre de mission sont approuves par ses acteurs.
 - [ ] La strategie de signature, de pieces privees et de conservation est validee.
 - [ ] La matrice acteur, action et perimetre est testable sans role code en dur.
-- [ ] Les scenarios d'acceptation incluent corrections, concurrence, delegation,
-  refus d'acces et reprise apres erreur.
+- [ ] Les scenarios d'acceptation incluent corrections, concurrence, delegation, refus d'acces et reprise apres erreur.
 
 * <2026-07-24 ven.> Connexion Django depuis Vite sous Windows
 ** Diagnostic et correction
