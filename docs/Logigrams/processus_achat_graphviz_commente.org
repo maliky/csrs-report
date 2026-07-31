@@ -1,0 +1,356 @@
+#+title: Processus d'achat CSRS — version Graphviz commentée
+
+#+begin_src dot :file processus-achat-graphviz.svg :exports both :results file graphics :cmdline -Kdot -Tsvg
+digraph processus_achat {
+
+  // ==================================================================
+  // 1. PARAMÈTRES GÉNÉRAUX DU GRAPHE
+  // ==================================================================
+  graph [
+    charset="UTF-8",
+
+    // Les couloirs sont empilés verticalement.
+    rankdir=TB,
+
+    // Autorise les liens entre les sous-graphes servant de couloirs.
+    compound=true,
+    newrank=true,
+
+    // Les polylignes sont plus lisibles que les courbes dans ce cas.
+    splines=polyline,
+    nodesep=0.65,
+    ranksep=0.90,
+    pad=0.20,
+    outputorder=edgesfirst,
+
+    bgcolor="white",
+    fontname="DejaVu Sans",
+    fontsize=16,
+    labelloc="t",
+    label="Processus d'achat CSRS — diagramme d'activité"
+  ];
+
+  // Style par défaut des activités.
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#EEF0FB",
+    color="#0078A8",
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=10,
+    margin="0.15,0.10"
+  ];
+
+  // Style par défaut des flux.
+  edge [
+    color="#202020",
+    penwidth=1.1,
+    arrowsize=0.75,
+    fontname="DejaVu Sans",
+    fontsize=9
+  ];
+
+
+  // ==================================================================
+  // 2. COULOIR : DEMANDEUR
+  // ==================================================================
+  subgraph cluster_demandeur {
+    label="Demandeur";
+    labeljust="l";
+    color="#777777";
+    style="filled";
+    fillcolor="#FCFCFC";
+    margin=18;
+
+    // Point initial du processus.
+    start [
+      shape=circle,
+      fixedsize=true,
+      width=0.32,
+      label="",
+      xlabel="Chercheurs ou employés",
+      style=filled,
+      fillcolor="#DFFF80",
+      color="#68A800",
+      penwidth=1.6
+    ];
+
+    saisir_da [label="Faire une demande\nd'achat"];
+
+    // Ce nœud est volontairement unique.
+    // Les corrections demandées par la DAF et par le DG y convergent.
+    correction_da [label="Demande de correction\nde la DA"];
+
+    // Place les trois éléments sur une même ligne dans le couloir.
+    { rank=same; start; saisir_da; correction_da; }
+
+    start -> saisir_da;
+
+    // Arc invisible : uniquement utilisé pour stabiliser la mise en page.
+    // Il ne représente aucun flux métier.
+    saisir_da -> correction_da [style=invis, weight=4];
+  }
+
+
+  // ==================================================================
+  // 3. COULOIR : DAF
+  // ==================================================================
+  subgraph cluster_daf {
+    label="DAF";
+    labeljust="l";
+    color="#777777";
+    style="filled";
+    fillcolor="#FAFAFA";
+    margin=18;
+
+    soumettre_daf [
+      label="Soumettre la DA à la\nsignature de la DAF"
+    ];
+
+    // Passerelle à trois sorties : signature, correction ou rejet.
+    decision_daf [
+      shape=diamond,
+      label="Décision\nDAF",
+      style=filled,
+      fillcolor="#FFFDE1",
+      color="#B3A500",
+      width=0.85,
+      height=0.60,
+      margin=0.03
+    ];
+
+    rejet_daf [label="Rejet de la DA"];
+
+    { rank=same; soumettre_daf; decision_daf; rejet_daf; }
+
+    soumettre_daf -> decision_daf;
+    decision_daf -> rejet_daf [label="Rejet"];
+  }
+
+
+  // ==================================================================
+  // 4. COULOIR : DG
+  // ==================================================================
+  subgraph cluster_dg {
+    label="DG";
+    labeljust="l";
+    color="#777777";
+    style="filled";
+    fillcolor="#FCFCFC";
+    margin=18;
+
+    soumettre_dg [
+      label="Soumettre la DA signée par la DAF\nà la signature du DG"
+    ];
+
+    // Passerelle à trois sorties : signature, correction ou rejet.
+    decision_dg [
+      shape=diamond,
+      label="Décision\nDG",
+      style=filled,
+      fillcolor="#FFFDE1",
+      color="#B3A500",
+      width=0.85,
+      height=0.60,
+      margin=0.03
+    ];
+
+    rejet_dg [label="Rejet de la DA\npar le DG"];
+
+    { rank=same; soumettre_dg; decision_dg; rejet_dg; }
+
+    soumettre_dg -> decision_dg;
+    decision_dg -> rejet_dg [label="Rejet"];
+  }
+
+
+  // ==================================================================
+  // 5. COULOIR : CELLULE ACHAT
+  // ==================================================================
+  subgraph cluster_achat {
+    label="Cellule achat";
+    labeljust="l";
+    color="#777777";
+    style="filled";
+    fillcolor="#FAFAFA";
+    margin=18;
+
+    // Référentiel consulté pendant la cotation.
+    fournisseurs [
+      shape=cylinder,
+      label="Base des fournisseurs\net prestataires de services",
+      style=filled,
+      fillcolor="#F5F5F5",
+      color="#777777",
+      fontsize=9
+    ];
+
+    cotation [label="Demander une cotation"];
+    bon_commande [label="Envoyer le bon\nde commande"];
+
+    // Barre de divergence parallèle.
+    // Après le bon de commande, livraison et facturation démarrent.
+    fork_cmd [
+      shape=rect,
+      label="",
+      fixedsize=true,
+      width=0.70,
+      height=0.07,
+      style=filled,
+      fillcolor="#202020",
+      color="#202020"
+    ];
+
+    livraison [label="Livraison du produit\nou du service"];
+    recouvrer_tva [label="Recouvrer la TVA"];
+
+    { rank=same;
+      fournisseurs; cotation; bon_commande;
+      fork_cmd; livraison; recouvrer_tva;
+    }
+
+    // Le lien pointillé indique une ressource consultée,
+    // et non une étape séquentielle du processus.
+    fournisseurs -> cotation [
+      style=dashed,
+      label="référentiel"
+    ];
+
+    cotation -> bon_commande;
+    bon_commande -> fork_cmd;
+    fork_cmd -> livraison;
+
+    // Arc invisible utilisé uniquement pour placer la TVA à droite.
+    livraison -> recouvrer_tva [style=invis, weight=1];
+  }
+
+
+  // ==================================================================
+  // 6. COULOIR : « BANDE 1 »
+  // ==================================================================
+  subgraph cluster_finance {
+    // « Bande 1 » est le libellé du PDF source.
+    // Il doit être remplacé par le rôle réel après validation métier.
+    label="Bande 1 — rôle à préciser";
+    labeljust="l";
+    color="#777777";
+    style="filled";
+    fillcolor="#FCFCFC";
+    margin=18;
+
+    facture [label="Facture déposée"];
+
+    // Barre de synchronisation : le paiement n'est possible
+    // qu'après la livraison ET le dépôt de la facture.
+    join_cmd [
+      shape=rect,
+      label="",
+      fixedsize=true,
+      width=0.70,
+      height=0.07,
+      style=filled,
+      fillcolor="#202020",
+      color="#202020"
+    ];
+
+    payer [label="Payer la facture"];
+
+    decision_tva [
+      shape=diamond,
+      label="TVA ?",
+      style=filled,
+      fillcolor="#FFFDE1",
+      color="#B3A500",
+      width=0.75,
+      height=0.55,
+      margin=0.03
+    ];
+
+    // Point final commun aux rejets et à la clôture normale.
+    fin [
+      shape=doublecircle,
+      fixedsize=true,
+      width=0.32,
+      label="",
+      style=filled,
+      fillcolor="#FFCCCC",
+      color="#B00000",
+      penwidth=1.6
+    ];
+
+    { rank=same; facture; join_cmd; payer; decision_tva; fin; }
+
+    facture -> join_cmd;
+    join_cmd -> payer;
+    payer -> decision_tva;
+    decision_tva -> fin [label="Non"];
+  }
+
+
+  // ==================================================================
+  // 7. FLUX DE VALIDATION DE LA DA
+  // ==================================================================
+
+  // Première soumission à la DAF.
+  saisir_da -> soumettre_daf;
+
+  // Correction demandée par la DAF.
+  // constraint=false évite que ce retour ne déforme les rangs principaux.
+  decision_daf -> correction_da [
+    label="Correction",
+    constraint=false
+  ];
+
+  // Après correction, le demandeur resoumet la DA au début du circuit.
+  correction_da -> saisir_da [
+    label="Corriger et resoumettre",
+    constraint=false
+  ];
+
+  // Une DA signée par la DAF est transmise au DG.
+  decision_daf -> soumettre_dg [label="DA signée"];
+
+  // Correction demandée par le DG : elle rejoint le même nœud
+  // correction_da. L'activité n'est donc pas dupliquée.
+  decision_dg -> correction_da [
+    label="Correction",
+    constraint=false
+  ];
+
+  // Une DA signée par le DG passe à la cotation.
+  decision_dg -> cotation [label="DA signée"];
+
+
+  // ==================================================================
+  // 8. FLUX D'ACHAT, DE LIVRAISON ET DE FACTURATION
+  // ==================================================================
+
+  // Deux branches parallèles sont créées après le bon de commande.
+  fork_cmd -> facture;
+
+  // Les deux branches convergent vers la barre join_cmd.
+  livraison -> join_cmd;
+
+  // Le PDF ne raccorde pas explicitement la livraison au paiement.
+  // Le fork/join ci-dessus est donc une hypothèse de normalisation :
+  // livraison ET facture doivent être disponibles avant paiement.
+
+
+  // ==================================================================
+  // 9. TVA ET FINS DU PROCESSUS
+  // ==================================================================
+
+  // Lorsque la TVA doit être recouvrée, le traitement revient
+  // dans le couloir « Cellule achat » avant de rejoindre la fin.
+  decision_tva -> recouvrer_tva [
+    label="Oui",
+    constraint=false
+  ];
+  recouvrer_tva -> fin [constraint=false];
+
+  // Les rejets de la DAF et du DG terminent également le processus.
+  rejet_daf -> fin [constraint=false];
+  rejet_dg -> fin [constraint=false];
+}
+#+end_src

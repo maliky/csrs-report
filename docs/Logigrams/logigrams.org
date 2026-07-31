@@ -1,0 +1,951 @@
+#+TITLE: Logigrammes des processus CSRS
+#+LANGUAGE: fr
+#+property: header-args:plantuml :exports both :results file graphics :cmdline -charset UTF-8
+
+* Processus de demande et de prolongation de visa
+
+#+begin_src plantuml :file Exports/processus_demande_prolongation_visa.png
+  @startuml
+  !pragma useVerticalIf on
+
+  title Processus de demande et de prolongation de visa
+
+  ' =====================================================================
+  ' MISE EN FORME — alignée sur le diagramme * Activite
+  ' =====================================================================
+  skinparam shadowing false
+  skinparam defaultFontSize 12
+  skinparam ArrowColor #202020
+  skinparam activityBackgroundColor #EEF0FB
+  skinparam activityBorderColor #0078A8
+  skinparam activityDiamondBackgroundColor #FFFDE1
+  skinparam activityDiamondBorderColor #B3A500
+  skinparam activityStartColor #DFFF80
+  skinparam activityEndColor #FFCCCC
+  skinparam swimlaneBorderColor #777777
+  skinparam swimlaneTitleBackgroundColor #F7F7F7
+  skinparam swimlaneTitleFontStyle bold
+
+  |Chercheur / Visiteur|
+  start
+
+  if (Type de demande ?) then (Visa avant l'arrivée)
+    :Envoyer un courriel à la Direction;
+    note right
+      Préciser :
+      - date d'arrivée ;
+      - date de départ ;
+      - but du voyage ou de la mission.
+
+      Joindre une copie du passeport.
+    end note
+
+    |Assistante DRD / DRV|
+    :Rédiger la lettre de demande\nde visa de séjour;
+    note right
+      Lettre destinée à l'Ambassade
+      de Côte d'Ivoire du pays
+      de résidence du visiteur.
+
+      Délai indicatif : 24 h.
+    end note
+
+    |Chef de service I2A|
+    :Vérifier la note verbale;
+
+    |Directeur Général|
+    :Signer la note verbale;
+    :Transmettre la note signée\nau secrétariat;
+
+    |Assistante DRD / DRV|
+    :Scanner la note verbale signée;
+    :Envoyer la note scannée\nau chercheur ou au visiteur;
+
+    |Chercheur / Visiteur|
+    :Recevoir la note verbale scannée;
+
+  else (Prolongation pendant le séjour)
+    |Assistante DRD / DRV|
+    :Rédiger la demande\nde prolongation de visa;
+    note right
+      Préciser la période
+      de prolongation sollicitée.
+
+      Le formulaire doit idéalement
+      être disponible deux semaines
+      avant l'expiration du visa.
+    end note
+
+    |Chef de service I2A|
+    :Vérifier la note\nde prolongation;
+    note right
+      Délai indicatif : 24 h.
+    end note
+
+    |Directeur Général|
+    :Signer la note verbale;
+    :Transmettre la note signée\nau secrétariat;
+
+    |Assistante DRD / DRV|
+    :Préparer le dossier\nde prolongation;
+    note right
+      Pièces du dossier :
+      - note verbale signée ;
+      - deux photos d'identité ;
+      - formulaire de prolongation ;
+      - copie de la première page
+        du passeport ;
+      - copie du visa expiré,
+        en cours ou antérieur ;
+      - passeport original.
+    end note
+    :Transmettre le dossier\nau coursier;
+
+    |Coursier|
+    :Déposer le dossier au MAE;
+    note right
+      Dépôt pendant un jour de course.
+      Objectif : transmission du dossier
+      au MAE dans les 48 h.
+    end note
+    :Déposer la décharge\nau secrétariat;
+
+    |Assistante / Secrétariat|
+    :Recevoir et enregistrer\nla décharge;
+
+    |Ministère des Affaires étrangères|
+    :Traiter la demande\nde prolongation;
+    note right
+      Délai indicatif :
+      15 à 30 jours.
+    end note
+
+    |Assistante / Secrétariat|
+    :Assurer le suivi du dossier\nauprès du MAE;
+    :Appeler le coursier pour\nla récupération du passeport;
+
+    |Coursier|
+    :Retirer le passeport\navec le visa prolongé;
+    :Transmettre le passeport\nau secrétariat;
+
+    |Assistante / Secrétariat|
+    :Réceptionner le passeport\navec le visa;
+    :Transmettre le passeport\nau chercheur ou au coordonnateur;
+
+    |Chercheur / Visiteur|
+    :Recevoir le passeport\navec le visa prolongé;
+  endif
+
+  :Visa ou prolongation disponible;
+  stop
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus_demande_prolongation_visa.png]]
+
+* Processus d'élaboration des ordres de mission
+
+#+begin_src plantuml :file Exports/processus_elaboration_ordres_mission.png
+  @startuml
+  !pragma useVerticalIf on
+
+  title Processus d'élaboration des ordres de mission
+
+  ' =====================================================================
+  ' MISE EN FORME — alignée sur le diagramme * Activite
+  ' =====================================================================
+  skinparam shadowing false
+  skinparam defaultFontSize 12
+  skinparam ArrowColor #202020
+  skinparam activityBackgroundColor #EEF0FB
+  skinparam activityBorderColor #0078A8
+  skinparam activityDiamondBackgroundColor #FFFDE1
+  skinparam activityDiamondBorderColor #B3A500
+  skinparam activityStartColor #DFFF80
+  skinparam activityEndColor #FFCCCC
+  skinparam swimlaneBorderColor #777777
+  skinparam swimlaneTitleBackgroundColor #F7F7F7
+  skinparam swimlaneTitleFontStyle bold
+
+  |Chercheur / Employé|
+  start
+  :Identifier un besoin de déplacement\nhors de la ville d'Abidjan;
+  note right
+    L'ordre de mission est nécessaire
+    pour un déplacement par véhicule
+    ou par avion.
+  end note
+  :Initier la demande\nd'ordre de mission;
+
+  if (Mission à l'intérieur du pays ?) then (Oui)
+    :Transmettre à l'assistante les TDR\net, au besoin, la lettre d'invitation;
+    note right
+      Délai indicatif : 24 h
+    end note
+
+    |Assistante / Secrétariat|
+    :Préparer l'ordre de mission intérieure;
+    note right
+      Informations principales :
+      - Numéro de l'ordre de mission
+      - Participants et fonctions
+      - Lieu et motif
+      - Itinéraire
+      - Véhicule et immatriculation
+      - Dates de départ et de retour
+      - Prise en charge
+
+      Délai indicatif : 24 h
+    end note
+  else (Non, mission extérieure)
+    |Chercheur / Employé|
+    :Transmettre au secrétariat les TDR,\nla lettre d'invitation éventuelle\net le billet d'avion;
+    note right
+      Délai indicatif : 24 h
+    end note
+
+    |Assistante / Secrétariat|
+    :Préparer le projet\nd'ordre de mission extérieure;
+    note right
+      Informations principales :
+      - Numéro de l'ordre de mission
+      - Nom et fonction du voyageur
+      - Lieu, motif et destination
+      - Moyen de transport ou compagnie
+      - Dates de départ et de retour
+      - Prise en charge
+
+      Délai indicatif : 24 à 48 h
+    end note
+  endif
+
+  |Assistante / Secrétariat|
+  :Transmettre l'ordre de mission\nau Directeur Général;
+
+  |Directeur Général|
+  :S'assurer de l'utilité\nde la mission;
+  :Signer l'ordre de mission;
+  :Transmettre l'ordre signé\nau secrétariat;
+  note right
+    Transmission immédiate
+    après signature.
+  end note
+
+  |Assistante / Secrétariat|
+  :Réceptionner l'ordre\nde mission signé;
+  :Transmettre une copie\nà la comptabilité;
+
+  |Comptabilité|
+  :Recevoir la copie\nde l'ordre de mission;
+
+  |Assistante / Secrétariat|
+  :Transmettre l'original\nau demandeur;
+
+  |Chercheur / Employé|
+  :Recevoir l'ordre\nde mission signé;
+
+  |Assistante / Secrétariat|
+  :Classer une copie\nde l'ordre de mission;
+  if (Parc automobile concerné ?) then (Oui)
+    :Transmettre l'ordre de mission\nau parc automobile;
+
+    |Parc automobile|
+    :Recevoir l'ordre de mission;
+    :Préparer le véhicule\nsi nécessaire;
+  else (Non)
+    |Assistante / Secrétariat|
+    :Poursuivre sans transmission\nau parc automobile;
+  endif
+
+  |Chercheur / Employé|
+  :Ordre de mission disponible\npour le déplacement;
+  stop
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus_elaboration_ordres_mission.png]]
+
+* Processus d'élaboration du Bon de sortie de fonds (BSF)
+
+#+begin_src plantuml :file Exports/processus_elaboration_bsf.png
+  @startuml
+  !pragma useVerticalIf on
+
+  title Processus d'élaboration du Bon de Sortie de Fonds (BSF)
+
+  ' =====================================================================
+  ' MISE EN FORME — alignée sur le diagramme * Activite
+  ' =====================================================================
+  skinparam shadowing false
+  skinparam defaultFontSize 12
+  skinparam ArrowColor #202020
+  skinparam activityBackgroundColor #EEF0FB
+  skinparam activityBorderColor #0078A8
+  skinparam activityDiamondBackgroundColor #FFFDE1
+  skinparam activityDiamondBorderColor #B3A500
+  skinparam activityStartColor #DFFF80
+  skinparam activityEndColor #FFCCCC
+  skinparam swimlaneBorderColor #777777
+  skinparam swimlaneTitleBackgroundColor #F7F7F7
+  skinparam swimlaneTitleFontStyle bold
+
+  |dem| Employé / Chercheur
+  start
+  :Identifier un besoin de fonds;
+
+  ' La boucle revient au demandeur tant que la demande est non conforme.
+  repeat
+    |dem|
+    :Exprimer ou corriger\nla demande de fonds;
+    note right
+      Informations à préciser :
+      - Projet ou service
+      - Ligne budgétaire
+      - Objet du décaissement
+      - Montant demandé
+      - Initiateur
+      - Bénéficiaire
+
+      Documents possibles :
+      - Ordre de mission
+      - TDR
+      - Budget
+      - Contrat
+      - Convention
+      - Facture
+      - Demande d'achat
+    end note
+
+    |sfc| Service Finances-Comptabilité
+    :Recevoir la demande\net les pièces justificatives;
+    :Vérifier la capacité budgétaire\ndu projet ou du service;
+    :Vérifier la situation comptable\nde l'initiateur;
+  repeat while (Demande non conforme ?) is (Oui)
+  -> Non;
+
+  |sfc|
+  :Élaborer le Bon de Sortie\nde Fonds;
+  note right
+    Jours d'élaboration du BSF :
+    - lundi
+    - mercredi
+  end note
+
+  |dem|
+  :Vérifier et viser le BSF;
+
+  |chef| Chef de Service FC
+  :Contrôler et viser le BSF;
+
+  |daf| Direction Administrative et Financière
+  :Vérifier et viser le BSF;
+
+  |cpt| Comptable en charge du projet
+  :Contrôler le dossier financier;
+
+  ' Toute anomalie renvoie le BSF dans la chaîne de correction et de visa.
+  while (Anomalie détectée ?) is (Oui)
+    :Retourner le BSF\npour correction;
+
+    |chef|
+    :Corriger le BSF;
+    :Viser à nouveau le BSF;
+
+    |daf|
+    :Vérifier et viser\nle BSF corrigé;
+
+    |cpt|
+    :Contrôler à nouveau\nle dossier financier;
+  endwhile (Non)
+
+  :Transmettre le BSF au DG;
+
+  |dg| Directeur Général
+  :Examiner le Bon de Sortie\nde Fonds;
+
+  ' Un rejet du DG déclenche une seconde boucle de correction complète.
+  while (BSF rejeté ?) is (Oui)
+    :Retourner le BSF\npour correction;
+
+    |chef|
+    :Corriger le BSF rejeté;
+    :Viser le BSF corrigé;
+
+    |daf|
+    :Vérifier et viser\nle BSF corrigé;
+
+    |cpt|
+    :Contrôler le dossier corrigé;
+    :Transmettre à nouveau\nle BSF au DG;
+
+    |dg|
+    :Réexaminer le BSF;
+  endwhile (Non)
+
+  :Approuver et signer le BSF;
+  note right
+    Seule la signature du DG
+    autorise le paiement du BSF.
+  end note
+
+  |cpt|
+  :Recevoir le BSF\nsigné et validé;
+  :Transmettre le BSF\nà la caisse;
+
+  |caisse| Caisse
+  :Réceptionner le BSF\nsigné et approuvé;
+  if (Montant inférieur ou égal à\n200 000 F CFA ?) then (Oui)
+    :Préparer le paiement\nen espèces;
+  else (Non)
+    :Préparer le paiement\npar chèque;
+    :Informer le demandeur\nde la disponibilité du chèque;
+  endif
+
+  :Effectuer le paiement;
+  note right
+    Jours de caisse :
+    - mardi
+    - jeudi
+    - vendredi
+
+    Délai prévu :
+    au plus tard 3 jours
+    après la demande.
+  end note
+
+  |ben| Bénéficiaire
+  :Recevoir les espèces\nou le chèque;
+  stop
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus_elaboration_bsf.png]]
+
+* Processus de gestion des données
+
+#+begin_src plantuml :file Exports/processus_gestion_donnees.png
+  @startuml
+  !pragma useVerticalIf on
+
+  title Processus de gestion des données
+
+  ' =====================================================================
+  ' MISE EN FORME — alignée sur le diagramme * Activite
+  ' =====================================================================
+  skinparam shadowing false
+  skinparam defaultFontSize 12
+  skinparam ArrowColor #202020
+  skinparam activityBackgroundColor #EEF0FB
+  skinparam activityBorderColor #0078A8
+  skinparam activityDiamondBackgroundColor #FFFDE1
+  skinparam activityDiamondBorderColor #B3A500
+  skinparam activityStartColor #DFFF80
+  skinparam activityEndColor #FFCCCC
+  skinparam swimlaneBorderColor #777777
+  skinparam swimlaneTitleBackgroundColor #F7F7F7
+  skinparam swimlaneTitleFontStyle bold
+
+  |Directeur d'étude|
+  start
+  :Définir les objectifs et les besoins\nen données de l'étude;
+
+  |Gestionnaire de données|
+  :Élaborer ou adapter le Plan\nde Gestion des Données (PGD);
+  note right
+    Le PGD couvre :
+    - acquisition et transfert ;
+    - traitement et analyse ;
+    - stockage et sauvegarde ;
+    - accès et partage ;
+    - archivage et suppression.
+  end note
+
+  |Administrateur système / TSI|
+  :Valider le matériel, les logiciels\net les systèmes informatiques;
+  while (Systèmes non validés ?) is (Oui)
+    :Corriger la configuration\nou les anomalies;
+    :Reprendre les tests\nde validation;
+  endwhile (Non)
+
+  |Responsable Assurance Qualité|
+  :Vérifier la version correcte de la POS\net former le personnel;
+
+  |Chercheur / Employé|
+  :Collecter les données avec\ndes instruments validés;
+  note right
+    Assurer la traçabilité :
+    - date et heure ;
+    - collecteur ;
+    - source ;
+    - déviations éventuelles.
+
+    Utiliser le contrôle visuel
+    et la double saisie si nécessaire.
+  end note
+
+  |Gestionnaire de données|
+  :Transférer les données par un canal sécurisé\net vérifier leur intégrité;
+  :Nettoyer, transformer\net intégrer les données;
+  :Analyser les données\navec des outils validés;
+  note right
+    Exemples d'outils :
+    Excel, Stata, Python
+    ou logiciels spécifiques BPL.
+  end note
+  :Effectuer le contrôle qualité\net valider les résultats;
+
+  while (Données non conformes ?) is (Oui)
+    if (Erreur provenant de la collecte ?) then (Oui)
+      |Chercheur / Employé|
+      :Corriger ou reprendre\nla collecte des données;
+
+      |Gestionnaire de données|
+      :Transférer à nouveau\nles données corrigées;
+    else (Non)
+      :Corriger le nettoyage,\nle traitement ou l'analyse;
+    endif
+    :Effectuer un nouveau\ncontrôle qualité;
+  endwhile (Non)
+
+  |Administrateur système / TSI|
+  :Stocker les données\nde manière sécurisée;
+  :Effectuer les sauvegardes\net tester la restauration;
+
+  |Gestionnaire de données|
+  if (Accès ou partage requis ?) then (Oui)
+    |Chercheur / Employé|
+    :Soumettre une demande d'accès;
+    note right
+      La demande précise :
+      - l'identité ;
+      - la justification ;
+      - les données concernées ;
+      - le niveau d'accès souhaité.
+    end note
+
+    |Gestionnaire de données|
+    :Examiner la demande d'accès;
+    if (Accès approuvé ?) then (Oui)
+      |Administrateur système / TSI|
+      :Attribuer les droits appropriés\nselon le moindre privilège;
+
+      |Gestionnaire de données|
+      :Partager les données par un canal sécurisé\net journaliser le partage;
+    else (Non)
+      :Documenter le refus d'accès;
+    endif
+  else (Non)
+    :Poursuivre sans partage externe;
+  endif
+
+  |Responsable Assurance Qualité|
+  :Auditer la conformité, la sécurité\net la traçabilité;
+  while (Non-conformité détectée ?) is (Oui)
+    |Gestionnaire de données|
+    :Mettre en œuvre les actions correctives\navec le service TSI;
+
+    |Responsable Assurance Qualité|
+    :Réaliser un nouvel audit;
+  endwhile (Non)
+
+  |Gestionnaire de données|
+  :Clôturer l'usage actif des données\net préparer l'archivage;
+
+  |Documentation et Archives|
+  :Archiver les données\net documenter les métadonnées;
+  :Conserver les données pendant\nla durée réglementaire applicable;
+  note right
+    Le document mentionne une échéance
+    de cinq ans après la fin de l'étude,
+    sous réserve d'obligations de
+    conservation plus longues.
+  end note
+
+  |Directeur d'étude|
+  :Examiner l'échéance\nde conservation;
+  if (Suppression autorisée ?) then (Oui)
+    |Administrateur système / TSI|
+    :Supprimer les données\nde manière sécurisée;
+    note right
+      Documenter :
+      - les données supprimées ;
+      - la date ;
+      - la méthode ;
+      - l'autorité ayant approuvé.
+    end note
+  else (Non)
+    |Documentation et Archives|
+    :Prolonger la conservation\ndes données archivées;
+  endif
+
+  |Directeur d'étude|
+  :Données conservées ou supprimées\nconformément aux règles;
+  stop
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus_gestion_donnees.png]]
+
+
+* Activite
+#+begin_src plantuml :file Exports/processus-achat-activite.png
+  @startuml
+  !pragma useVerticalIf on
+
+  title Processus d'achat CSRS — diagramme d'activité
+
+  ' =====================================================================
+  ' MISE EN FORME
+  ' =====================================================================
+  skinparam shadowing false
+  skinparam defaultFontSize 12
+  skinparam ArrowColor #202020
+
+  skinparam activityBackgroundColor #EEF0FB
+  skinparam activityBorderColor #0078A8
+  skinparam activityDiamondBackgroundColor #FFFDE1
+  skinparam activityDiamondBorderColor #B3A500
+  skinparam activityStartColor #DFFF80
+  skinparam activityEndColor #FFCCCC
+
+  skinparam swimlaneBorderColor #777777
+  skinparam swimlaneTitleBackgroundColor #F7F7F7
+  skinparam swimlaneTitleFontStyle bold
+
+
+  ' =====================================================================
+  ' CONNECTEURS
+  '
+  ' (S) : point de saisie ou de resoumission de la DA.
+  ' (C) : convergence des corrections demandées par la DAF ou le DG.
+  ' (A) : sortie unique lorsque la DA est approuvée par le DG.
+  ' (F) : convergence des fins normales et des deux rejets.
+  '
+  ' « detach » termine uniquement la branche locale.
+  ' Le traitement reprend à la seconde occurrence du connecteur
+  ' portant le même identifiant.
+  ' =====================================================================
+
+  ' 1. SAISIE DE LA DEMANDE D'ACHAT
+
+  |Demandeur|
+  start
+  ' Le connecteur S sera également utilisé pour les resoumissions.
+  #blue:(S)
+  :Faire une demande d'achat;
+  note right
+    Chercheurs ou employés
+  end note
+
+  ' 2. VALIDATION PAR LA DAF
+  |DAF|
+  :Soumettre la DA à la signature\nde la DAF;
+  switch (Décision de la DAF)
+    case (Correction)
+      #orange:(C)
+      detach
+    case (Rejet)
+      ' Le rejet rejoint la fin commune F.
+      :Rejet de la DA;
+      stop
+
+    case (DA signée)
+      ' Seule une DA signée par la DAF est transmise au DG.
+      |DG|
+      :Soumettre la DA signée par la DAF\nà la signature du DG;
+      ' 3. VALIDATION PAR LE DG
+      switch (Décision du DG)
+        case (Correction)
+          #orange:(C)
+          detach
+        case (Rejet)
+          :Rejet de la DA par le DG;
+          stop;  
+        case (DA signée)
+          :DA approuvée;
+          #green:(A)
+          detach
+      endswitch
+  endswitch
+
+  ' ---------------------------------------------------------------------
+  ' 4. TRAITEMENT UNIQUE DE LA CORRECTION
+  '
+  ' Les corrections demandées par la DAF et par le DG arrivent toutes
+  ' les deux au connecteur C. L'activité n'est définie qu'une seule fois.
+  ' ---------------------------------------------------------------------
+  |Demandeur|
+  #orange:(C)
+  :Demande de correction de la DA;
+  ' Après correction, le flux retourne au point S placé avant
+  ' « Faire une demande d'achat ».
+  -> DA corrigée et resoumise;
+  #blue:(S)
+  detach
+
+  ' ---------------------------------------------------------------------
+  ' 5. TRAITEMENT DE LA DA APPROUVÉE
+  '
+  ' Seule la branche « DA signée » du DG peut atteindre A.
+  ' ---------------------------------------------------------------------
+  |DG|
+  #green:(A)
+
+  ' ---------------------------------------------------------------------
+  ' 6. COTATION ET COMMANDE
+  ' ---------------------------------------------------------------------
+  |Cellule achat|
+  :Demander une cotation;
+  note left
+    Référentiel :
+    base de données des fournisseurs
+    et prestataires de services
+  end note
+  :Envoyer le bon de commande;
+  ' ---------------------------------------------------------------------
+  ' 7. LIVRAISON ET FACTURATION
+  '
+  ' Hypothèse de normalisation :
+  ' le diagramme source ne montre aucun lien sortant après
+  ' « Livraison produit ou service ».
+  '
+  ' On suppose donc que :
+  '   - la livraison ;
+  '   - le dépôt de la facture
+  ' sont deux opérations parallèles devant être terminées avant paiement.
+  ' ---------------------------------------------------------------------
+  fork
+    |Cellule achat|
+    :Livraison du produit ou du service;
+  fork again
+    :Facture déposée;
+  end fork
+  ' Le paiement ne peut être atteint qu'après la synchronisation
+  ' des deux branches précédentes.
+  :Payer la facture;
+
+  ' ---------------------------------------------------------------------
+  ' 8. TRAITEMENT ÉVENTUEL DE LA TVA
+  ' ---------------------------------------------------------------------
+  if (TVA à recouvrer ?) then (oui)
+    |Cellule achat|
+    :Recouvrer la TVA;
+  else (non)
+    ' Aucun traitement supplémentaire de TVA.
+  endif
+  ' Le résultat du test TVA rejoint la même fin que les rejets.
+  stop
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus-achat-activite.png]]
+
+* Sequences
+#+begin_src plantuml :file Exports/processus-achat-sequence.png
+@startuml
+
+title Processus d'achat CSRS — diagramme de séquence
+
+autonumber
+
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign center
+
+skinparam ParticipantBackgroundColor #EEF0FB
+skinparam ParticipantBorderColor #0078A8
+skinparam ActorBackgroundColor #E8F5E9
+skinparam ActorBorderColor #5A9E22
+skinparam DatabaseBackgroundColor #F5F5F5
+skinparam DatabaseBorderColor #777777
+
+actor "Chercheur ou employé" as Demandeur
+participant DAF
+participant DG
+participant "Cellule achat" as Achat
+database "Base fournisseurs et\nprestataires de services" as Base
+participant "Fournisseur ou\nprestataire" as Fournisseur
+participant "Bande 1\n(rôle à préciser)" as Bande
+
+Demandeur -> Demandeur: Préparer la demande d'achat
+Demandeur -> DAF: Soumettre la DA
+
+loop 0..n corrections demandées par la DAF
+
+  DAF --> Demandeur: Demander la correction de la DA
+  Demandeur -> Demandeur: Corriger la DA
+  Demandeur -> DAF: Resoumettre la DA corrigée
+
+end
+
+alt DA rejetée par la DAF
+
+  DAF --> Demandeur: Notifier le rejet
+
+else DA signée par la DAF
+
+  DAF -> DG: Transmettre la DA signée
+
+  loop 0..n corrections demandées par le DG
+
+    DG --> Demandeur: Demander la correction de la DA
+    Demandeur -> Demandeur: Corriger la DA
+    Demandeur -> DAF: Resoumettre la DA corrigée
+    DAF -> DG: Transmettre la DA corrigée et resignée
+
+  end
+
+  alt DA rejetée par le DG
+
+    DG --> Demandeur: Notifier le rejet
+
+  else DA signée par le DG
+
+    DG -> Achat: Transmettre la DA approuvée
+
+    Achat -> Base: Rechercher les fournisseurs ou prestataires
+    Base --> Achat: Retourner la liste disponible
+
+    loop Pour chaque fournisseur présélectionné
+
+      Achat -> Fournisseur: Demander une cotation
+      Fournisseur --> Achat: Transmettre la cotation
+
+    end
+
+    Achat -> Fournisseur: Envoyer le bon de commande
+
+    par Livraison
+
+      Fournisseur -> Achat: Livrer le produit ou le service
+
+    else Facturation
+
+      Fournisseur -> Bande: Déposer la facture
+
+    end
+
+    Bande -> Fournisseur: Payer la facture
+
+    alt TVA à recouvrer
+
+      Bande --> Achat: Confirmer le paiement
+      Achat -> Achat: Recouvrer la TVA
+
+    else Pas de TVA à recouvrer
+
+      Bande -> Bande: Clôturer le paiement
+
+    end
+
+  end
+
+end
+
+@enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus-achat-sequence.png]]
+* Diagrammes d'etat
+#+begin_src plantuml :file Exports/processus-achat-etats.png
+@startuml
+
+title Processus d'achat CSRS — cycle de vie de la DA
+
+left to right direction
+hide empty description
+
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam ArrowColor #202020
+
+skinparam state {
+  BackgroundColor #EEF0FB
+  BorderColor #0078A8
+  StartColor #DFFF80
+  EndColor #FFCCCC
+}
+
+state "Brouillon" as Brouillon
+state "En validation DAF" as ValidationDAF
+state "Correction demandée" as Correction
+state "Signée par la DAF" as SigneeDAF
+state "En validation DG" as ValidationDG
+state "DA approuvée" as Approuvee
+state "DA rejetée" as Rejetee #FADBD8
+
+state "Cotation en cours" as Cotation
+state "Bon de commande envoyé" as Commande
+
+state "En attente de livraison" as AttenteLivraison
+state "Produit ou service livré" as Livre
+
+state "En attente de facture" as AttenteFacture
+state "Facture déposée" as FactureDeposee
+state "Facture payée" as FacturePayee
+
+state "Recouvrement de la TVA" as TVA
+state "Dossier clôturé" as Cloturee #E8F5E9
+
+state ForkCommande <<fork>>
+state JoinCommande <<join>>
+state ChoixTVA <<choice>>
+
+[*] --> Brouillon
+
+Brouillon --> ValidationDAF : Demandeur / soumettre
+
+ValidationDAF --> Correction : DAF / demander correction
+ValidationDAF --> Rejetee : DAF / rejeter
+ValidationDAF --> SigneeDAF : DAF / signer
+
+Correction --> Brouillon : Demandeur / corriger
+
+SigneeDAF --> ValidationDG : transmettre au DG
+
+ValidationDG --> Correction : DG / demander correction
+ValidationDG --> Rejetee : DG / rejeter
+ValidationDG --> Approuvee : DG / signer
+
+Rejetee --> [*]
+
+Approuvee --> Cotation : Cellule achat / demander cotation
+Cotation --> Commande : Cellule achat / envoyer le bon de commande
+
+Commande --> ForkCommande
+
+ForkCommande --> AttenteLivraison
+ForkCommande --> AttenteFacture
+
+AttenteLivraison --> Livre : livraison
+AttenteFacture --> FactureDeposee : Bande 1 / dépôt
+
+Livre --> JoinCommande
+FactureDeposee --> JoinCommande
+
+JoinCommande --> FacturePayee : Bande 1 / payer la facture
+FacturePayee --> ChoixTVA
+
+ChoixTVA --> TVA : [TVA à recouvrer]
+ChoixTVA --> Cloturee : [pas de TVA]
+
+TVA --> Cloturee : Cellule achat / TVA recouvrée
+
+Cloturee --> [*]
+
+note bottom of FactureDeposee
+  « Bande 1 » est le libellé du PDF.
+  Remplacer par le rôle organisationnel réel.
+end note
+
+@enduml
+#+end_src
+
+#+RESULTS:
+[[file:Exports/processus-achat-etats.png]]

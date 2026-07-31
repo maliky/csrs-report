@@ -65,6 +65,11 @@ pgdata/
 docker-compose.override.yml
 backups/
 
+# Other stuff for dev
+*pdf
+*svg
+*png
+
 # Generated static assets
 staticfiles/
 static/react/
