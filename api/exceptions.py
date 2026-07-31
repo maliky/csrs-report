@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -9,6 +10,8 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 from work.services import StaleRevisionError
+
+logger = logging.getLogger(__name__)
 
 
 def _field_messages(data: Any) -> tuple[str, dict[str, list[str]]]:
@@ -56,7 +59,20 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
         )
     response = exception_handler(exc, context)
     if response is None:
-        raise exc
+        logger.error(
+            "Unhandled API exception",
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
+        return Response(
+            {
+                "error": {
+                    "code": "server_error",
+                    "message": "Le serveur n'a pas pu traiter cette demande.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
     message, fields = _field_messages(response.data)
     code = {
         400: "validation_error",

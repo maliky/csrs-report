@@ -73,7 +73,7 @@ paths:
           description: ''
   /api/v1/proposals/:
     get:
-      operationId: proposals_retrieve
+      operationId: proposal_list
       tags:
       - proposals
       security:
@@ -87,7 +87,7 @@ paths:
                 additionalProperties: {}
           description: ''
     post:
-      operationId: proposals_create
+      operationId: proposal_create
       tags:
       - proposals
       requestBody:
@@ -112,9 +112,61 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/proposals/{id}/:
+    get:
+      operationId: proposal_detail
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - proposals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    patch:
+      operationId: proposal_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProposalUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProposalUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProposalUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/proposals/{id}/decision/:
     post:
-      operationId: proposals_decision_create
+      operationId: proposal_decision
       parameters:
       - in: path
         name: id
@@ -134,6 +186,39 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProposalDecision'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/proposals/{id}/resubmit/:
+    post:
+      operationId: proposal_resubmit
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalResubmit'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalResubmit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalResubmit'
         required: true
       security:
       - cookieAuth: []
@@ -426,6 +511,35 @@ components:
       required:
       - message
       - revision
+    PatchedProposalUpdate:
+      type: object
+      description: Shared, server-validated assignment schedule.
+      properties:
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        estimated_work_days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        action_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        calendar_id:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
     PatchedTaskUpdate:
       type: object
       description: Shared, server-validated assignment schedule.
@@ -542,6 +656,14 @@ components:
           default: ''
       required:
       - decision
+      - revision
+    ProposalResubmit:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+      required:
       - revision
     SourceEnum:
       enum:

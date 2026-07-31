@@ -120,10 +120,18 @@ export type Proposal = {
   start_date: string;
   due_date: string;
   estimated_work_days: string;
+  action: { id: number; label: string } | null;
+  calendar: { id: number; label: string };
   employee: Person;
+  accepted_assignment_id: number | null;
   decision_note: string;
   created_at: string;
   can_review: boolean;
+  capabilities: {
+    edit: boolean;
+    resubmit: boolean;
+    review: boolean;
+  };
 };
 
 export type ProposalGroups = {

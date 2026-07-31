@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { TaskDetail } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
@@ -21,25 +21,34 @@ export function TaskDetailPage() {
   const { data, error, loading, reload, setData } =
     useApi<TaskDetail>(endpoint);
   const [mutationError, setMutationError] = useState<Error | null>(null);
+  const [mutationSuccess, setMutationSuccess] = useState("");
+  const [draftPercentage, setDraftPercentage] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
-  async function mutate(path: string, body: object) {
+  useEffect(() => {
+    if (data) setDraftPercentage(data.percentage);
+  }, [data]);
+
+  async function mutate(path: string, body: object, successMessage = "") {
     setSaving(true);
     setMutationError(null);
+    setMutationSuccess("");
     try {
-      setData(
-        await apiFetch<TaskDetail>(path, {
-          method: "POST",
-          body: JSON.stringify(body),
-        }),
-      );
+      const updated = await apiFetch<TaskDetail>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setData(updated);
+      setMutationSuccess(successMessage);
+      return true;
     } catch (caught) {
       setMutationError(
         caught instanceof Error
           ? caught
           : new Error("Échec de l'enregistrement"),
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -83,6 +92,11 @@ export function TaskDetailPage() {
           </Button>
         </div>
       )}
+      {mutationSuccess && (
+        <div className="success-banner" role="status">
+          {mutationSuccess}
+        </div>
+      )}
       <dl className="details-grid">
         <div className="detail">
           <dt>Date de début</dt>
@@ -113,7 +127,12 @@ export function TaskDetailPage() {
         <div className="stack">
           <Card>
             <h2>Progression dans le temps</h2>
-            <ProgressChart points={data.chart} today={data.today} />
+            <ProgressChart
+              points={data.chart}
+              today={data.today}
+              status={data.status}
+              previewPercentage={draftPercentage ?? data.percentage}
+            />
           </Card>
           <Card>
             <h2>Description</h2>
@@ -130,19 +149,20 @@ export function TaskDetailPage() {
               <div>
                 {data.activities.map((activity) => (
                   <article className="activity" key={activity.id}>
-                    <time dateTime={activity.occurred_at}>
-                      {formatDateTime(activity.occurred_at)}
-                    </time>
-                    <span className="activity-meta">
-                      {activity.actor_short_name} ·{" "}
-                      {activity.kind === "progress"
-                        ? "Progression"
-                        : "Observation"}
-                      {activity.percentage_after !== null
-                        ? ` ${activity.percentage_after} %`
-                        : ""}
-                    </span>
-                    <div>{activity.message}</div>
+                    <div className="activity-summary">
+                      <time dateTime={activity.occurred_at}>
+                        {formatDateTime(activity.occurred_at)}
+                      </time>
+                      <span className="activity-author">
+                        {activity.actor.name}
+                      </span>
+                      <span className="activity-meta">
+                        {activity.kind === "progress"
+                          ? `Progression ${activity.percentage_after ?? 0} %`
+                          : "Observation"}
+                      </span>
+                    </div>
+                    <div className="activity-message">{activity.message}</div>
                   </article>
                 ))}
               </div>
@@ -158,9 +178,15 @@ export function TaskDetailPage() {
           {data.capabilities.update_progress && (
             <ProgressForm
               task={data}
+              percentage={draftPercentage ?? data.percentage}
+              setPercentage={setDraftPercentage}
               saving={saving}
               submit={(body) =>
-                mutate(`/api/v1/tasks/${data.id}/progress/`, body)
+                mutate(
+                  `/api/v1/tasks/${data.id}/progress/`,
+                  body,
+                  `Progression enregistrée à ${draftPercentage ?? data.percentage} %.`,
+                )
               }
             />
           )}
@@ -190,23 +216,33 @@ export function TaskDetailPage() {
 
 function ProgressForm({
   task,
+  percentage,
+  setPercentage,
   saving,
   submit,
 }: {
   task: TaskDetail;
+  percentage: number;
+  setPercentage: (value: number) => void;
   saving: boolean;
-  submit: (body: object) => Promise<void>;
+  submit: (body: object) => Promise<boolean>;
 }) {
-  const [percentage, setPercentage] = useState(task.percentage);
+  const [note, setNote] = useState("");
+  const [blocked, setBlocked] = useState(false);
+  const requiresNote = percentage < task.percentage || blocked;
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
     void submit({
       revision: task.revision,
       entry_date: task.today,
       percentage,
-      note: form.get("note"),
-      blocked: form.get("blocked") === "on",
+      note,
+      blocked,
+    }).then((saved) => {
+      if (saved) {
+        setNote("");
+        setBlocked(false);
+      }
     });
   }
   return (
@@ -234,11 +270,24 @@ function ProgressForm({
           <textarea
             id="progress-note"
             name="note"
+            required={requiresNote}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
             placeholder="Résultat obtenu, difficulté ou prochaine étape"
           />
+          {requiresNote && (
+            <small>
+              Une observation est obligatoire pour expliquer cette modification.
+            </small>
+          )}
         </div>
         <label>
-          <input type="checkbox" name="blocked" />{" "}
+          <input
+            type="checkbox"
+            name="blocked"
+            checked={blocked}
+            onChange={(event) => setBlocked(event.target.checked)}
+          />{" "}
           {task.capabilities.self_managed
             ? "Signaler un point d'attention"
             : "Je suis bloqué"}
@@ -256,7 +305,7 @@ function ObservationForm({
 }: {
   task: TaskDetail;
   saving: boolean;
-  submit: (body: object) => Promise<void>;
+  submit: (body: object) => Promise<boolean>;
 }) {
   const [message, setMessage] = useState("");
   return (
@@ -265,9 +314,9 @@ function ObservationForm({
         className="stack"
         onSubmit={(event) => {
           event.preventDefault();
-          void submit({ revision: task.revision, message }).then(() =>
-            setMessage(""),
-          );
+          void submit({ revision: task.revision, message }).then((saved) => {
+            if (saved) setMessage("");
+          });
         }}
       >
         <h2>Ajouter une observation</h2>
@@ -295,7 +344,7 @@ function TransitionActions({
 }: {
   task: TaskDetail;
   saving: boolean;
-  submit: (body: object) => Promise<void>;
+  submit: (body: object) => Promise<boolean>;
 }) {
   const [reason, setReason] = useState("");
   return (

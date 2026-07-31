@@ -2,14 +2,32 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { Period } from "../../lib/api/types";
 import styles from "./tasks.module.css";
 
-export function PeriodNavigation({ period }: { period: Period }) {
-  const [, setSearch] = useSearchParams();
+export function PeriodNavigation({
+  period,
+  preserveParams = [],
+}: {
+  period: Period;
+  preserveParams?: string[];
+}) {
+  const [search, setSearch] = useSearchParams();
+
+  function preserve(query: string) {
+    const next = new URLSearchParams(query);
+    for (const key of preserveParams) {
+      const values = search.getAll(key);
+      next.delete(key);
+      for (const value of values) next.append(key, value);
+    }
+    return next;
+  }
+
   function switchMode(kind: "week" | "month") {
-    setSearch(
-      kind === "month"
-        ? { month: period.start.slice(0, 7) }
-        : { week: period.start },
+    const next = preserve("");
+    next.set(
+      kind === "month" ? "month" : "week",
+      kind === "month" ? period.start.slice(0, 7) : period.start,
     );
+    setSearch(next);
   }
   return (
     <>
@@ -30,11 +48,17 @@ export function PeriodNavigation({ period }: { period: Period }) {
         </button>
       </div>
       <nav className={styles.period} aria-label="Changer de période">
-        <Link to={`?${period.previous_query}`} aria-label="Période précédente">
+        <Link
+          to={`?${preserve(period.previous_query)}`}
+          aria-label="Période précédente"
+        >
           ← <span>Précédente</span>
         </Link>
         <strong>{period.label}</strong>
-        <Link to={`?${period.next_query}`} aria-label="Période suivante">
+        <Link
+          to={`?${preserve(period.next_query)}`}
+          aria-label="Période suivante"
+        >
           <span>Suivante</span> →
         </Link>
       </nav>

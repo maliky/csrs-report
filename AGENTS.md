@@ -15,6 +15,7 @@ Ces directives s'appliquent a tout le depot `csrs_report` et restent volontairem
 - Ajouter ou adapter les tests avec chaque comportement fonctionnel.
 - Preferer de petits changements verificables a des refontes larges.
 - Documenter les decisions d'architecture qui engagent durablement le projet.
+- Dans les fichiers `.org` et `.md`, ne pas envelopper manuellement le texte : conserver chaque paragraphe et chaque element de liste sur une seule ligne logique, sans modifier les blocs de code, tableaux, titres ou autres structures.
 - Conserver des migrations de base de donnees reproductibles et versionnees.
 - Garder le projet executable dans des conteneurs sans rendre le code dependant d'un poste de travail particulier.
 

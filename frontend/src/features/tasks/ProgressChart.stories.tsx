@@ -9,5 +9,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const HistoriqueSurPlusieursSemaines: Story = {
-  args: { points: taskDetailFixture.chart, today: taskDetailFixture.today },
+  args: {
+    points: taskDetailFixture.chart,
+    today: taskDetailFixture.today,
+    status: taskDetailFixture.status,
+  },
 };

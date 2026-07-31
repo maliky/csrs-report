@@ -2,11 +2,105 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-07-24 ven.> Connexion Django depuis Vite sous Windows
+** Diagnostic et correction
+
+- un appel anonyme a =/api/v1/session/= recevait correctement =401=, mais la redirection relative vers =/connexion/= restait sur le serveur Vite 5173, qui ne transmettait jusque-la que =/api= a Django;
+- Vite transmet maintenant =/connexion=, =/deconnexion=, =/admin= et =/static= au meme backend que =/api=; le formulaire, les fichiers statiques, le cookie de session et React restent donc sur une origine unique;
+- le developpeur doit utiliser =localhost= ou =127.0.0.1= pendant toute la session, sans alterner les deux noms d'hote;
+- le proxy est couvert par un test de configuration et le parcours reel conserve Django/PostgreSQL sans =VITE_USE_MOCKS=.
+
+** Verification
+
+- [X] Les 17 tests React et le build Vite reussissent.
+- [X] Un serveur Django simule confirme le passage reel de =/connexion/= et =/static/= par Vite.
+- [X] Les tests cibles de =seed_pilot_users=, de selection de l'hote et de session API reussissent.
+
+* <2026-07-24 ven.> Installation Psycopg portable dans l'image Docker
+** Realisation
+
+- l'image Python installe =libpq5= depuis Debian et utilise le paquet Python portable =psycopg==3.2.9=;
+- le deploiement ne depend plus de la disponibilite d'une roue =psycopg-binary= pour l'architecture Docker de la machine;
+- l'API Python et la version de Psycopg restent inchangees.
+
+* <2026-07-22 mer.> Scripts Docker pour Windows PowerShell
+** Realisation
+
+- les quatre scripts Docker Bash possedent maintenant un equivalent PowerShell 5.1 compatible sous =scripts/=;
+- =bootstrap_env.ps1= genere sans Python un =.env= local, des secrets aleatoires, le port Django 8000, les origines Vite 5173 et desactive les redirections TLS locales;
+- =seed_pilot.ps1= masque les deux mots de passe, execute la simulation avant l'ecriture puis retire les variables sensibles de la session;
+- =backup_db.ps1= produit et valide le dump dans le conteneur avant de le copier sur Windows, ce qui evite la corruption binaire par une redirection PowerShell;
+- les scripts utilisent Docker Compose v2; la preproduction =psiaka= reste administree sur Linux avec les scripts Bash.
+
+* <2026-07-22 mer.> Profils integres et filtre de l'equipe React
+** Realisation
+
+- chaque ligne de =/app/equipe= est maintenant une branche tactile et utilisable au clavier;
+- la premiere ouverture charge =/api/v1/team/{id}/= et affiche les taches du collaborateur directement dans l'arbre; une fermeture puis une reouverture reutilise les donnees chargees;
+- le lien explicite =Voir la progression= est retire. Le titre de chaque tache reste un lien vers son detail;
+- le controle segmente =Tous / Avec taches / Sans tache= filtre les compteurs propres a la periode;
+- lorsqu'un descendant correspond, ses ancetres restent visibles afin de conserver le chemin hierarchique;
+- le parametre =tasks=with|without= est conserve lors des changements de semaine, de mois et de periode;
+- sur telephone, toute la ligne reste une cible d'au moins 44 pixels, les profils restent dans une colonne et l'arbre ne produit aucun debordement horizontal.
+
+Le filtrage utilise les =task_count= deja fournis par l'API de synthese. Aucun modele, migration ou contrat JSON supplementaire n'est necessaire. Le detail existant fournit les =TaskSummary= charges paresseusement.
+
+** Verification
+
+- [X] Tests React : filtre recursif, ancetres conserves, URL de periode, chargement unique et absence du lien explicite.
+- [X] Build TypeScript et Vite.
+- [X] Selenium avec la vraie API Django : profil integre, filtres avec/sans tache et largeur de 360 pixels.
+
+* <2026-07-22 mer.> Actualisation de la population pilote sur psiaka
+** Execution
+
+La base de =psiaka.koba.sarl= contenait deja les 73 affectations =PIL-=, mais les donnees ont ete recalees sur la semaine courante avec le mode idempotent dedie. La procedure executee est :
+
+1. sauvegarde PostgreSQL verifiee avec =scripts/backup_db.sh=;
+2. =seed_pilot_users --refresh-scenarios-only --dry-run= dans le conteneur web;
+3. meme commande sans =--dry-run= apres succes de la simulation;
+4. controle des volumes, de la tache non pilote et de la vue equipe de =dg=.
+
+Les deux passages ont confirme =users=15 assignments=73 proposals=42=. Le chargement a reconstruit les progressions, conversations et caches des scenarios sans recreer les comptes et sans modifier leurs mots de passe.
+
+** Lecture de la vue equipe
+
+Les 73 affectations ne doivent pas apparaitre simultanement sur les cartes de =Mon equipe=. Elles couvrent douze semaines, cinq scenarios pour chacun des quatorze collaborateurs concernes et trois taches propres a =dg=. Le compteur d'une carte :
+
+- est limite a la semaine ou au mois selectionne;
+- compte les taches de la personne, pas celles de ses descendants;
+- alimente le profil charge directement lorsque la ligne est ouverte.
+
+Il est donc attendu que plusieurs responsables directs de =dg= affichent zero tache dans la semaine courante alors que leurs sous-equipes repliees contiennent les collaborateurs peuples. La procedure reproductible et ces regles de lecture sont documentees dans =README.md=, section /Actualiser les scenarios pilotes existants/. Le filtre React conserve ces responsables lorsqu'ils sont necessaires pour atteindre un descendant correspondant.
+
+* <2026-07-22 mer.> Detail, filtres et cycle React des propositions
+** Realisation
+
+- le menu place maintenant =Propositions= apres =Mon equipe=;
+- le dashboard filtre les propositions par statut, collaborateur et periode chevauchante; les criteres appliques restent dans l'URL;
+- une carte validee ouvre directement la progression de la tache creee; les autres cartes ouvrent le detail de la proposition;
+- l'auteur peut corriger une proposition soumise ou rejetee. Une proposition rejetee doit ensuite etre resoumise explicitement;
+- seul un responsable autorise peut valider ou rejeter. Les capacites =edit=, =resubmit= et =review= sont renvoyees par Django et controlees a nouveau par les services metier;
+- les controles de decision occupent une rangee flexible sous le motif et ne depassent plus de la carte dans une grille etroite;
+- les activites d'une tache empilent date, auteur et progression a gauche, avant le texte de l'observation a droite.
+
+Les routes =GET/PATCH /api/v1/proposals/{id}/= et =POST /api/v1/proposals/{id}/resubmit/= completent le contrat existant. Une proposition validee expose =accepted_assignment_id= afin que React ouvre =/app/taches/{id}= sans reconstruire le lien.
+
+** Incident PostgreSQL corrige
+
+L'acceptation de la proposition =Formaliser le tableau de priorites= recevait un statut 500 puis React affichait =JSON.parse: unexpected character=. Le service combinait =select_for_update()= et =select_related("action")= alors que l'action est facultative. PostgreSQL refusait de verrouiller le cote nullable du =LEFT JOIN=. Le service verrouille maintenant uniquement la ligne =TaskProposal= et charge les relations sous la meme transaction. Les erreurs inattendues de l'API conservent aussi une enveloppe JSON generique; le client React sait signaler une reponse non JSON sans exposer une erreur de parseur.
+
+** Verification
+
+- [X] Tests API : acceptation, lien d'affectation, correction, resoumission, revision et permissions.
+- [X] Tests React : filtres, destinations des cartes, validation, detail, resoumission, ordre du menu et reponse non JSON.
+- [X] Selenium : vraie API Django, validation de proposition et absence de debordement a 360 et 1440 pixels.
+
 * <2026-07-22 mer.> Preproduction psiaka et parcours developpeur
 ** Etat operationnel
 
 - la preproduction est publiee sur =https://psiaka.koba.sarl/= avec un certificat Let's Encrypt;
-- la branche partagee de developpement et de preproduction est =dev=;
+- la branche de travail et de preproduction de l'etudiant est =psiaka=; =dev= reste la branche d'integration apres revue administrateur;
 - le checkout serveur est =/srv/apps/psiaka/app= et le depot bare partage est =/home/jil/git/csrs_report.git=;
 - le projet Compose est =csrs_psiaka= et le service web n'est expose a l'hote que sur =127.0.0.1:18006=, derriere Nginx;
 - le compte systeme =psiaka= peut cloner, tirer et pousser le depot, mais n'appartient pas au groupe =docker=;
@@ -39,27 +133,40 @@ Le premier parcours ne valide pas les regles du serveur. Avant de proposer une m
 
 ** Flux Git et mise en preproduction
 
-Le developpeur clone le depot sur sa machine, travaille sur =dev=, teste, committe puis pousse vers =/home/jil/git/csrs_report.git=. Il transmet ensuite a l'administrateur :
+Le developpeur clone le depot sur sa machine, suit =origin/psiaka=, teste, committe puis pousse sa branche =psiaka= vers =/home/jil/git/csrs_report.git=. Il ne pousse pas directement sur =dev=. Il transmet ensuite a l'administrateur :
 
 - le hash ou le message du commit a deployer;
 - les migrations ou nouvelles variables d'environnement attendues;
 - les tests et controles executes;
 - les points particuliers a verifier sur =https://psiaka.koba.sarl/=.
 
-Le compte =psiaka= peut tirer les commits, mais le pull ne modifie pas les conteneurs deja en cours. L'administrateur controle le diff, sauvegarde la base si necessaire, lance le script de deploiement, puis verifie la sante Compose, la connexion, =/app/= et les journaux. Cette separation permet au developpeur de travailler sans lui accorder les privileges Docker de l'hote.
 
-* <2026-07-22 mer.> Scenario guide React : modifier la progression et actualiser le graphique D3
-** Ou nous en sommes
+Le checkout =/srv/apps/psiaka/app= suit lui aussi la branche =psiaka=. Le pull ne modifie pas les conteneurs deja en cours. L'administrateur controle le diff, sauvegarde la base si necessaire, lance le script de deploiement, puis verifie la sante Compose, la connexion, =/app/= et les journaux. Apres validation, il fusionne les changements de =psiaka= vers =dev=. Les nouveaux changements de =dev= sont reintegres dans =psiaka= avec un merge de =origin/dev=. 
 
-La branche =dev= contient deja le parcours complet de modification d'une progression dans la nouvelle interface :
+La sequence operationnelle est donc strictement :
+
+1. l'etudiant pousse son commit local vers =origin/psiaka=;
+2. le checkout VPS tire ce commit avec =git pull --ff-only=;
+3. apres revue, l'administrateur lance =./scripts/deploy_preprod.sh=.
+
+Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=; =npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
+
+* <2026-07-22 mer.> Progression React, graphique D3 et navigation laterale
+** Realisation
+
+La branche =psiaka= reprend le parcours complet de modification d'une progression dans la nouvelle interface et le raccorde au graphique D3 :
 
 - =/app/taches/:taskId= affiche =TaskDetailPage=;
 - =ProgressForm= propose un curseur de 0 a 100 par pas de 5 et le bouton =Enregistrer la progression=;
 - =POST /api/v1/tasks/{id}/progress/= applique la session, CSRF, les permissions, les regles metier et la revision optimiste dans Django;
 - la reponse renvoie le detail actualise de la tache, y compris la progression, la charge, le statut, le fil d'activite et les points du graphique;
-- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la vue sans rechargement de page.
+- =setData(...)= remplace l'etat React et provoque le nouveau rendu de toute la vue sans rechargement de page;
+- le deplacement du curseur affiche d'abord un apercu local distinct de la valeur serveur;
+- une baisse ou un point d'attention rend l'observation obligatoire dans React, puis Django applique encore la meme validation;
+- le graphique utilise D3 pour les echelles, la courbe en escalier et la selection du point le plus proche, tout en laissant React proprietaire du DOM;
+- la navigation horizontale est remplacee par une barre laterale gauche, retractable et persistante sur ordinateur, fermee par defaut sur telephone.
 
-Le graphique de =ProgressChart.tsx= est actuellement un SVG construit en React. Il n'utilise pas encore D3 et ne reprend pas toute la richesse du graphique classique produit par =renderProgressChart= dans =static/js/app.js=.
+Le composant =ProgressChart.tsx= reprend les jours non ouvres comprimes, les points pleins observes et creux reportes, les reperes debut, aujourd'hui et fin prevue, la zone de retard, la navigation clavier et la table textuelle alternative. Son apercu n'est jamais presente comme une donnee enregistree : apres sauvegarde, seule la nouvelle reponse =TaskDetail= de Django actualise le graphique et le fil d'activite.
 
 ** Scenario vertical a suivre
 
@@ -84,13 +191,12 @@ Exemple : un collaborateur ouvre =/app/taches/31=, fait passer la progression de
 6. Django renvoie un nouveau =TaskDetail=. La fonction =mutate= appelle =setData=; le pourcentage, la charge, le fil d'activite et le graphique sont alors recalcules depuis cette reponse serveur unique.
 7. Le graphique doit montrer un point plein =observed=true= a la date du jour et une courbe passant de 60 a 65 %, sans fabriquer d'observation intermediaire.
 
-** Exercice React et portage D3
+** Regles d'extension
 
-Le developpeur peut commencer par modifier le libelle, l'etat d'enregistrement ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas creer un second endpoint ni dupliquer =record_progress= dans React.
+Le developpeur peut modifier le libelle, l'etat d'enregistrement ou le retour de succes dans =ProgressForm=, puis suivre le flux ci-dessus dans les outils reseau du navigateur. Le raccord metier existe deja; il ne faut pas creer un second endpoint ni dupliquer =record_progress= dans React.
 
-Pour integrer le graphique D3 classique dans la vue React :
+Pour etendre le graphique D3 dans la vue React :
 
-- ajouter =d3= et ses types aux dependances du frontend;
 - conserver React comme proprietaire du DOM et utiliser D3 pour les echelles, les calculs et le generateur de courbe, plutot que monter directement le renderer imperatif de =static/js/app.js= dans un =ref=;
 - porter la courbe en escalier =curveStepAfter=, les jours non ouvres comprimes, les points pleins observes et creux reportes, les reperes debut, aujourd'hui et fin prevue, ainsi que la zone rose de retard;
 - conserver l'infobulle, la navigation clavier et la table textuelle alternative deja attendues pour l'accessibilite;
@@ -103,12 +209,12 @@ Pour integrer le graphique D3 classique dans la vue React :
 - une ancienne =revision= recoit =409 stale_revision= et propose de recharger la tache avant de recommencer;
 - une tache cloturee ne peut plus recevoir de progression.
 
-** Criteres de verification du futur exercice
+** Criteres de verification
 
-- [ ] Le test React simule avec MSW le clic, le JSON envoye et la reponse actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
-- [ ] Le test du graphique couvre la courbe en escalier, les jours non ouvres, les points observes/reportes et l'alternative textuelle.
-- [ ] Le test API conserve les controles de permission, CSRF, validation et conflit de revision.
-- [ ] Playwright valide le parcours contre la vraie API aux largeurs telephone et ordinateur, avec mise a jour du graphique sans rechargement complet.
+- [X] Le test React simule avec MSW le clic, le JSON envoye et la reponse actualisee, puis verifie le pourcentage, l'activite et le nouveau point.
+- [X] Le test du graphique couvre les donnees datees, les points observes/reportes, l'apercu et l'alternative textuelle.
+- [X] Le test API conserve les controles de permission, CSRF, validation et conflit de revision et verifie explicitement la regression.
+- [X] Selenium valide le bundle de production contre la vraie API aux largeurs telephone et ordinateur, avec mise a jour du graphique sans rechargement complet; le test API Django valide separement les regles serveur.
 
 * <2026-07-17 ven.> Parcours frontend React pour un etudiant
 ** Objectif et diagnostic
@@ -846,15 +952,12 @@ Au niveau de la navigation. le n+3 doit pouvoir voir sans modifier les taches de
 *** Dates, charge et modele de la tache
 
 1. [x] La =charge estimee= represente-t-elle une duree calendaire exclusive sur la tache, ou un effort pouvant etre reparti en parallele avec d'autres taches ?
-   - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte.
-Pour l instant il s agit d une duree calendaire excluse sur une tache.
+   - Si elle represente une duree, =echeance = debut + jours ouvrables de charge= peut devenir une regle forte. Pour l instant il s agit d une duree calendaire excluse sur une tache.
 
 2. [x] Lors de la creation, faut-il exiger =debut + charge= et calculer l'echeance, ou accepter =debut + echeance= et calculer la charge ? Les deux sont acceptable
-3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ?
-update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
+3. [x] Si les trois valeurs sont renseignees mais incoherentes, quelle valeur fait autorite : la charge ou l'echeance ? update l echeance to match the charge, or the charge to match the echeance. both should never diverge at the interface level. at db level refuse to save divergente values.
 
-4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ?
-lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
+4. [x] Lors d'une modification de la date de debut, faut-il conserver la charge et deplacer l'echeance, ou conserver l'echeance et recalculer la charge ? lors de la modification garder la date d echeance, mais attirer l attention de l utilisateur sur le choix technique qui a ete fait. normalement il doit pouvoir change la charge en meme temps aue la date de debut si l echenace ne lui convient pas.  l echeance sera alors ajuste on the fly
 5. [x] Le calcul doit-il exclure samedi, dimanche et les jours feries configures dans =Holiday= ? oui, seulement les jours ouvrables.  utiliser la calendrier ivoirien officiel, importer. le calendrier de reference doit pouvoir etre changer la l admin. il doit pouvoir ajouter ou retirer des jours ouvrable.
 6. [x] Une charge decimale comme =2,5 jours= reste-t-elle autorisee ? Si oui, l'echeance doit-elle etre arrondie au jour ouvrable superieur ? oui.
 7. [x] La coherence doit-elle etre garantie par le modele Django et les services transactionnels, avec une contrainte de base seulement sur les invariants exprimables en SQL ? Une egalite utilisant les jours feries ne peut pas etre une simple =CHECK CONSTRAINT= PostgreSQL. je voyais la contraite garantie au niveau du model djanog effectivement.
@@ -862,8 +965,7 @@ lors de la modification garder la date d echeance, mais attirer l attention de l
 8. [x] =Action institutionnelle= doit-il seulement etre renomme =Code normalise= dans l'interface, ou faut-il creer un vrai modele de code/categorie de tache distinct des plans institutionnels ? garder cela pour l instant.
 9. [x] Une tache peut-elle conserver une action institutionnelle et posseder en plus un code normalise, ou le nouveau code remplace-t-il completement ce rattachement ? une tache a un code unique normalize ratacher a une action institutionelle.  explique moi ce que tu veux clarifier ici ?
 
-10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ?
-explique moi ce que tu veux clarifier ici ?
+10. [x] Les champs de planification et de progression doivent-ils rester sur =TaskAssignment=, tandis que =Task= conserve seulement le titre, la description et la classification ? explique moi ce que tu veux clarifier ici ?
 
 *** Etats, reouverture et observations
 
@@ -873,8 +975,7 @@ explique moi ce que tu veux clarifier ici ?
 14. [x] Souhaitez-vous un fil d'activite unique melangeant progressions, notes du jour, commentaires, validations, reprises et changements d'echeance ? oui
 15. [x] Si oui, faut-il introduire un modele immuable =TaskActivity= comme source du fil, ou construire le fil a la lecture a partir de =ProgressEntry=, =TaskComment= et des tables d'audit existantes ? ca me semble correct, mais propose des alternatives
 16. [x] Une correction de la progression du meme jour remplace-t-elle la valeur visible de ce jour, tout en gardant les versions precedentes uniquement dans l'audit, ou chaque correction doit-elle apparaitre dans le fil utilisateur ? elle la remplace.  quand tu dit dans l audit je comprend dans la table history de django qui track to les changement en bd is that correct ?
-17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ?
-dans le fil d'activie uniquement
+17. [x] La note du jour doit-elle etre affichee directement avec le point correspondant dans le graphique et dans le fil d'activite ? dans le fil d'activie uniquement
 
 *** Historique journalier et JSON des graphiques
 
@@ -888,8 +989,7 @@ dans le fil d'activie uniquement
 25. [x] Le JSON Observable doit-il contenir les notes et l'alias de l'auteur, ou uniquement les dates, pourcentages, charge, echeance et indicateurs de retard afin de minimiser les donnees exposees ? uniquement les donnees utile au graphique, pas de notes ni d auteur
 26. [x] Le schema minimal suivant convient-il : =task_id=, =start_date=, =day=, =due_date=, =planned_work_days=, =elapsed_work_days=, =remaining_schedule_days=, =overdue_days=, =percentage= et =observed= ? yes
 27. [x] Pour une consultation historique d'un mois passe, la ligne verticale =jour courant= represente-t-elle la vraie date du jour ou la fin de la periode consultee ? lorsque la tache est terminer, il ne faut pas reprenseter le jour courant sur le graphique
-28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ?
-non
+28. [x] La ligne pleine d'echeance doit-elle rester visible apres l'achevement, meme lorsque la tache a ete terminee avant cette date ? non
 
 *** Navigation hierarchique
 
@@ -1073,13 +1173,11 @@ I am not convinced byt the +5pts (or it should be clarified somewhere that it is
 
 1. [x] pour une tache que =dg= s'est affectee, faut-il supprimer uniquement le champ =je suis bloque= ou remplacer ce signalement par une action plus adaptee, par exemple =signaler un point d'attention= ? signaler un point d attention
 2. [x] lorsque =dg= est a la fois collaborateur et responsable, le bloc =decision du responsable= doit-il devenir =cloture de ma tache=, avec les actions =confirmer l'achevement= et =poursuivre le travail= ? yes,
-3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ?
-validation explicites
+3. [x] la validation explicite a 100 % reste-t-elle necessaire pour une tache personnelle de =dg=, ou le passage a 100 % doit-il la terminer directement ? validation explicites
 
 *** progression et observations
 
-4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ?
-conserver en clarifiant les titres
+4. [x] les deux champs actuels ont des usages differents : l'observation de progression est liee au pourcentage du jour, tandis que l'observation en bas de page est un commentaire immuable. faut-il conserver les deux en clarifiant leurs titres, ou les reunir dans un seul fil d'observations ? conserver en clarifiant les titres
 5. [x] la note de progression reste facultative en fonctionnement normal et devient obligatoire lors d'une regression ou d'un point d'attention.
 6. [x] sur les cartes, faut-il afficher les deux dernieres observations, toutes les observations dans un bloc repliable, ou seulement un indicateur donnant acces au detail ? toutes les observations dans un bloc repliable
 
@@ -1090,11 +1188,9 @@ conserver en clarifiant les titres
 
 9. [x] la visualisation doit-elle utiliser d3.js, ou un svg/css sans dependance est-il preferable si le resultat, les axes en jours et l'accessibilite sont equivalents ? svg css sans dependance est prefereable uniquement si on obtient le meme resultat ce dont je doute. donc d3.js pour plus de flexibilite.
 
-10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ?
-titre, jours realises, jours restants, charge totale et echeance.
+10. [x] quelle information doit rester lisible sans survol sur telephone : titre, jours realises, jours restants, charge totale et echeance, ou seulement un sous-ensemble ? titre, jours realises, jours restants, charge totale et echeance.
 
-11. [x] l'echeance doit-elle changer de couleur lorsqu'elle approche ou est depassee, et quels seuils faut-il retenir ?
-oui. une echelle presaue logarithmique du genre 50 75 90
+11. [x] l'echeance doit-elle changer de couleur lorsqu'elle approche ou est depassee, et quels seuils faut-il retenir ? oui. une echelle presaue logarithmique du genre 50 75 90
 
 *** navigation semaine et mois
 
@@ -1102,8 +1198,7 @@ oui. une echelle presaue logarithmique du genre 50 75 90
 
 13. [x] la vue semaine doit-elle montrer le detail quotidien, tandis que la vue mois montre quatre ou cinq points hebdomadaires, afin que la difference soit immediatement perceptible ? detail quotidient ?  non.  le niveau actuel des cartes est bon. mais la vue mois dois montrer plus de taches car il faut montrer les taches totalement realisee meme si grisee. ces dernier doivent rester accessible.  la diference peut etre en term de couleur de titre par exemple pour le label du mois
 
-14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ?
-oui.
+14. [x] en vue mensuelle, faut-il afficher les taches ayant ete actives a un moment quelconque du mois, ou uniquement celles encore actives a la fin du mois ? oui.
 
 *** synthese de l'equipe et petits multiples
 #     meme largeur, nous parlons de pourcentage de realisation.  le nombre de jour est indique sur les x. nombre de jour ecoule depuis le debut de la tache.    ce qui nous interesse  c est le profil de progresssion.

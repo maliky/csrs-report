@@ -38,6 +38,16 @@ urlpatterns = [
     ),
     path("proposals/", views.ProposalListCreateView.as_view(), name="proposal-list"),
     path(
+        "proposals/<int:pk>/",
+        views.ProposalDetailView.as_view(),
+        name="proposal-detail",
+    ),
+    path(
+        "proposals/<int:pk>/resubmit/",
+        views.ProposalResubmitView.as_view(),
+        name="proposal-resubmit",
+    ),
+    path(
         "proposals/<int:pk>/decision/",
         views.ProposalDecisionView.as_view(),
         name="proposal-decision",

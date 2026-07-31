@@ -147,19 +147,42 @@ def assignment_detail_payload(
 def proposal_payload(proposal: TaskProposal, viewer: User) -> dict[str, object]:
     from work.services import can_review_proposal
 
+    can_edit = proposal.employee_id == viewer.pk and proposal.status in {
+        "submitted",
+        "rejected",
+    }
+    status_label = {
+        "submitted": "Soumise",
+        "accepted": "Validée",
+        "rejected": "Rejetée",
+    }.get(proposal.status, proposal.get_status_display())
     return {
         "id": proposal.pk,
         "revision": proposal.revision,
         "title": proposal.title,
         "description": proposal.description,
         "status": proposal.status,
-        "status_label": proposal.get_status_display(),
+        "status_label": status_label,
         "start_date": proposal.start_date.isoformat(),
         "due_date": proposal.due_date.isoformat(),
         "estimated_work_days": decimal_text(proposal.estimated_work_days),
+        "action": (
+            {"id": proposal.action.pk, "label": str(proposal.action)}
+            if proposal.action
+            else None
+        ),
+        "calendar": {"id": proposal.calendar.pk, "label": str(proposal.calendar)},
         "employee": person_payload(proposal.employee),
+        "accepted_assignment_id": proposal.accepted_assignment_id,
         "decision_note": proposal.decision_note,
         "created_at": proposal.created_at.isoformat(),
         "can_review": proposal.status == "submitted"
         and can_review_proposal(viewer, proposal),
+        "capabilities": {
+            "edit": can_edit,
+            "resubmit": proposal.employee_id == viewer.pk
+            and proposal.status == "rejected",
+            "review": proposal.status == "submitted"
+            and can_review_proposal(viewer, proposal),
+        },
     }

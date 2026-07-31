@@ -62,6 +62,18 @@
   background: #dcefe8;
   color: #195d4a;
 }
+.accepted {
+  background: #dcefe8;
+  color: #195d4a;
+}
+.submitted {
+  background: #fff0d2;
+  color: #805100;
+}
+.rejected {
+  background: #f8dcda;
+  color: #8d2f2a;
+}
 .awaiting_validation {
   background: #fff0d2;
   color: #805100;

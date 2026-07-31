@@ -1113,15 +1113,7 @@ class Command(BaseCommand):
         users: dict[str, User], demo_password: str | None = None
     ) -> None:
         """Verify representative dashboards without requiring stored credentials."""
-        host = next(
-            (
-                value
-                for value in settings.ALLOWED_HOSTS
-                if value not in {"localhost", "127.0.0.1", "testserver", "*"}
-                and not value.startswith(".")
-            ),
-            "testserver",
-        )
+        host = Command._dashboard_request_host()
         storage = {
             "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             "staticfiles": {
@@ -1141,3 +1133,29 @@ class Command(BaseCommand):
                     raise CommandError(
                         f"Tableau de bord indisponible pour {alias}: {response.status_code}."
                     )
+
+    @staticmethod
+    def _dashboard_request_host() -> str:
+        """Select a request host accepted by the current Django configuration."""
+        allowed_hosts = [
+            value.strip() for value in settings.ALLOWED_HOSTS if value.strip()
+        ]
+        external_host = next(
+            (
+                value
+                for value in allowed_hosts
+                if value not in {"localhost", "127.0.0.1", "testserver", "*"}
+                and not value.startswith(".")
+            ),
+            None,
+        )
+        if external_host:
+            return external_host
+        if "*" in allowed_hosts:
+            return "testserver"
+        if allowed_hosts:
+            return allowed_hosts[0].removeprefix(".")
+        raise CommandError(
+            "DJANGO_ALLOWED_HOSTS doit contenir au moins un nom d'hote "
+            "pour verifier les tableaux de bord."
+        )
