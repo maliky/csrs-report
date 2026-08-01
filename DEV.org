@@ -2,6 +2,79 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-01 sam.> Realisation du premier parcours : ordre de mission
+** Resultat
+
+Le premier parcours vertical des processus est implemente dans l'application Django =processes= et dans React sous =/app/processus=. CSRS Report est la source faisant autorite pour le dossier, ses decisions et son historique. Cette realisation ne genere pas encore l'ordre de mission officiel : elle conserve le projet PDF ou DOCX televerse, la decision de signature dans l'application et les preuves d'audit.
+
+** Parcours realise
+
+1. Un utilisateur interne actif possedant une appartenance principale cree pour lui-meme un brouillon de mission nationale ou internationale.
+2. Le demandeur renseigne les champs structures, les participants internes et les pieces, puis soumet le dossier a la file d'assistance la plus specifique couvrant son service.
+3. Un agent autorise prend le dossier en charge ; un autre agent possedant la meme delegation peut le reprendre avec un motif audite.
+4. L'assistance peut corriger la preparation, saisir un numero officiel facultatif, ajouter le projet d'ordre de mission et transmettre le dossier au DG. Le billet international peut etre ajoute apres la demande mais devient obligatoire avant cette transmission.
+5. Le DG prend le dossier en charge et peut signer, demander une correction motivee ou rejeter definitivement. Il ne peut pas modifier les champs du dossier. La signature exige la phrase exacte =SIGNER <reference>= et fige un instantane canonique des donnees ainsi que le manifeste trie des empreintes SHA-256 des pieces.
+6. Apres signature, le secretariat confirme la copie comptable, la remise de l'original et la copie d'archive. Si un vehicule a ete demande, une action distincte est creee pour le parc automobile ; sinon le dossier est termine.
+7. Un dossier termine, rejete ou abandonne est immutable et ne peut pas etre rouvert. La conservation indicative des ordres de mission est fixee a trois ans apres la cloture ; une suspension pour audit ou litige est representee par le gel juridique audite et aucune suppression automatique n'est activee dans ce lot.
+
+** Modele et garanties metier
+
+| Modele | Role |
+|--------+------|
+| =ProcessDefinition= | Code et version du graphe metier utilise par le dossier |
+| =ProcessCase= | Reference interne, demandeur, service photographie, etat, etape, revision optimiste, calendrier et conservation |
+| =ProcessQueue= | File de service, role delegue, unite de traitement et perimetre organisationnel couvert |
+| =ProcessWorkItem= | Action ouverte, prise en charge, echeance en jours ouvres et auteur effectif |
+| =ProcessEvent= | Journal metier append-only des actions, motifs et changements d'etat |
+| =ProcessDocument= | Metadonnees privees, fournisseur, type, taille, resultat antivirus et empreinte SHA-256 |
+| =ProcessSignature= | Confirmation, signataire, instantane, manifeste documentaire et empreinte de preuve |
+| =MissionOrder= et =MissionParticipant= | Champs propres a l'ordre de mission et participants internes photographies |
+
+Chaque ecriture d'etat, modification de preparation ou ajout de piece incremente la revision du dossier. Une ecriture fondee sur une ancienne revision renvoie =409 stale_revision=. Les evenements et signatures refusent modification et suppression ; les contraintes de date, de reclamation et de gel juridique sont egalement imposees en base.
+
+** Files, roles et delegations
+
+Une file de service n'est pas une affectation permanente a une personne : tous les titulaires actifs du role associe peuvent voir l'action, puis un agent la reclame et devient le seul a pouvoir la traiter. Une reprise par un autre titulaire reste possible avec un motif obligatoire ; l'auteur precedent et la reprise sont journalises. La revocation d'une delegation retire immediatement le droit d'agir, y compris sur un dossier deja reclame.
+
+Les roles versionnes ajoutes sont =MISSION_ASSISTANCE=, =MISSION_SIGNER=, =MISSION_SECRETARIAT= et =MISSION_FLEET=. Les roles =UNIT_VIEWER= et =UNIT_MANAGER= recoivent la lecture des metadonnees de processus dans leur perimetre ; cette lecture hierarchique ne donne pas acces au contenu des pieces. Les pieces sont telechargeables uniquement par le demandeur, un acteur ayant a agir ou ayant agi, le signataire et les administrateurs autorises.
+
+Le routage choisit la file active dont le perimetre est le plus proche du service principal du demandeur. L'absence de file ou deux files de meme precision bloquent explicitement la soumission au lieu d'envoyer silencieusement le dossier au mauvais service. Les files doivent etre creees dans l'administration avec leur type, role, unite de traitement, unite couverte et portee =unit= ou =tree= ; aucun utilisateur ni code de service n'est impose dans le code.
+
+** Pieces privees et exploitation
+
+Les formats acceptes sont PDF, DOCX, JPG et PNG, dans la limite de 20 Mio. L'extension, le type MIME et la signature interne du fichier sont controles, puis le contenu est analyse par ClamAV avant stockage. Une infection, une analyse impossible ou un antivirus indisponible bloque le depot. Les pieces ne sont jamais servies par WhiteNoise ni placees dans les fichiers statiques.
+
+Le backend est choisi au deploiement par =PROCESS_DOCUMENT_BACKEND= : =local= conserve les fichiers dans le volume Docker prive =csrs_private_documents= monte sur =/private-media= ; =sharepoint= utilise Microsoft Graph avec une application dediee, l'autorisation minimale =Sites.Selected= accordee par un administrateur Office 365, un site et une bibliotheque dedies, et un dossier racine existant. Les identifiants Graph restent exclusivement dans =.env=. Une panne Graph bloque le depot et ne provoque jamais une bascule silencieuse vers le disque local.
+
+ClamAV utilise le service Compose =clamav/clamav:1.4.3= et son volume de signatures =csrs_clamav_data=. =PROCESS_DOCUMENT_SCAN_REQUIRED= vaut =1= par defaut et ne doit etre desactive que dans un environnement de developpement ou de test isole.
+
+** API et interface React
+
+- =GET /api/v1/processes/?box=actionable|mine= expose la boite =A traiter= ou =Mes dossiers= avec les compteurs de dossiers en attente et de retours en correction.
+- =POST /api/v1/processes/mission-orders/= cree un brouillon et =GET /api/v1/processes/mission-orders/options/= fournit les participants internes eligibles.
+- =GET/PATCH /api/v1/processes/{id}/= lit ou modifie le brouillon ou la preparation selon les capacites serveur.
+- =POST /api/v1/processes/{id}/actions/= execute une transition avec revision, action, motif, confirmation ou liste de distribution.
+- =POST /api/v1/processes/{id}/documents/= analyse et depose une piece multipart ; le contenu et l'export restent servis par des URL autorisees cote Django.
+- =GET /api/v1/processes/{id}/export/= produit a la demande un ZIP contenant un PDF de synthese d'audit, les originaux et =manifest.json=. Le PDF porte explicitement la mention de dossier d'audit CSRS Report et n'est ni un ordre de mission officiel ni une signature cryptographique du PDF.
+
+React fournit la boite de travail, le formulaire responsive, la fiche avec les dates, la progression par etapes, les participants, les pieces, les actions contextuelles, la signature, la distribution et l'historique. Les statuts restent libelles textuellement et ne reposent pas uniquement sur la couleur. L'interface classique Django et les parcours de taches existants sont conserves.
+
+** Portee differee
+
+- [ ] Generer un ordre de mission depuis un modele officiel et trancher la numerotation automatique.
+- [ ] Obtenir le modele Office 365 definitif, creer le site ou la bibliotheque et accorder =Sites.Selected= avant d'activer =sharepoint=.
+- [ ] Implementer ensuite le visa, le BSF et la gouvernance des identifiants de donnees apres validation du socle en usage.
+- [ ] Preciser quels modeles de plan de gestion des donnees, controle qualite et preuve de destruction sont consideres comme les plus communs avant le lot 4.
+
+** Verification
+
+- [X] Migrations reproductibles et absence de migration manquante.
+- [X] Ruff et mypy strict sur le backend modifie.
+- [X] Tests Pytest du parcours national et international, routage, permissions, reprise, immutabilite, concurrence, pieces et export.
+- [X] Generation et validation du contrat OpenAPI sans avertissement, puis regeneration des types TypeScript.
+- [X] Build React sous Node 24 et vingt tests Vitest, dont la boite de processus, la prise en charge et le depot multipart.
+- [ ] Validation Selenium a 360 et 1440 pixels avec une base pilote configuree ; elle reste a effectuer apres creation des files et delegations de demonstration.
+
 * <2026-07-31 ven.> Cadrage des workflows issus des quatre premiers logigrammes
 ** Objet de cette phase
 
@@ -36,14 +109,14 @@ La presente branche est une branche de conception. Elle ne modifie ni les modele
 
 Une application Django dediee, provisoirement nommee =processes=, porterait les concepts suivants :
 
-| Concept propose      | Responsabilite |
-|----------------------+----------------|
-| Definition           | Code stable, version et type du processus |
-| Dossier              | Reference metier, demandeur, unite porteuse, etat, etape courante, dates et revision |
-| Etape de travail     | Action attendue, echeance, statut et affectation a une personne, un role ou une unite |
-| Transition           | Passage autorise entre deux etapes avec auteur, date, decision et motif |
-| Participant          | Acteur interne ou representation encadree d'un intervenant externe |
-| Piece                | Metadonnees, classification, empreinte et emplacement prive d'un document |
+| Concept propose      | Responsabilite                                                                            |
+|----------------------+-------------------------------------------------------------------------------------------|
+| Definition           | Code stable, version et type du processus                                                 |
+| Dossier              | Reference metier, demandeur, unite porteuse, etat, etape courante, dates et revision      |
+| Etape de travail     | Action attendue, echeance, statut et affectation a une personne, un role ou une unite     |
+| Transition           | Passage autorise entre deux etapes avec auteur, date, decision et motif                   |
+| Participant          | Acteur interne ou representation encadree d'un intervenant externe                        |
+| Piece                | Metadonnees, classification, empreinte et emplacement prive d'un document                 |
 | Evenement de dossier | Historique append-only des creations, transmissions, corrections, validations et clotures |
 
 Les graphes de transition et leurs validations resteraient en code Python type et versionne. La base conserverait la version utilisee par chaque dossier afin qu'une evolution future ne reecrive pas silencieusement les processus deja engages.
@@ -105,55 +178,83 @@ React ajouterait =/app/processus= avec une boite de travail, des filtres par typ
 
 *** Portee et valeur du systeme
 
-1. [ ] CSRS Report devient-il le systeme faisant autorite pour ces processus, ou conserve-t-il seulement la trace d'un circuit realise sur papier et par email ?
-2. [ ] Une validation ou un visa dans l'application a-t-il une valeur de signature, ou faut-il produire, televerser puis conserver un document signe ?
-3. [ ] Faut-il generer les lettres, ordres de mission et BSF depuis des modeles officiels, et qui gere leur numerotation ?
-4. [ ] Un dossier termine devient-il immutable ? Si une reouverture est permise, quels roles peuvent l'autoriser et quel motif doit etre conserve ?
-5. [ ] Confirme-t-on l'ordre de realisation suivant : ordre de mission, visa, BSF, puis gestion des donnees ?
+1. [X] CSRS Report devient-il le systeme faisant autorite pour ces processus, ou conserve-t-il seulement la trace d'un circuit realise sur papier et par email ?
+   il fait authorité
+2. [X] Une validation ou un visa dans l'application a-t-il une valeur de signature, ou faut-il produire, televerser puis conserver un document signe ?
+   a valeur de signature dans l'application
+3. [X] Faut-il generer les lettres, ordres de mission et BSF depuis des modeles officiels, et qui gere leur numerotation ?
+   Non pas tant que lq question n est pas tranchee
+4. [X] Un dossier termine devient-il immutable ? Si une reouverture est permise, quels roles peuvent l'autoriser et quel motif doit etre conserve ?
+   oui immutable, pas de reouverture permise pour l instant
+5. [X] Confirme-t-on l'ordre de realisation suivant : ordre de mission, visa, BSF, puis gestion des donnees ?
+   oui
 
 *** Acteurs, files de travail et delegations
 
-6. [ ] Une etape est-elle attribuee a une personne precise, ou a une file de service dans laquelle un agent autorise prend le dossier ?
-7. [ ] Comment choisir un remplacant en cas d'absence, et une delegation en cours autorise-t-elle a reprendre un dossier commence par une autre personne ?
-8. [ ] Le DG peut-il corriger le contenu d'un dossier, ou seulement valider, rejeter et demander une correction motivee ?
-9. [ ] Les visiteurs, coursiers, beneficiaires et agents du MAE doivent-ils avoir un compte, ou leurs actions sont-elles enregistrees par un agent interne ?
-10. [ ] Une remise de document, de passeport, de cheque ou d'especes exige-t-elle un accuse de reception du destinataire ?
+6. [X] Une etape est-elle attribuee a une personne precise, ou a une file de service dans laquelle un agent autorise prend le dossier ?
+   Une file de service est retenue : tous les titulaires actifs du role voient l'action, un agent la reclame pour la traiter et une reprise motivee reste auditee.
+7. [X] Comment choisir un remplacant en cas d'absence, et une delegation en cours autorise-t-elle a reprendre un dossier commence par une autre personne ?
+   Une delegation active autorise la reprise motivee ; sa revocation retire immediatement le droit d'agir.
+8. [X] Le DG peut-il corriger le contenu d'un dossier, ou seulement valider, rejeter et demander une correction motivee ?
+   Le DG peut uniquement valider, rejeter ou demander une correction motivee.
+9. [X] Les visiteurs, coursiers, beneficiaires et agents du MAE doivent-ils avoir un compte, ou leurs actions sont-elles enregistrees par un agent interne ?
+   Leurs actions sont enregistrees par un agent interne.
+10. [X] Une remise de document, de passeport, de cheque ou d'especes exige-t-elle un accuse de reception du destinataire ?
+    Aucun accuse du destinataire n'est exige pour l'instant.
 
 *** Delais, notifications et pilotage
 
-11. [ ] Pour chaque delai, faut-il compter des heures, des jours calendaires ou les jours ouvres du calendrier ivoirien ?
-12. [ ] Les jours de preparation des BSF et les jours de caisse sont-ils des parametres administrables et dates, ou des regles fixes ?
-13. [ ] Quels rappels doivent etre envoyes avant une echeance, et a qui faut-il escalader un dossier en retard ?
-14. [ ] Les notifications restent-elles limitees a l'email et a l'interface dans le MVP des processus ?
-15. [ ] Quels indicateurs sont prioritaires : dossiers en attente, delai moyen, retours en correction, rejets, depassements ou charge par service ?
-
+11. [X] Pour chaque delai, faut-il compter des heures, des jours calendaires ou les jours ouvres du calendrier ivoirien ?
+    Les delais utilisent les jours ouvres du calendrier ivoirien versionne.
+12. [X] Les jours de preparation des BSF et les jours de caisse sont-ils des parametres administrables et dates, ou des regles fixes ?
+    Ce sont des regles fixes.
+13. [X] Quels rappels doivent etre envoyes avant une echeance, et a qui faut-il escalader un dossier en retard ?
+    Aucun rappel ni aucune escalade automatique ne sont retenus dans le MVP.
+14. [X] Les notifications restent-elles limitees a l'email et a l'interface dans le MVP des processus ?
+    Les processus utilisent uniquement leur boite et leurs compteurs dans l'interface ; aucun email ni centre lu ou non lu n'est ajoute.
+15. [X] Quels indicateurs sont prioritaires : dossiers en attente, delai moyen, retours en correction, rejets, depassements ou charge par service ?
+    Les dossiers en attente et les retours en correction sont prioritaires.
 *** Documents, securite et conservation
 
-16. [ ] Les pieces sont-elles stockees dans CSRS Report ou dans un systeme documentaire externe auquel le dossier conserve un lien ?
-17. [ ] Quels formats, tailles maximales et controles antivirus sont requis avant d'accepter une piece ?
-18. [ ] Qui peut consulter ou telecharger les passeports, photos d'identite et autres pieces sensibles, et combien de temps sont-ils conserves ?
-19. [ ] L'export d'un dossier clos doit-il produire un dossier PDF ou ZIP signe, accompagne de son historique d'audit ?
-20. [ ] La duree de conservation de cinq ans du processus de gestion des donnees commence-t-elle a la cloture de l'etude, a l'archivage ou a une autre date ?
-21. [ ] Faut-il pouvoir suspendre une destruction planifiee en cas d'audit, de litige ou d'obligation scientifique ?
+16. [X] Les pieces sont-elles stockees dans CSRS Report ou dans un systeme documentaire externe auquel le dossier conserve un lien ?
+    SharePoint par Microsoft Graph est prefere lorsqu'il est configure ; un stockage prive CSRS Report est disponible sinon et le backend reste un choix explicite de deploiement.
+17. [X] Quels formats, tailles maximales et controles antivirus sont requis avant d'accepter une piece ?
+    PDF, DOCX, JPG et PNG sont acceptes jusqu'a 20 Mio apres verification du format et analyse antivirus obligatoire.
+18. [X] Qui peut consulter ou telecharger les passeports, photos d'identite et autres pieces sensibles, et combien de temps sont-ils conserves ?
+    Le demandeur, les acteurs devant agir ou ayant agi, le signataire et les administrateurs autorises peuvent telecharger les pieces ; la lecture hierarchique reste limitee aux metadonnees et la conservation des ordres de mission est de trois ans apres cloture.
+19. [X] L'export d'un dossier clos doit-il produire un dossier PDF ou ZIP signe, accompagne de son historique d'audit ?
+    Un ZIP d'audit contient un PDF de synthese, les originaux et un manifeste d'empreintes avec les preuves de signature dans l'application.
+20. [X] La duree de conservation de cinq ans du processus de gestion des donnees commence-t-elle a la cloture de l'etude, a l'archivage ou a une autre date ?
+    Elle commence a l'archivage.
+21. [X] Faut-il pouvoir suspendre une destruction planifiee en cas d'audit, de litige ou d'obligation scientifique ?
+    Oui, par un gel juridique motive.
 
 *** Decisions propres aux processus
 
-22. [ ] Pour une mission internationale, le billet d'avion est-il obligatoire avant la preparation du projet ou peut-il etre ajoute avant la signature ?
-23. [ ] La branche parc automobile doit-elle seulement notifier le service, ou reserver effectivement un vehicule et enregistrer sa disponibilite ?
-24. [ ] Pour le BSF, le controle budgetaire reste-t-il une confirmation manuelle ou doit-il interroger un systeme comptable ?
-25. [ ] Le seuil de paiement en especes de 200 000 FCFA est-il configurable et historise afin qu'un dossier conserve la regle applicable a sa date ?
-26. [ ] Faut-il interdire qu'une meme personne cumule, sur un BSF, plusieurs controles normalement separes ?
-27. [ ] Pour la gestion des donnees, CSRS Report conserve-t-il les jeux de donnees ou uniquement leur identifiant, leur classification et les operations de gouvernance ?
-28. [ ] Une autorisation d'acces validee doit-elle configurer techniquement les droits dans les systemes TSI, ou seulement creer une action a executer et a confirmer par TSI ?
+22. [X] Pour une mission internationale, le billet d'avion est-il obligatoire avant la preparation du projet ou peut-il etre ajoute avant la signature ?
+    Il peut etre ajoute apres la demande mais devient obligatoire avant transmission au signataire.
+23. [X] La branche parc automobile doit-elle seulement notifier le service, ou reserver effectivement un vehicule et enregistrer sa disponibilite ?
+    Elle cree une action a reclamer et confirmer par le parc automobile, sans inventaire ni reservation automatique.
+24. [X] Pour le BSF, le controle budgetaire reste-t-il une confirmation manuelle ou doit-il interroger un systeme comptable ?
+    L'integration comptable est souhaitee mais reste hors du champ d'automatisation actuel.
+25. [X] Le seuil de paiement en especes de 200 000 FCFA est-il configurable et historise afin qu'un dossier conserve la regle applicable a sa date ?
+    Le seuil reste fixe et non configurable.
+26. [X] Faut-il interdire qu'une meme personne cumule, sur un BSF, plusieurs controles normalement separes ?
+    Oui, la separation des controles devra etre imposee.
+27. [X] Pour la gestion des donnees, CSRS Report conserve-t-il les jeux de donnees ou uniquement leur identifiant, leur classification et les operations de gouvernance ?
+    CSRS Report conserve seulement les identifiants et les operations de gouvernance ; les jeux de donnees restent hors de son champ.
+28. [X] Une autorisation d'acces validee doit-elle configurer techniquement les droits dans les systemes TSI, ou seulement creer une action a executer et a confirmer par TSI ?
+    Elle cree seulement une action a executer et confirmer par TSI.
 29. [ ] Quels modeles officiels de plan de gestion des donnees, de controle qualite et de preuve de destruction doivent etre versionnes avec le processus ?
+    La reponse =le plus commun= doit encore etre precisee par des noms de modeles ou des exemples avant le lot 4.
 
 ** Criteres de sortie du cadrage
 
-- [ ] Les questions bloquant le premier parcours sont tranchees.
-- [ ] Les etats et transitions de l'ordre de mission sont approuves par ses acteurs.
-- [ ] La strategie de signature, de pieces privees et de conservation est validee.
-- [ ] La matrice acteur, action et perimetre est testable sans role code en dur.
-- [ ] Les scenarios d'acceptation incluent corrections, concurrence, delegation, refus d'acces et reprise apres erreur.
+- [X] Les questions bloquant le premier parcours sont tranchees.
+- [X] Les etats et transitions de l'ordre de mission sont implementes selon les reponses confirmees.
+- [X] La strategie de signature, de pieces privees et de conservation est implementee pour le premier lot.
+- [X] La matrice acteur, action et perimetre est testable sans utilisateur ni service code en dur.
+- [X] Les scenarios d'acceptation incluent corrections, concurrence, delegation, refus d'acces et reprise apres erreur.
 
 * <2026-07-24 ven.> Connexion Django depuis Vite sous Windows
 ** Diagnostic et correction
