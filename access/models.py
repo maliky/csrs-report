@@ -42,6 +42,12 @@ class ScopedRole(models.Model):
             ("correct_unit_progress", "Corriger la progression d'un service"),
             ("review_unit_proposals", "Decider les propositions d'un service"),
             ("export_unit_data", "Exporter les donnees d'un service"),
+            ("view_process_scope", "Consulter les dossiers d'un service"),
+            ("work_mission_assistance", "Preparer les ordres de mission"),
+            ("sign_mission_order", "Signer les ordres de mission"),
+            ("work_mission_distribution", "Distribuer les ordres de mission"),
+            ("work_mission_fleet", "Preparer les vehicules de mission"),
+            ("export_process", "Exporter un dossier de processus"),
         ]
 
     def __str__(self) -> str:

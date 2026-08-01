@@ -71,6 +71,233 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/processes/:
+    get:
+      operationId: process_case_list
+      parameters:
+      - in: query
+        name: box
+        schema:
+          type: string
+      tags:
+      - processes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/processes/{id}/:
+    get:
+      operationId: process_case_detail
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    patch:
+      operationId: mission_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMissionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMissionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMissionUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/processes/{id}/actions/:
+    post:
+      operationId: process_case_action
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessAction'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/processes/{id}/documents/:
+    post:
+      operationId: process_document_upload
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpload'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentUpload'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentUpload'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/processes/{id}/documents/{document_pk}/content/:
+    get:
+      operationId: process_document_download
+      parameters:
+      - in: path
+        name: document_pk
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/processes/{id}/export/:
+    get:
+      operationId: process_case_export
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - processes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/processes/mission-orders/:
+    post:
+      operationId: mission_create
+      tags:
+      - processes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mission'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Mission'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Mission'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/processes/mission-orders/options/:
+    get:
+      operationId: mission_options
+      tags:
+      - processes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/proposals/:
     get:
       operationId: proposal_list
@@ -492,6 +719,34 @@ paths:
           description: ''
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - submit
+      - abandon
+      - claim
+      - takeover
+      - send_to_signature
+      - request_correction
+      - reject
+      - sign
+      - complete_distribution
+      - complete_fleet
+      - place_legal_hold
+      - release_legal_hold
+      type: string
+      description: |-
+        * `submit` - submit
+        * `abandon` - abandon
+        * `claim` - claim
+        * `takeover` - takeover
+        * `send_to_signature` - send_to_signature
+        * `request_correction` - request_correction
+        * `reject` - reject
+        * `sign` - sign
+        * `complete_distribution` - complete_distribution
+        * `complete_fleet` - complete_fleet
+        * `place_legal_hold` - place_legal_hold
+        * `release_legal_hold` - release_legal_hold
     DecisionEnum:
       enum:
       - accept
@@ -500,6 +755,92 @@ components:
       description: |-
         * `accept` - accept
         * `reject` - reject
+    DocumentUpload:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+      - kind
+      - revision
+    KindEnum:
+      enum:
+      - terms_of_reference
+      - invitation
+      - ticket
+      - order_draft
+      - other
+      type: string
+      description: |-
+        * `terms_of_reference` - Termes de référence
+        * `invitation` - Invitation
+        * `ticket` - Billet de transport
+        * `order_draft` - Projet d'ordre de mission
+        * `other` - Autre pièce
+    Mission:
+      type: object
+      properties:
+        mission_type:
+          $ref: '#/components/schemas/MissionTypeEnum'
+        destination:
+          type: string
+          maxLength: 220
+        purpose:
+          type: string
+        itinerary:
+          type: string
+        transport_mode:
+          type: string
+          maxLength: 120
+        transport_company:
+          type: string
+          maxLength: 160
+        departure_date:
+          type: string
+          format: date
+        return_date:
+          type: string
+          format: date
+        funding_source:
+          type: string
+          maxLength: 220
+        costs_covered:
+          type: string
+        vehicle_required:
+          type: boolean
+          default: false
+        vehicle_details:
+          type: string
+        participant_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        official_number:
+          type: string
+          default: ''
+          maxLength: 80
+      required:
+      - departure_date
+      - destination
+      - mission_type
+      - purpose
+      - return_date
+    MissionTypeEnum:
+      enum:
+      - domestic
+      - international
+      type: string
+      description: |-
+        * `domestic` - Mission nationale
+        * `international` - Mission internationale
     Observation:
       type: object
       properties:
@@ -511,6 +852,52 @@ components:
       required:
       - message
       - revision
+    PatchedMissionUpdate:
+      type: object
+      properties:
+        mission_type:
+          $ref: '#/components/schemas/MissionTypeEnum'
+        destination:
+          type: string
+          maxLength: 220
+        purpose:
+          type: string
+        itinerary:
+          type: string
+        transport_mode:
+          type: string
+          maxLength: 120
+        transport_company:
+          type: string
+          maxLength: 160
+        departure_date:
+          type: string
+          format: date
+        return_date:
+          type: string
+          format: date
+        funding_source:
+          type: string
+          maxLength: 220
+        costs_covered:
+          type: string
+        vehicle_required:
+          type: boolean
+          default: false
+        vehicle_details:
+          type: string
+        participant_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        official_number:
+          type: string
+          default: ''
+          maxLength: 80
+        revision:
+          type: integer
+          minimum: 1
     PatchedProposalUpdate:
       type: object
       description: Shared, server-validated assignment schedule.
@@ -588,6 +975,25 @@ components:
       - calendar_id
       - source
       - start_date
+    ProcessAction:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        note:
+          type: string
+        confirmation:
+          type: string
+        checklist:
+          type: object
+          additionalProperties:
+            type: boolean
+      required:
+      - action
+      - revision
     Progress:
       type: object
       properties:

@@ -59,6 +59,7 @@ pnpm-debug.log*
 *.sqlite3
 *.db
 media/
+.test-private-media/
 uploads/
 postgres-data/
 pgdata/

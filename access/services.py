@@ -19,6 +19,20 @@ MANAGE_PERMISSION = "manage_unit_assignments"
 PROGRESS_PERMISSION = "correct_unit_progress"
 PROPOSAL_PERMISSION = "review_unit_proposals"
 EXPORT_PERMISSION = "export_unit_data"
+PROCESS_VIEW_PERMISSION = "view_process_scope"
+MISSION_ASSISTANCE_PERMISSION = "work_mission_assistance"
+MISSION_SIGN_PERMISSION = "sign_mission_order"
+MISSION_DISTRIBUTION_PERMISSION = "work_mission_distribution"
+MISSION_FLEET_PERMISSION = "work_mission_fleet"
+PROCESS_EXPORT_PERMISSION = "export_process"
+
+
+def grant_has_permission(grant: RoleGrant, permission: str) -> bool:
+    """Return whether one prefetched grant carries an access permission."""
+    return any(
+        item.codename == permission and item.content_type.app_label == "access"
+        for item in grant.role.group.permissions.all()
+    )
 
 
 def active_role_grants(user: User, at: datetime | None = None) -> QuerySet[RoleGrant]:
@@ -63,10 +77,7 @@ def scoped_unit_ids(
     """Return the union of units granted for one permission codename."""
     unit_ids: set[int] = set()
     for grant in active_role_grants(user, at):
-        if any(
-            item.codename == permission and item.content_type.app_label == "access"
-            for item in grant.role.group.permissions.all()
-        ):
+        if grant_has_permission(grant, permission):
             unit_ids.update(units_in_scope(grant))
     return frozenset(unit_ids)
 

@@ -23,6 +23,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_started
+    volumes:
+      - csrs_private_documents:/private-media
     ports:
       - "${CSRS_BIND_ADDRESS:-127.0.0.1}:${CSRS_PORT:-18005}:8000"
     command: >-
@@ -52,5 +56,13 @@ services:
         condition: service_healthy
     command: python manage.py send_notifications --watch --interval 30 --limit 50
 
+  clamav:
+    image: clamav/clamav:1.4.3
+    restart: unless-stopped
+    volumes:
+      - csrs_clamav_data:/var/lib/clamav
+
 volumes:
   csrs_postgres_data:
+  csrs_private_documents:
+  csrs_clamav_data:

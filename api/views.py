@@ -70,6 +70,7 @@ from work.services import (
     visible_employee_ids,
     workload_for,
 )
+from processes.services import may_create_mission, visible_cases
 
 PERIOD_PARAMETERS = [
     OpenApiParameter("week", OpenApiTypes.DATE, required=False),
@@ -141,6 +142,8 @@ class SessionView(APIView):
                     "view_team": bool(visible_employee_ids(user) - {user.pk}),
                     "self_assign": can_self_assign(user),
                     "admin": user.is_staff,
+                    "view_processes": may_create_mission(user) or visible_cases(user).exists(),
+                    "create_mission_order": may_create_mission(user),
                 },
             }
         )

@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "accounts",
     "work",
     "access",
+    "processes",
     "api",
 ]
 
@@ -164,3 +165,27 @@ SECURE_HSTS_PRELOAD = False
 SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+PROCESS_DOCUMENT_BACKEND = os.environ.get("PROCESS_DOCUMENT_BACKEND", "local")
+PROCESS_DOCUMENT_ROOT = Path(
+    os.environ.get("PROCESS_DOCUMENT_ROOT", "/private-media")
+)
+PROCESS_DOCUMENT_MAX_BYTES = int(
+    os.environ.get("PROCESS_DOCUMENT_MAX_BYTES", str(20 * 1024 * 1024))
+)
+PROCESS_DOCUMENT_SCAN_REQUIRED = (
+    os.environ.get("PROCESS_DOCUMENT_SCAN_REQUIRED", "1") == "1"
+)
+CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "clamav")
+CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
+CLAMAV_TIMEOUT_SECONDS = float(os.environ.get("CLAMAV_TIMEOUT_SECONDS", "15"))
+MICROSOFT_GRAPH_TENANT_ID = os.environ.get("MICROSOFT_GRAPH_TENANT_ID", "")
+MICROSOFT_GRAPH_CLIENT_ID = os.environ.get("MICROSOFT_GRAPH_CLIENT_ID", "")
+MICROSOFT_GRAPH_CLIENT_SECRET = os.environ.get(
+    "MICROSOFT_GRAPH_CLIENT_SECRET", ""
+)
+MICROSOFT_GRAPH_SITE_ID = os.environ.get("MICROSOFT_GRAPH_SITE_ID", "")
+MICROSOFT_GRAPH_DRIVE_ID = os.environ.get("MICROSOFT_GRAPH_DRIVE_ID", "")
+MICROSOFT_GRAPH_FOLDER = os.environ.get(
+    "MICROSOFT_GRAPH_FOLDER", "CSRS-Report"
+)
