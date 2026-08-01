@@ -7,12 +7,13 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Route,
   Settings,
   Users,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "../lib/router";
 import { apiFetch } from "../lib/api/client";
 import type { Session } from "../lib/api/types";
 import { ErrorState, Skeleton } from "../components/ui";
@@ -155,6 +156,12 @@ export function AppShell() {
             <NavLink to="/equipe" className={navClass} title="Mon équipe">
               <Users size={iconSize} aria-hidden="true" />
               <span className={styles.navLabel}>Mon équipe</span>
+            </NavLink>
+          )}
+          {session.capabilities.view_processes && (
+            <NavLink to="/processus" className={navClass} title="Processus">
+              <Route size={iconSize} aria-hidden="true" />
+              <span className={styles.navLabel}>Processus</span>
             </NavLink>
           )}
           <NavLink to="/propositions" className={navClass} title="Propositions">

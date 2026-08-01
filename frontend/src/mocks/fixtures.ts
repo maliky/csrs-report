@@ -22,6 +22,8 @@ export const sessionFixture: Session = {
     view_team: true,
     self_assign: true,
     admin: false,
+    view_processes: true,
+    create_mission_order: true,
   },
 };
 

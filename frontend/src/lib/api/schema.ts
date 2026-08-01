@@ -52,6 +52,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/processes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["process_case_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["process_case_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mission_update"];
+        trace?: never;
+    };
+    "/api/v1/processes/{id}/actions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["process_case_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/{id}/documents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["process_document_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/{id}/documents/{document_pk}/content/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["process_document_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/{id}/export/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["process_case_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/mission-orders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mission_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processes/mission-orders/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mission_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/": {
         parameters: {
             query?: never;
@@ -266,14 +394,92 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * @description * `submit` - submit
+         *     * `abandon` - abandon
+         *     * `claim` - claim
+         *     * `takeover` - takeover
+         *     * `send_to_signature` - send_to_signature
+         *     * `request_correction` - request_correction
+         *     * `reject` - reject
+         *     * `sign` - sign
+         *     * `complete_distribution` - complete_distribution
+         *     * `complete_fleet` - complete_fleet
+         *     * `place_legal_hold` - place_legal_hold
+         *     * `release_legal_hold` - release_legal_hold
+         * @enum {string}
+         */
+        ActionEnum: "submit" | "abandon" | "claim" | "takeover" | "send_to_signature" | "request_correction" | "reject" | "sign" | "complete_distribution" | "complete_fleet" | "place_legal_hold" | "release_legal_hold";
+        /**
          * @description * `accept` - accept
          *     * `reject` - reject
          * @enum {string}
          */
         DecisionEnum: "accept" | "reject";
+        DocumentUpload: {
+            revision: number;
+            kind: components["schemas"]["KindEnum"];
+            /** Format: uri */
+            file: string;
+        };
+        /**
+         * @description * `terms_of_reference` - Termes de référence
+         *     * `invitation` - Invitation
+         *     * `ticket` - Billet de transport
+         *     * `order_draft` - Projet d'ordre de mission
+         *     * `other` - Autre pièce
+         * @enum {string}
+         */
+        KindEnum: "terms_of_reference" | "invitation" | "ticket" | "order_draft" | "other";
+        Mission: {
+            mission_type: components["schemas"]["MissionTypeEnum"];
+            destination: string;
+            purpose: string;
+            itinerary?: string;
+            transport_mode?: string;
+            transport_company?: string;
+            /** Format: date */
+            departure_date: string;
+            /** Format: date */
+            return_date: string;
+            funding_source?: string;
+            costs_covered?: string;
+            /** @default false */
+            vehicle_required: boolean;
+            vehicle_details?: string;
+            participant_ids?: number[];
+            /** @default  */
+            official_number: string;
+        };
+        /**
+         * @description * `domestic` - Mission nationale
+         *     * `international` - Mission internationale
+         * @enum {string}
+         */
+        MissionTypeEnum: "domestic" | "international";
         Observation: {
             revision: number;
             message: string;
+        };
+        PatchedMissionUpdate: {
+            mission_type?: components["schemas"]["MissionTypeEnum"];
+            destination?: string;
+            purpose?: string;
+            itinerary?: string;
+            transport_mode?: string;
+            transport_company?: string;
+            /** Format: date */
+            departure_date?: string;
+            /** Format: date */
+            return_date?: string;
+            funding_source?: string;
+            costs_covered?: string;
+            /** @default false */
+            vehicle_required: boolean;
+            vehicle_details?: string;
+            participant_ids?: number[];
+            /** @default  */
+            official_number: string;
+            revision?: number;
         };
         /** @description Shared, server-validated assignment schedule. */
         PatchedProposalUpdate: {
@@ -311,6 +517,15 @@ export interface components {
             due_date?: string;
             /** Format: decimal */
             estimated_work_days?: string;
+        };
+        ProcessAction: {
+            revision: number;
+            action: components["schemas"]["ActionEnum"];
+            note?: string;
+            confirmation?: string;
+            checklist?: {
+                [key: string]: boolean;
+            };
         };
         Progress: {
             revision: number;
@@ -445,6 +660,230 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["PlanningPreview"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    process_case_list: {
+        parameters: {
+            query?: {
+                box?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    process_case_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    mission_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedMissionUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedMissionUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedMissionUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    process_case_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessAction"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProcessAction"];
+                "multipart/form-data": components["schemas"]["ProcessAction"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    process_document_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUpload"];
+                "application/x-www-form-urlencoded": components["schemas"]["DocumentUpload"];
+                "multipart/form-data": components["schemas"]["DocumentUpload"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    process_document_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_pk: number;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    process_case_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    mission_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Mission"];
+                "application/x-www-form-urlencoded": components["schemas"]["Mission"];
+                "multipart/form-data": components["schemas"]["Mission"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    mission_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

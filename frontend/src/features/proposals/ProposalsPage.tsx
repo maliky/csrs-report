@@ -1,6 +1,6 @@
 import { CircleCheckBig, Filter, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "../../lib/router";
 import type { Proposal, ProposalGroups } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "../../lib/router";
 import type { Period } from "../../lib/api/types";
 import styles from "./tasks.module.css";
 

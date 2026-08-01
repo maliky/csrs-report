@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "../../lib/router";
 import { dashboardFixture } from "../../mocks/fixtures";
 import { TaskCard } from "./TaskCard";
 

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "../../lib/router";
 import { ProposalDetailPage } from "./ProposalDetailPage";
 
 test("permet à l'auteur de modifier puis resoumettre un rejet", async () => {

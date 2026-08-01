@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "../../lib/router";
 import type { TaskSummary } from "../../lib/api/types";
 import { dayCount, formatDate } from "../../lib/format";
 import { AlertBadge, Card, StatusBadge } from "../../components/ui";

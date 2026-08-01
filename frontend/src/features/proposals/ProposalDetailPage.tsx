@@ -1,6 +1,6 @@
 import { CircleCheckBig, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "../../lib/router";
 import type { Proposal } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";

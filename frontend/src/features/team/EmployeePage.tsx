@@ -1,4 +1,4 @@
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams } from "../../lib/router";
 import type { TeamEmployee } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
 import {

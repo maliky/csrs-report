@@ -93,8 +93,91 @@ export type Session = {
     view_team: boolean;
     self_assign: boolean;
     admin: boolean;
+    view_processes: boolean;
+    create_mission_order: boolean;
   };
 };
+
+export type ProcessSummary = {
+  id: number;
+  reference: string;
+  revision: number;
+  status: string;
+  status_label: string;
+  current_step: string;
+  initiator: Person;
+  origin_unit: { id: number; name: string; short_name: string };
+  mission_type: "domestic" | "international";
+  mission_type_label: string;
+  destination: string;
+  purpose: string;
+  departure_date: string;
+  return_date: string;
+  created_at: string;
+  updated_at: string;
+  due_date: string | null;
+  claimed_by: Person | null;
+  available_actions: string[];
+};
+
+export type ProcessDocument = {
+  id: number;
+  kind: string;
+  kind_label: string;
+  name: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  scan_status: string;
+  active: boolean;
+  replaced_by_id: number | null;
+  created_at: string;
+  download_url: string | null;
+};
+
+export type ProcessEvent = {
+  id: number;
+  kind: string;
+  from_status: string;
+  to_status: string;
+  message: string;
+  actor: Person;
+  occurred_at: string;
+};
+
+export type ProcessDetail = ProcessSummary & {
+  mission: {
+    itinerary: string;
+    transport_mode: string;
+    transport_company: string;
+    funding_source: string;
+    costs_covered: string;
+    vehicle_required: boolean;
+    vehicle_details: string;
+    official_number: string;
+  };
+  participants: Person[];
+  documents: ProcessDocument[];
+  events: ProcessEvent[];
+  capabilities: {
+    edit: boolean;
+    upload: boolean;
+    download_documents: boolean;
+    export: boolean;
+  };
+  signature: {
+    signer: Person;
+    signed_at: string;
+    snapshot_sha256: string;
+  } | null;
+};
+
+export type ProcessList = {
+  items: ProcessSummary[];
+  counters: { pending: number; correction_returns: number };
+};
+
+export type MissionOptions = { participants: Person[]; today: string };
 
 export type Dashboard = { period: Period; today: string; tasks: TaskSummary[] };
 

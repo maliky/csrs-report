@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation } from "../../lib/router";
 import { dashboardFixture, teamFixture } from "../../mocks/fixtures";
 import { server } from "../../mocks/server";
 import { TeamPage } from "./TeamPage";

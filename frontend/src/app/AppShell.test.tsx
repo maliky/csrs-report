@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "../lib/router";
 import { AppShell } from "./AppShell";
 
 test("réduit la barre latérale et mémorise le choix", async () => {

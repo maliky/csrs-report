@@ -1,0 +1,218 @@
+.counters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 15rem));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.counters section {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+}
+.counters svg {
+  grid-row: 1 / 3;
+  color: var(--color-warning);
+}
+.counters strong {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+.counters span {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.tabs button {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-weight: 750;
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] {
+  border-color: var(--color-warning);
+  color: var(--color-ink);
+}
+.caseCard {
+  display: grid;
+  gap: 0.75rem;
+}
+.caseHeading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.caseHeading h2 {
+  margin-bottom: 0;
+}
+.caseHeading a {
+  color: inherit;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: var(--color-muted);
+  font-size: 0.86rem;
+}
+.choiceGroup,
+.participants,
+.checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.choiceGroup legend,
+.participants legend,
+.checklist legend {
+  padding: 0 0.35rem;
+  font-weight: 750;
+}
+.choiceGroup label,
+.checkbox,
+.checklist label {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+.participants {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.participants p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.participants label {
+  display: flex;
+  gap: 0.6rem;
+}
+.participants small {
+  display: block;
+  color: var(--color-muted);
+}
+.steps {
+  display: flex;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+.steps li {
+  min-width: 8.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 3px solid var(--color-border);
+  color: var(--color-muted);
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+.steps .currentStep {
+  border-color: var(--color-warning);
+  color: var(--color-ink);
+  background: var(--color-surface-alt);
+}
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+.compactDetails {
+  display: grid;
+  gap: 0.65rem;
+}
+.compactDetails div {
+  border-bottom: 1px solid var(--color-border);
+}
+.compactDetails dt {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.compactDetails dd {
+  margin: 0.15rem 0 0.65rem;
+}
+.documents {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.documents li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.documents small {
+  display: block;
+  color: var(--color-muted);
+}
+.uploadForm,
+.actionPanel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+.actionPanel h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+.history {
+  margin-top: 2rem;
+}
+.signatureEvidence {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-left: 0.35rem solid var(--color-success);
+  overflow-wrap: anywhere;
+  background: #e9f6f1;
+}
+.exportButton {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.62rem 1rem;
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .counters,
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+  .caseHeading,
+  .documents li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .steps li {
+    min-width: 7.5rem;
+  }
+}

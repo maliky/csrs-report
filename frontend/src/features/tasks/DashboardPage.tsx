@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { useLocation } from "../../lib/router";
 import type { Dashboard } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
 import {

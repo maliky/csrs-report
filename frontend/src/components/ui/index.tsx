@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
-import { Link, type LinkProps } from "react-router-dom";
+import { Link, type LinkProps } from "../../lib/router";
 import styles from "./ui.module.css";
 
 type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";

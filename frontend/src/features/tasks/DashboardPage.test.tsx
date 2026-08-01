@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "../../lib/router";
 import { emptyDashboardHandler } from "../../mocks/handlers";
 import { server } from "../../mocks/server";
 import { DashboardPage } from "./DashboardPage";

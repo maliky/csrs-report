@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "../../lib/router";
 import type { TaskDetail } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";
