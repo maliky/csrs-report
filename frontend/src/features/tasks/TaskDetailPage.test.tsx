@@ -39,7 +39,9 @@ test("prévisualise puis enregistre une baisse de progression", async () => {
   expect(summary?.children[0].tagName).toBe("TIME");
   const slider = screen.getByRole("slider", { name: /avancement/i });
   fireEvent.change(slider, { target: { value: "80" } });
-  expect(screen.getByText(/aperçu non enregistré : 80 %/i)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/aperçu non enregistré : 80 %/i),
+  ).toBeInTheDocument();
 
   const note = screen.getByLabelText("Observation", { selector: "textarea" });
   expect(note).toBeRequired();
