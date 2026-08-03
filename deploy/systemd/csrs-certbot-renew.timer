@@ -1,0 +1,11 @@
+[Unit]
+Description=Vérification biquotidienne du certificat IP CSRS
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00 UTC
+Persistent=true
+RandomizedDelaySec=30m
+Unit=csrs-certbot-renew.service
+
+[Install]
+WantedBy=timers.target

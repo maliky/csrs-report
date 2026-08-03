@@ -7,16 +7,17 @@
 
 - La branche =design/workflows-logigrams= est publiée pour conserver son historique, puis =dev= avance par fast-forward sur son commit =83b515d=. Le déploiement reste sur =dev= et n'utilise pas =csrs_psiaka=.
 - La préproduction restaure une sauvegarde fraîche de la base CSRS existante dans un PostgreSQL 17 conteneurisé. Les secrets Django, PostgreSQL et SMTP sont propres au nouvel hôte et aucun fichier =.env= n'est copié.
-- Avant la création DNS et le certificat TLS, l'adresse =179.237.107.40= sert uniquement une page d'attente HTTP. L'application complète reste liée à =127.0.0.1:18005= afin qu'aucun mot de passe ne transite en clair.
+- L'adresse =179.237.107.40= expose temporairement l'application complète avec un certificat IP Let's Encrypt reconnu publiquement et une redirection HTTP vers HTTPS. L'application reste liée à =127.0.0.1:18005= derrière Nginx.
 - Le nom public retenu est =ent.csrs.ch=. Le premier enregistrement DNS sera uniquement un =A= vers =179.237.107.40= ; IPv6 reste différé jusqu'à une vérification publique dédiée.
 - Les emails réels utilisent un compte SMTP dédié sur =mail.koba.sarl:587= avec TLS. Le notifier reste arrêté jusqu'à la configuration du compte, la disponibilité HTTPS et la neutralisation des notifications encore en attente dans la copie.
 - Les pièces de processus utilisent le volume local privé avec analyse ClamAV obligatoire. Les sauvegardes quotidiennes couvrent PostgreSQL et ce volume, avec une rétention locale de quatorze jours.
+- Le certificat IP Let's Encrypt est un certificat court de 160 heures. Un Certbot =5.7.0= isolé sous =/opt/certbot-ip= vérifie son renouvellement deux fois par jour et recharge Nginx uniquement après renouvellement.
 
 ** Contraintes d'exploitation
 
 - Nginx, Docker, le pare-feu et Certbot restent des services de l'hôte ; PostgreSQL reste exclusivement dans Compose et n'expose aucun port public.
 - Le compte administrateur =jil= reçoit explicitement =NOPASSWD: ALL= et l'accès au groupe =docker= sur ce serveur dédié. Cette décision donne de fait un accès root à tout processus lancé sous ce compte.
-- Le certificat ne sera demandé qu'après résolution publique de =ent.csrs.ch= vers ce serveur et validation du vhost HTTP.
+- Le futur certificat de nom =ent.csrs.ch= ne sera demandé qu'après résolution publique vers ce serveur et validation de son vhost HTTP ; le certificat IP temporaire ne remplace pas cette étape.
 
 * <2026-08-01 sam.> Realisation du premier parcours : ordre de mission
 ** Resultat
