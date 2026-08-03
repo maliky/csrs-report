@@ -150,7 +150,9 @@ def _draft(context: dict[str, object], *, international: bool = False) -> Proces
     today = timezone.localdate()
     return create_mission_draft(
         actor=users["requester"],
-        mission_type=(MissionType.INTERNATIONAL if international else MissionType.DOMESTIC),
+        mission_type=(
+            MissionType.INTERNATIONAL if international else MissionType.DOMESTIC
+        ),
         destination="Bouaké" if not international else "Dakar",
         purpose="Participer à l'atelier annuel de coordination scientifique.",
         itinerary="Abidjan — Bouaké — Abidjan",
@@ -360,8 +362,13 @@ def test_claim_requires_active_role_and_takeover_requires_reason(
         action="takeover",
         note="Remplacement pendant une absence approuvée.",
     )
-    assert case.work_items.get(status=WorkItemStatus.CLAIMED).claimed_by == users["outsider"]
-    assert case.events.get(kind="takeover").details["previous_actor_id"] == users["assistant"].pk
+    assert (
+        case.work_items.get(status=WorkItemStatus.CLAIMED).claimed_by == users["outsider"]
+    )
+    assert (
+        case.events.get(kind="takeover").details["previous_actor_id"]
+        == users["assistant"].pk
+    )
     replacement_grant.revoked_at = timezone.now()
     replacement_grant.revoked_by = users["signer"]
     replacement_grant.revoke_reason = "Fin du remplacement temporaire."
@@ -486,9 +493,7 @@ def test_document_rules_reject_sensitive_download_for_uninvolved_viewer(
     document = case.documents.get()
     client = Client()
     client.force_login(users["outsider"])
-    response = client.get(
-        f"/api/v1/processes/{case.pk}/documents/{document.pk}/content/"
-    )
+    response = client.get(f"/api/v1/processes/{case.pk}/documents/{document.pk}/content/")
     assert response.status_code == 404
 
 
@@ -521,9 +526,12 @@ def test_new_document_version_replaces_metadata_without_rewriting_old_record(
     _upload(case, users["requester"], DocumentKind.TERMS_OF_REFERENCE, storage)
     first.refresh_from_db()
     assert first.replaced_by_id is not None
-    assert case.documents.filter(
-        kind=DocumentKind.TERMS_OF_REFERENCE, replaced_by__isnull=True
-    ).count() == 1
+    assert (
+        case.documents.filter(
+            kind=DocumentKind.TERMS_OF_REFERENCE, replaced_by__isnull=True
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db

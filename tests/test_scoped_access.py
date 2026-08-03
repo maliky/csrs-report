@@ -50,9 +50,7 @@ def scoped_context(db) -> dict[str, object]:
     research = OrganizationUnit.objects.create(
         code="RES-X", short_name="recherche", long_name="Service recherche"
     )
-    OrganizationUnitLink.objects.create(
-        supervisor_service=root, collaborator_service=daf
-    )
+    OrganizationUnitLink.objects.create(supervisor_service=root, collaborator_service=daf)
     OrganizationUnitLink.objects.create(
         supervisor_service=daf, collaborator_service=finances
     )
@@ -216,9 +214,7 @@ def test_hierarchy_grant_sync_is_audited_idempotent_and_manager_only(
     users = scoped_context["users"]
     assert isinstance(users, dict)
     first_output = StringIO()
-    call_command(
-        "sync_hierarchy_role_grants", actor="it", stdout=first_output
-    )
+    call_command("sync_hierarchy_role_grants", actor="it", stdout=first_output)
 
     grants = RoleGrant.objects.filter(role__code="UNIT_MANAGER")
     assert grants.count() == 2
@@ -231,9 +227,7 @@ def test_hierarchy_grant_sync_is_audited_idempotent_and_manager_only(
     assert "creees=2 conservees=0" in first_output.getvalue()
 
     second_output = StringIO()
-    call_command(
-        "sync_hierarchy_role_grants", actor="it", stdout=second_output
-    )
+    call_command("sync_hierarchy_role_grants", actor="it", stdout=second_output)
     assert grants.count() == 2
     assert "creees=0 conservees=2" in second_output.getvalue()
 

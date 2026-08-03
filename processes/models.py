@@ -279,9 +279,7 @@ class ProcessEventQuerySet(models.QuerySet["ProcessEvent"]):
 class ProcessEvent(models.Model):
     """Append-only, human-readable business audit event."""
 
-    case = models.ForeignKey(
-        ProcessCase, on_delete=models.PROTECT, related_name="events"
-    )
+    case = models.ForeignKey(ProcessCase, on_delete=models.PROTECT, related_name="events")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

@@ -125,10 +125,14 @@ def _validate_people(
     ids.add(initiator.pk)
     people = list(User.objects.filter(pk__in=ids, is_active=True).order_by("pk"))
     if {person.pk for person in people} != ids:
-        raise ValidationError({"participant_ids": "Un participant est inactif ou inconnu."})
+        raise ValidationError(
+            {"participant_ids": "Un participant est inactif ou inconnu."}
+        )
     if mission_type == MissionType.INTERNATIONAL and ids != {initiator.pk}:
         raise ValidationError(
-            {"participant_ids": "Une mission internationale concerne uniquement le demandeur."}
+            {
+                "participant_ids": "Une mission internationale concerne uniquement le demandeur."
+            }
         )
     return people
 
@@ -214,9 +218,11 @@ def update_mission_draft(
     fields: Mapping[str, object],
     participant_ids: Iterable[int],
 ) -> ProcessCase:
-    locked = ProcessCase.objects.select_for_update().select_related(
-        "mission_order"
-    ).get(pk=case.pk)
+    locked = (
+        ProcessCase.objects.select_for_update()
+        .select_related("mission_order")
+        .get(pk=case.pk)
+    )
     ensure_revision(locked.revision, expected_revision)
     draft_owner = locked.status == CaseStatus.DRAFT and locked.initiator_id == actor.pk
     preparation_actor = False
@@ -318,7 +324,9 @@ def resolve_queue(case: ProcessCase, kind: str) -> ProcessQueue:
             candidates.append((distance, queue))
     if not candidates:
         raise ValidationError(
-            {"queue": f"Aucune file {_status_label(kind)} ne couvre le service demandeur."}
+            {
+                "queue": f"Aucune file {_status_label(kind)} ne couvre le service demandeur."
+            }
         )
     best_distance = min(item[0] for item in candidates)
     best = [queue for distance, queue in candidates if distance == best_distance]
@@ -366,7 +374,9 @@ def can_work_queue(user: User, queue: ProcessQueue) -> bool:
     if user.is_superuser or user.is_it_admin:
         return True
     for grant in active_role_grants(user):
-        if grant.role_id == queue.role_id and queue.handler_unit_id in units_in_scope(grant):
+        if grant.role_id == queue.role_id and queue.handler_unit_id in units_in_scope(
+            grant
+        ):
             return True
     return False
 
@@ -380,7 +390,10 @@ def can_view_case(user: User, case: ProcessCase) -> bool:
         return True
     if has_scoped_permission(user, PROCESS_VIEW_PERMISSION, case.origin_unit_id):
         return True
-    if case.work_items.filter(claimed_by=user).exists() or case.events.filter(actor=user).exists():
+    if (
+        case.work_items.filter(claimed_by=user).exists()
+        or case.events.filter(actor=user).exists()
+    ):
         return True
     try:
         return can_work_queue(user, _current_item(case).queue)
@@ -391,7 +404,10 @@ def can_view_case(user: User, case: ProcessCase) -> bool:
 def can_download_documents(user: User, case: ProcessCase) -> bool:
     if user.is_superuser or user.is_it_admin or case.initiator_id == user.pk:
         return True
-    if case.work_items.filter(claimed_by=user).exists() or case.events.filter(actor=user).exists():
+    if (
+        case.work_items.filter(claimed_by=user).exists()
+        or case.events.filter(actor=user).exists()
+    ):
         return True
     if ProcessSignature.objects.filter(case=case, signer=user).exists():
         return True
@@ -453,7 +469,9 @@ def _validate_submission(case: ProcessCase) -> None:
     mission.full_clean()
     participant_ids = set(case.mission_participants.values_list("user_id", flat=True))
     if case.initiator_id not in participant_ids:
-        raise ValidationError({"participants": "Le demandeur doit participer à la mission."})
+        raise ValidationError(
+            {"participants": "Le demandeur doit participer à la mission."}
+        )
     if mission.mission_type == MissionType.INTERNATIONAL and participant_ids != {
         case.initiator_id
     }:
@@ -504,7 +522,9 @@ def _close_case(case: ProcessCase, status: str) -> None:
         case.retention_until = now.date().replace(year=now.year + 3, day=28)
 
 
-def _canonical_signature(case: ProcessCase) -> tuple[dict[str, object], list[dict[str, object]], str]:
+def _canonical_signature(
+    case: ProcessCase,
+) -> tuple[dict[str, object], list[dict[str, object]], str]:
     mission = case.mission_order
     snapshot: dict[str, object] = {
         "reference": case.reference,
@@ -568,14 +588,18 @@ def act_on_case(  # noqa: C901
     checklist: Mapping[str, bool] | None = None,
 ) -> ProcessCase:
     """Execute one authorized transition against a locked current revision."""
-    locked = ProcessCase.objects.select_for_update().select_related(
-        "definition", "calendar", "mission_order", "origin_unit"
-    ).get(pk=case.pk)
+    locked = (
+        ProcessCase.objects.select_for_update()
+        .select_related("definition", "calendar", "mission_order", "origin_unit")
+        .get(pk=case.pk)
+    )
     ensure_revision(locked.revision, expected_revision)
     before = locked.status
     if action in {"place_legal_hold", "release_legal_hold"}:
         if not actor.is_superuser and not actor.is_it_admin:
-            raise PermissionDenied("Seul un administrateur autorisé peut gérer le gel juridique.")
+            raise PermissionDenied(
+                "Seul un administrateur autorisé peut gérer le gel juridique."
+            )
         if not note.strip():
             raise ValidationError({"note": "Le motif est obligatoire."})
         enabled = action == "place_legal_hold"
@@ -795,9 +819,7 @@ def add_document(
         raise ValidationError({"kind": "Type de pièce inconnu."})
     suffix = Path(name).suffix.lower()
     if content_type not in ALLOWED_CONTENT_TYPES or suffix not in ALLOWED_SUFFIXES:
-        raise ValidationError(
-            {"file": "Formats acceptés : PDF, DOCX, JPG et PNG."}
-        )
+        raise ValidationError({"file": "Formats acceptés : PDF, DOCX, JPG et PNG."})
     if not content or len(content) > int(settings.PROCESS_DOCUMENT_MAX_BYTES):
         raise ValidationError({"file": "La pièce doit peser au maximum 20 Mio."})
     if not _matches_declared_format(content, suffix):
@@ -834,9 +856,7 @@ def add_document(
             .first()
         )
         if previous is not None:
-            ProcessDocument.objects.filter(pk=previous.pk).update(
-                replaced_by=document
-            )
+            ProcessDocument.objects.filter(pk=previous.pk).update(replaced_by=document)
         _save_case(locked, from_status=locked.status)
         _record_event(
             case=locked,
@@ -859,7 +879,5 @@ def add_document(
 def document_bytes(document: ProcessDocument) -> bytes:
     storage = configured_storage()
     if storage.provider != document.provider:
-        raise ValidationError(
-            "Le fournisseur configuré ne correspond pas à cette pièce."
-        )
+        raise ValidationError("Le fournisseur configuré ne correspond pas à cette pièce.")
     return storage.read(document.object_key)

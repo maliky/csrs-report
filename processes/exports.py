@@ -13,7 +13,12 @@ from processes.services import document_bytes
 
 def _pdf_escape(value: str) -> bytes:
     normalized = value.encode("latin-1", errors="replace").decode("latin-1")
-    return normalized.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").encode("latin-1")
+    return (
+        normalized.replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .encode("latin-1")
+    )
 
 
 def simple_audit_pdf(lines: list[str]) -> bytes:
@@ -30,7 +35,11 @@ def simple_audit_pdf(lines: list[str]) -> bytes:
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Length "
+        + str(len(stream)).encode()
+        + b" >>\nstream\n"
+        + stream
+        + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
     output = BytesIO()

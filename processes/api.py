@@ -204,7 +204,9 @@ def case_payload(user: User, case: ProcessCase, *, detail: bool) -> dict[str, ob
         "created_at": case.created_at.isoformat(),
         "updated_at": case.updated_at.isoformat(),
         "due_date": open_item.due_date.isoformat() if open_item else None,
-        "claimed_by": _person(open_item.claimed_by) if open_item and open_item.claimed_by else None,
+        "claimed_by": _person(open_item.claimed_by)
+        if open_item and open_item.claimed_by
+        else None,
         "available_actions": _available_actions(user, case),
     }
     if not detail:
@@ -293,9 +295,11 @@ class ProcessListView(APIView):
     def get(self, request: Request) -> Response:
         user = _request_user(request)
         box = request.query_params.get("box", "actionable")
-        cases = visible_cases(user).select_related(
-            "initiator", "origin_unit", "mission_order"
-        ).prefetch_related("work_items__queue__role", "work_items__claimed_by")
+        cases = (
+            visible_cases(user)
+            .select_related("initiator", "origin_unit", "mission_order")
+            .prefetch_related("work_items__queue__role", "work_items__claimed_by")
+        )
         items = list(cases)
         if box == "mine":
             items = [case for case in items if case.initiator_id == user.pk]
@@ -345,7 +349,10 @@ class MissionCreateView(APIView):
         data.pop("official_number", None)
         case = create_mission_draft(actor=_request_user(request), **data)
         case = _case_for_user(_request_user(request), case.pk)
-        return Response(case_payload(_request_user(request), case, detail=True), status=status.HTTP_201_CREATED)
+        return Response(
+            case_payload(_request_user(request), case, detail=True),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProcessDetailView(APIView):
@@ -435,10 +442,12 @@ class ProcessDocumentContentView(APIView):
         if not can_download_documents(user, case):
             raise Http404
         document = get_object_or_404(ProcessDocument, pk=document_pk, case=case)
-        response = HttpResponse(document_bytes(document), content_type=document.content_type)
-        response["Content-Disposition"] = content_disposition_header(
-            True, document.original_name
-        ) or "attachment"
+        response = HttpResponse(
+            document_bytes(document), content_type=document.content_type
+        )
+        response["Content-Disposition"] = (
+            content_disposition_header(True, document.original_name) or "attachment"
+        )
         response["X-Content-Type-Options"] = "nosniff"
         return response
 
@@ -451,6 +460,8 @@ class ProcessExportView(APIView):
         if not can_export_case(user, case):
             raise Http404
         response = HttpResponse(export_case_zip(case), content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{case.reference}-audit.zip"'
+        response["Content-Disposition"] = (
+            f'attachment; filename="{case.reference}-audit.zip"'
+        )
         response["X-Content-Type-Options"] = "nosniff"
         return response
