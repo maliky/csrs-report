@@ -590,8 +590,7 @@
 #+RESULTS:
 [[file:Exports/processus_gestion_donnees.png]]
 
-
-* Activite
+* Processus d'achat
 #+begin_src plantuml :file Exports/processus-achat-activite.png
   @startuml
   !pragma useVerticalIf on

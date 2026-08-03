@@ -1,0 +1,136 @@
+#+TITLE: Décisions et questions d'architecture des processus CSRS
+#+LANGUAGE: fr
+#+STARTUP: overview
+#+OPTIONS: toc:2 num:nil
+
+* Périmètre
+
+- Source métier : =docs/Logigrams/logigrams.org= dans son état courant.
+- Historique étudié : commits de =248c1e9= exclu à =fae457f= inclus.
+- Commits fonctionnels : =c64c57b= pour le backend, =36992ff= pour la UI React et =83b515d= pour les décisions documentées.
+- Les commits de style, de test isolé et de preprod n'ajoutent pas d'architecture propre aux processus.
+- Une remarque est une entrée =Dxx= ou =Qxx= ; chaque processus reste à 20 remarques maximum.
+
+* Processus de demande et de prolongation de visa
+
+** Décisions constatées
+
+- D01 :: Le visa doit réutiliser le noyau auditable =ProcessCase= avec un =data model= et un =state graph= typés et versionnés, sans mini-BPM administrable. (=83b515d=)
+- D02 :: CSRS Report fera autorité sur le dossier ; les validations dans l'application ont valeur de signature. (=83b515d=)
+- D03 :: Les étapes internes passent par des =service queues= avec =claim= et =takeover= audité ; les actions des visiteurs, coursiers et agents MAE sont saisies par un agent interne. (=83b515d=)
+- D04 :: Les échéances utilisent le calendrier ivoirien en jours ouvrés ; le MVP n'ajoute ni =reminder=, ni =escalation=, ni email de processus. (=83b515d=)
+- D05 :: Les pièces sont privées, contrôlées par ClamAV et stockées explicitement en =local private storage= ou via Microsoft Graph ; la lecture hiérarchique reste limitée aux métadonnées. (=c64c57b=, =83b515d=)
+- D06 :: Un dossier terminal est immutable et exportable en ZIP d'audit avec originaux, synthèse et =manifest= d'empreintes. (=c64c57b=, =83b515d=)
+
+** Questions ouvertes
+
+- Q01 :: Faut-il une seule =ProcessDefinition= avec un type =before_arrival/extension=, ou deux définitions et deux =state graphs= ?
+- Q02 :: Qui initie une demande avant arrivée : le visiteur avec une identité externe, un chercheur hôte, ou une assistante agissant comme =proxy= ?
+- Q03 :: Comment router DRD ou DRV, puis I2A, secrétariat et coursier : par unité d'origine, type de visiteur ou =service queue= explicite ?
+- Q04 :: Quel =chain of custody= tracer pour le passeport original : remise, dépôt MAE, retrait, stockage temporaire et restitution ?
+- Q05 :: Les délais de 24 h, 48 h et 15 à 30 jours sont-ils des =due dates= contraignantes, des SLA indicatifs ou de simples informations ?
+- Q06 :: Quel événement déclenche le délai de deux semaines avant expiration et faut-il un =scheduler= malgré l'absence de =reminder= dans le MVP ?
+- Q07 :: Quels templates et quelle numérotation appliquer à la note verbale, à la prolongation et au formulaire officiel ?
+- Q08 :: Comment représenter les statuts externes du MAE, notamment dossier incomplet, refus, perte ou délai dépassé, sans intégration directe ?
+- Q09 :: Quelle classification, visibilité, durée de conservation et règle de destruction appliquer à chaque type de pièce d'identité ?
+
+* Processus d'élaboration des ordres de mission
+
+** Décisions constatées
+
+- D01 :: Le premier parcours vertical est implémenté avec =ProcessDefinition=, =ProcessCase= et les champs typés =MissionOrder= et =MissionParticipant=. (=c64c57b=)
+- D02 :: Le =state graph= couvre brouillon, assistance, décision DG, distribution, parc automobile et états terminaux. (=c64c57b=)
+- D03 :: Chaque étape est routée vers la =service queue= active la plus proche du service demandeur ; une absence ou une égalité de routage bloque la soumission. (=c64c57b=)
+- D04 :: Un agent autorisé effectue un =claim= ; un autre peut faire un =takeover= motivé et audité, sous réserve d'un =RoleGrant= actif. (=c64c57b=)
+- D05 :: Django applique toutes les permissions et transitions =server-side= ; la UI n'utilise que les capacités renvoyées par l'API. (=c64c57b=, =36992ff=)
+- D06 :: Les écritures utilisent une transaction, un verrou et une révision optimiste ; une ancienne révision produit =409 stale_revision= et les événements sont =append-only=. (=c64c57b=)
+- D07 :: Pour une mission internationale, le billet peut suivre la demande mais devient obligatoire avant l'envoi au signataire. (=c64c57b=, =83b515d=)
+- D08 :: Le DG signe avec =SIGNER <reference>=, ou demande une correction motivée, ou rejette ; la signature fige un =snapshot= et le =manifest= SHA-256 des pièces. (=c64c57b=)
+- D09 :: Le secrétariat confirme les trois remises obligatoires ; une demande de véhicule crée ensuite un =work item= du parc, sans inventaire ni réservation. (=c64c57b=, =83b515d=)
+- D10 :: Les pièces PDF, DOCX, JPG et PNG, limitées à 20 Mio, sont contrôlées et analysées avant un stockage privé sans =fallback= silencieux. (=c64c57b=)
+- D11 :: L'API versionnée et la UI React couvrent création, inbox, détail, actions, documents, historique et export d'audit sous =/app/processus=. (=c64c57b=, =36992ff=)
+- D12 :: Les dossiers terminés, rejetés ou abandonnés sont immutables ; la conservation est de trois ans après clôture avec =legal hold= motivé. (=c64c57b=, =83b515d=)
+
+** Questions ouvertes
+
+- Q01 :: Quelle autorité attribue le numéro officiel, à quel moment est-il réservé et comment éviter les doublons ou trous de séquence ?
+- Q02 :: Quel template et quel =rendering pipeline= produiront l'ordre officiel depuis le =snapshot= déjà signé dans l'application ?
+- Q03 :: Faut-il permettre des participants externes ou une demande créée pour un autre employé, alors que le =data model= actuel ne couvre que des utilisateurs internes ?
+- Q04 :: Comment corriger une erreur découverte après clôture : nouveau dossier lié, =superseding version= ou acte d'annulation, sans rouvrir le dossier ?
+- Q05 :: Quels liens typés relieront ultérieurement une mission à son BSF, à un achat ou à une réservation de véhicule externe ?
+
+* Processus d'élaboration du Bon de sortie de fonds (BSF)
+
+** Décisions constatées
+
+- D01 :: Aucun =data model= ou =state graph= BSF n'est encore implémenté ; il doit utiliser le noyau commun avec des règles typées propres. (=83b515d=)
+- D02 :: CSRS Report fera autorité sur le dossier et les visas dans l'application auront valeur de signature. (=83b515d=)
+- D03 :: Les contrôles passent par des =service queues= ; le DG valide, rejette ou demande une correction motivée sans modifier le contenu. (=83b515d=)
+- D04 :: Les jours de préparation du BSF et de caisse sont fixes ; aucun =reminder= ou =escalation= automatique n'est prévu dans le MVP. (=83b515d=)
+- D05 :: Le contrôle budgétaire et comptable reste manuel dans le périmètre actuel, même si une intégration future est souhaitée. (=83b515d=)
+- D06 :: Le seuil espèces/chèque reste fixé à 200 000 FCFA et n'est pas configurable. (=83b515d=)
+- D07 :: La séparation des contrôles entre les acteurs du BSF devra être imposée. (=83b515d=)
+- D08 :: Les versions, motifs, validations et pièces doivent rester auditables ; un dossier terminal est immutable et exportable avec ses preuves. (=c64c57b=, =83b515d=)
+
+** Questions ouvertes
+
+- Q01 :: Quel =data model= typé couvre projet, ligne budgétaire, montant, devise, initiateur, bénéficiaire et pièces justificatives ?
+- Q02 :: Quels rôles préparent et corrigent réellement le BSF : Service Finances-Comptabilité, Chef de service FC ou comptable du projet ?
+- Q03 :: Quel =state graph= exact conserve chaque visa lorsqu'une anomalie ou un rejet DG renvoie le dossier en correction ?
+- Q04 :: Quelle preuve structurée accompagne les contrôles manuels de capacité budgétaire et de situation comptable ?
+- Q05 :: Quelle matrice de =segregation of duties= interdit les cumuls, et quelles exceptions motivées restent possibles pendant une délégation ?
+- Q06 :: Les jours fixes et le délai maximal de trois jours doivent-ils bloquer une transition ou seulement calculer des =due dates= et indicateurs ?
+- Q07 :: Quelles données et preuves de paiement conserver pour espèces et chèque sans exposer inutilement des données financières sensibles ?
+- Q08 :: Quel template officiel, quelle numérotation et quel =rendering pipeline= utiliser pour le BSF signé ?
+- Q09 :: Comment relier un BSF à une mission, une demande d'achat, un contrat ou une facture sans dupliquer les données de référence ?
+- Q10 :: Quels états terminaux prévoir pour paiement annulé, chèque expiré, paiement partiel ou fonds non retirés ?
+
+* Processus de gestion des données
+
+** Décisions constatées
+
+- D01 :: Aucun workflow de gestion des données n'est encore implémenté ; il doit utiliser le noyau commun avec un =data model= et un =state graph= typés. (=83b515d=)
+- D02 :: CSRS Report conserve les identifiants, classifications et opérations de gouvernance, mais jamais les datasets eux-mêmes. (=83b515d=)
+- D03 :: Une autorisation d'accès crée un =work item= exécuté et confirmé par TSI ; elle ne provisionne pas directement les droits externes. (=83b515d=)
+- D04 :: La conservation de cinq ans commence à l'archivage et peut être suspendue par un =legal hold= motivé. (=83b515d=)
+- D05 :: Les décisions, corrections et confirmations doivent utiliser révisions optimistes, =service queues= et événements =append-only= ; les dossiers terminaux restent immutables. (=c64c57b=, =83b515d=)
+- D06 :: Les documents de gouvernance utilisent le stockage privé, le contrôle antivirus, les permissions =server-side= et l'export d'audit du socle. (=c64c57b=, =83b515d=)
+
+** Questions ouvertes
+
+- Q01 :: Un dossier représente-t-il une étude, un dataset, une collection, ou une étude contenant plusieurs actifs de données ?
+- Q02 :: Quels identifiants stables et quel =catalog= externe servent de référence aux actifs sans importer les datasets ?
+- Q03 :: Quels templates officiels de PGD, contrôle qualité et preuve de destruction doivent être versionnés ?
+- Q04 :: Quel schéma de classification décrit sensibilité, données personnelles, consentement, propriétaire et exigences réglementaires ?
+- Q05 :: Quel =state graph= sépare validation système, collecte, contrôle qualité, accès, audit, archivage et boucles de non-conformité ?
+- Q06 :: Quelle policy définit approbateurs, =least privilege=, durée, revue, révocation et refus d'un accès ?
+- Q07 :: Quelle preuve TSI confirme l'exécution ou la révocation des droits, et comment la relier aux identifiants des systèmes externes ?
+- Q08 :: Quelles empreintes, métadonnées de provenance et relations de =lineage= prouvent l'intégrité sans stocker les données ?
+- Q09 :: Quel système réalise l'archivage et comment synchroniser date d'archive, prolongation réglementaire et =legal hold= ?
+- Q10 :: La destruction couvre-t-elle copies, backups et replicas, et quelle preuve signée permet de clôturer le dossier ?
+
+* Processus d'achat
+
+** Décisions constatées
+
+- D01 :: Le range ne contient aucun choix spécifique à l'achat : aucun =ProcessDefinition=, =data model=, endpoint ou écran n'est implémenté. (=c64c57b=, =36992ff=)
+
+** Questions ouvertes
+
+- Q01 :: L'achat doit-il utiliser le noyau auditable CSRS avec un =state graph= typé, ou rester dans un système comptable ou procurement externe ?
+- Q02 :: CSRS Report fera-t-il autorité sur la demande d'achat, ou conservera-t-il seulement la trace d'un circuit externe ?
+- Q03 :: Les signatures DAF et DG dans l'application ont-elles valeur de validation, et quels documents officiels doivent être générés ou téléversés ?
+- Q04 :: Quel rôle réel remplace « Bande 1 » pour le dépôt de facture, le paiement et la confirmation de TVA ?
+- Q05 :: Quel =data model= décrit la demande d'achat, ses lignes, quantités, projet, budget, urgence et bénéficiaire ?
+- Q06 :: Quelles =service queues= et quelle =segregation of duties= appliquer entre demandeur, DAF, DG, Cellule achat, réception et paiement ?
+- Q07 :: Quel =state graph= conserve les corrections, resoumissions et signatures successives de la DAF et du DG ?
+- Q08 :: Combien de quotations sont requises, selon quels seuils, et comment documenter une exception ou un fournisseur unique ?
+- Q09 :: La =supplier database= est-elle interne à CSRS Report ou synchronisée avec un référentiel comptable ou documentaire externe ?
+- Q10 :: Quels critères, validations et déclarations de conflit d'intérêts rendent la sélection du fournisseur auditable ?
+- Q11 :: Quel template, quelle numérotation et quelle signature appliquer au =purchase order= avant son envoi au fournisseur ?
+- Q12 :: Le =fork/join= livraison-facture autorise-t-il livraisons partielles, plusieurs factures, retours ou remplacement d'un service non conforme ?
+- Q13 :: Quelle preuve de réception et quel =two-way/three-way match= sont obligatoires avant le paiement ?
+- Q14 :: Quel acteur déclenche le paiement et comment relier l'achat au BSF ou au système comptable avec =idempotency= ?
+- Q15 :: Quelle règle décide le recouvrement de TVA, qui le confirme et quelle preuve clôt cette branche ?
+- Q16 :: Comment identifier fournisseurs et prestataires externes, puis enregistrer leurs cotations, livraisons et factures ?
+- Q17 :: Quelles pièces contractuelles, permissions et durées de conservation sont nécessaires ?
