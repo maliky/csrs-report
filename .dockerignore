@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+.venv
 .git
 .pytest_cache
 .mypy_cache

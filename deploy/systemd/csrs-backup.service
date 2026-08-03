@@ -1,0 +1,13 @@
+[Unit]
+Description=Sauvegarde vérifiée de la préproduction CSRS
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=jil
+Group=jil
+SupplementaryGroups=docker
+WorkingDirectory=/home/jil/csrs_report
+UMask=0077
+ExecStart=/home/jil/csrs_report/scripts/backup_db.sh

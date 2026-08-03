@@ -1,0 +1,11 @@
+[Unit]
+Description=Sauvegarde quotidienne de la préproduction CSRS
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+Persistent=true
+RandomizedDelaySec=15m
+Unit=csrs-backup.service
+
+[Install]
+WantedBy=timers.target

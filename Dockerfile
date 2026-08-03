@@ -14,7 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt ./
 RUN apt-get update \
-    && apt-get install --no-install-recommends --yes libpq5 \
+    && apt-get install --no-install-recommends --yes gzip libpq5 tar \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r requirements.txt
 COPY . .

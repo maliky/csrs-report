@@ -57,7 +57,7 @@ services:
     command: python manage.py send_notifications --watch --interval 30 --limit 50
 
   clamav:
-    image: clamav/clamav:1.4.3
+    image: clamav/clamav:1.4.5
     restart: unless-stopped
     volumes:
       - csrs_clamav_data:/var/lib/clamav

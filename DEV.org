@@ -2,6 +2,22 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-02 dim.> Préproduction =ent.csrs.ch= sur le nouvel hôte
+** Décisions confirmées
+
+- La branche =design/workflows-logigrams= est publiée pour conserver son historique, puis =dev= avance par fast-forward sur son commit =83b515d=. Le déploiement reste sur =dev= et n'utilise pas =csrs_psiaka=.
+- La préproduction restaure une sauvegarde fraîche de la base CSRS existante dans un PostgreSQL 17 conteneurisé. Les secrets Django, PostgreSQL et SMTP sont propres au nouvel hôte et aucun fichier =.env= n'est copié.
+- Avant la création DNS et le certificat TLS, l'adresse =179.237.107.40= sert uniquement une page d'attente HTTP. L'application complète reste liée à =127.0.0.1:18005= afin qu'aucun mot de passe ne transite en clair.
+- Le nom public retenu est =ent.csrs.ch=. Le premier enregistrement DNS sera uniquement un =A= vers =179.237.107.40= ; IPv6 reste différé jusqu'à une vérification publique dédiée.
+- Les emails réels utilisent un compte SMTP dédié sur =mail.koba.sarl:587= avec TLS. Le notifier reste arrêté jusqu'à la configuration du compte, la disponibilité HTTPS et la neutralisation des notifications encore en attente dans la copie.
+- Les pièces de processus utilisent le volume local privé avec analyse ClamAV obligatoire. Les sauvegardes quotidiennes couvrent PostgreSQL et ce volume, avec une rétention locale de quatorze jours.
+
+** Contraintes d'exploitation
+
+- Nginx, Docker, le pare-feu et Certbot restent des services de l'hôte ; PostgreSQL reste exclusivement dans Compose et n'expose aucun port public.
+- Le compte administrateur =jil= reçoit explicitement =NOPASSWD: ALL= et l'accès au groupe =docker= sur ce serveur dédié. Cette décision donne de fait un accès root à tout processus lancé sous ce compte.
+- Le certificat ne sera demandé qu'après résolution publique de =ent.csrs.ch= vers ce serveur et validation du vhost HTTP.
+
 * <2026-08-01 sam.> Realisation du premier parcours : ordre de mission
 ** Resultat
 
@@ -46,7 +62,7 @@ Les formats acceptes sont PDF, DOCX, JPG et PNG, dans la limite de 20 Mio. L'ext
 
 Le backend est choisi au deploiement par =PROCESS_DOCUMENT_BACKEND= : =local= conserve les fichiers dans le volume Docker prive =csrs_private_documents= monte sur =/private-media= ; =sharepoint= utilise Microsoft Graph avec une application dediee, l'autorisation minimale =Sites.Selected= accordee par un administrateur Office 365, un site et une bibliotheque dedies, et un dossier racine existant. Les identifiants Graph restent exclusivement dans =.env=. Une panne Graph bloque le depot et ne provoque jamais une bascule silencieuse vers le disque local.
 
-ClamAV utilise le service Compose =clamav/clamav:1.4.3= et son volume de signatures =csrs_clamav_data=. =PROCESS_DOCUMENT_SCAN_REQUIRED= vaut =1= par defaut et ne doit etre desactive que dans un environnement de developpement ou de test isole.
+ClamAV utilise le service Compose =clamav/clamav:1.4.5= et son volume de signatures =csrs_clamav_data=. =PROCESS_DOCUMENT_SCAN_REQUIRED= vaut =1= par defaut et ne doit etre desactive que dans un environnement de developpement ou de test isole.
 
 ** API et interface React
 

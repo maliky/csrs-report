@@ -6,9 +6,9 @@ if [[ ! -f .env ]]; then
     exit 1
 fi
 
-POSTGRES_DB="$(sed -n 's/^POSTGRES_DB=//p' .env)"
-POSTGRES_USER="$(sed -n 's/^POSTGRES_USER=//p' .env)"
-if [[ -z "$POSTGRES_DB" || -z "$POSTGRES_USER" ]]; then
+postgres_db="$(sed -n 's/^POSTGRES_DB=//p' .env)"
+postgres_user="$(sed -n 's/^POSTGRES_USER=//p' .env)"
+if [[ -z "$postgres_db" || -z "$postgres_user" ]]; then
     echo "POSTGRES_DB et POSTGRES_USER sont requis dans .env." >&2
     exit 1
 fi
@@ -17,12 +17,24 @@ project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -n 1)"
 project="${project:-csrs}"
 mkdir -p backups
 chmod 700 backups
-output="backups/csrs_$(date -u +%Y%m%dT%H%M%SZ).dump"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+database_output="backups/csrs_${timestamp}.dump"
+documents_output="backups/csrs_documents_${timestamp}.tar.gz"
+manifest_output="backups/csrs_${timestamp}.sha256"
+compose=(docker-compose -p "$project" -f compose.yml)
 
-docker-compose -p "$project" -f compose.yml exec -T db \
-    pg_dump --format=custom --no-owner --username "$POSTGRES_USER" "$POSTGRES_DB" > "$output"
-chmod 600 "$output"
-docker-compose -p "$project" -f compose.yml exec -T db pg_restore --list < "$output" > /dev/null
-find backups -type f -name 'csrs_*.dump' -mtime +14 -delete
+"${compose[@]}" exec -T db \
+    pg_dump --format=custom --no-owner --username "$postgres_user" "$postgres_db" > "$database_output"
+"${compose[@]}" exec -T web \
+    tar --create --gzip --directory /private-media . > "$documents_output"
+chmod 600 "$database_output" "$documents_output"
+"${compose[@]}" exec -T db pg_restore --list < "$database_output" > /dev/null
+tar --list --gzip --file "$documents_output" > /dev/null
+(
+    cd backups
+    sha256sum "$(basename "$database_output")" "$(basename "$documents_output")" > "$(basename "$manifest_output")"
+)
+chmod 600 "$manifest_output"
+find backups -type f \( -name 'csrs_*.dump' -o -name 'csrs_documents_*.tar.gz' -o -name 'csrs_*.sha256' \) -mtime +14 -delete
 
-echo "Sauvegarde verifiee : $output"
+echo "Sauvegarde verifiee : $database_output, $documents_output et $manifest_output"
