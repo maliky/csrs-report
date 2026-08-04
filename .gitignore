@@ -70,6 +70,7 @@ backups/
 *pdf
 *svg
 *png
+/docs/Logigrams/Exports
 
 # Generated static assets
 staticfiles/

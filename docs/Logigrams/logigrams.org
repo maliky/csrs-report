@@ -657,7 +657,7 @@ Les connecteurs réunissent les missions intérieures et extérieures autour du 
   start
   :Identifier un besoin de fonds;
 
-  ' La boucle revient au demandeur tant que la demande est non conforme.
+  ' La boucle s'arrête lorsque la demande est conforme.
   repeat
     |dem|
     :Exprimer ou corriger\nla demande de fonds;
@@ -684,8 +684,8 @@ Les connecteurs réunissent les missions intérieures et extérieures autour du 
     :Recevoir la demande\net les pièces justificatives;
     :Vérifier la capacité budgétaire\ndu projet ou du service;
     :Vérifier la situation comptable\nde l'initiateur;
-  repeat while (Demande non conforme ?) is (Oui)
-  -> Non;
+  repeat while (Demande conforme ?) is (Non)
+  -> Oui;
 
   |sfc|
   :Élaborer le Bon de Sortie\nde Fonds;
@@ -707,8 +707,8 @@ Les connecteurs réunissent les missions intérieures et extérieures autour du 
   |cpt| Comptable en charge du projet
   :Contrôler le dossier financier;
 
-  ' Toute anomalie renvoie le BSF dans la chaîne de correction et de visa.
-  while (Anomalie détectée ?) is (Oui)
+  ' Le BSF reste dans la chaîne de correction jusqu'à sa conformité.
+  while (Dossier financier conforme ?) is (Non)
     :Retourner le BSF\npour correction;
 
     |chef|
@@ -720,15 +720,15 @@ Les connecteurs réunissent les missions intérieures et extérieures autour du 
 
     |cpt|
     :Contrôler à nouveau\nle dossier financier;
-  endwhile (Non)
+  endwhile (Oui)
 
   :Transmettre le BSF au DG;
 
   |dg| Directeur Général
   :Examiner le Bon de Sortie\nde Fonds;
 
-  ' Un rejet du DG déclenche une seconde boucle de correction complète.
-  while (BSF rejeté ?) is (Oui)
+  ' Le BSF revient en correction jusqu'à ce que le DG le juge conforme.
+  while (BSF conforme pour approbation ?) is (Non)
     :Retourner le BSF\npour correction;
 
     |chef|
@@ -744,7 +744,7 @@ Les connecteurs réunissent les missions intérieures et extérieures autour du 
 
     |dg|
     :Réexaminer le BSF;
-  endwhile (Non)
+  endwhile (Oui)
 
   :Approuver et signer le BSF;
   note right
@@ -879,12 +879,7 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
   :Recevoir la demande\net les pièces justificatives;
   :Vérifier la capacité budgétaire\ndu projet ou du service;
   :Vérifier la situation comptable\nde l'initiateur;
-  if (Demande non conforme ?) then (Oui)
-    |dem|
-    -> Demande à corriger;
-    #teal:(D)
-    detach
-  else (Non)
+  if (Demande conforme ?) then (Oui)
     |sfc|
     :Élaborer le Bon de Sortie\nde Fonds;
     note right
@@ -892,6 +887,11 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
       - lundi
       - mercredi
     end note
+  else (Non)
+    |dem|
+    -> Demande à corriger;
+    #teal:(D)
+    detach
   endif
 
   ' 2. CIRCUIT INITIAL DE VISA
@@ -906,12 +906,12 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
 
   |cpt| Comptable en charge du projet
   :Contrôler le dossier financier;
-  if (Anomalie détectée ?) then (Oui)
-    :Demander la correction du BSF;
-    #orange:(C)
+  if (Dossier financier conforme ?) then (Oui)
+    #green:(G)
     detach
   else (Non)
-    #green:(G)
+    :Demander la correction du BSF;
+    #orange:(C)
     detach
   endif
 
@@ -932,12 +932,12 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
 
   |cpt|
   :Contrôler le dossier corrigé;
-  if (Anomalie encore détectée ?) then (Oui)
-    :Demander une nouvelle correction;
-    #orange:(C)
+  if (Dossier corrigé conforme ?) then (Oui)
+    #green:(G)
     detach
   else (Non)
-    #green:(G)
+    :Demander une nouvelle correction;
+    #orange:(C)
     detach
   endif
 
@@ -953,16 +953,16 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
 
   |dg| Directeur Général
   :Examiner le Bon de Sortie\nde Fonds;
-  if (BSF rejeté ?) then (Oui)
-    :Demander la correction du BSF;
-    #orange:(C)
-    detach
-  else (Non)
+  if (BSF conforme pour approbation ?) then (Oui)
     :Approuver et signer le BSF;
     note right
       Seule la signature du DG
       autorise le paiement du BSF.
     end note
+  else (Non)
+    :Demander la correction du BSF;
+    #orange:(C)
+    detach
   endif
 
   ' 5. PRÉPARATION ET PAIEMENT
@@ -1051,10 +1051,10 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
 
   |Administrateur système / TSI|
   :Valider le matériel, les logiciels\net les systèmes informatiques;
-  while (Systèmes non validés ?) is (Oui)
+  while (Systèmes validés ?) is (Non)
     :Corriger la configuration\nou les anomalies;
     :Reprendre les tests\nde validation;
-  endwhile (Non)
+  endwhile (Oui)
 
   |Responsable Assurance Qualité|
   :Vérifier la version correcte de la POS\net former le personnel;
@@ -1083,18 +1083,18 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
   end note
   :Effectuer le contrôle qualité\net valider les résultats;
 
-  while (Données non conformes ?) is (Oui)
-    if (Erreur provenant de la collecte ?) then (Oui)
+  while (Données conformes ?) is (Non)
+    if (Collecte correcte ?) then (Oui)
+      :Corriger le nettoyage,\nle traitement ou l'analyse;
+    else (Non)
       |Chercheur / Employé|
       :Corriger ou reprendre\nla collecte des données;
 
       |Gestionnaire de données|
       :Transférer à nouveau\nles données corrigées;
-    else (Non)
-      :Corriger le nettoyage,\nle traitement ou l'analyse;
     endif
     :Effectuer un nouveau\ncontrôle qualité;
-  endwhile (Non)
+  endwhile (Oui)
 
   |Administrateur système / TSI|
   :Stocker les données\nde manière sécurisée;
@@ -1129,13 +1129,13 @@ Les connecteurs factorisent les contrôles et les corrections successives du BSF
 
   |Responsable Assurance Qualité|
   :Auditer la conformité, la sécurité\net la traçabilité;
-  while (Non-conformité détectée ?) is (Oui)
+  while (Audit conforme ?) is (Non)
     |Gestionnaire de données|
     :Mettre en œuvre les actions correctives\navec le service TSI;
 
     |Responsable Assurance Qualité|
     :Réaliser un nouvel audit;
-  endwhile (Non)
+  endwhile (Oui)
 
   |Gestionnaire de données|
   :Clôturer l'usage actif des données\net préparer l'archivage;
@@ -1312,17 +1312,17 @@ Les connecteurs évitent de redéfinir les actions exécutées après une correc
   end note
   :Effectuer le contrôle qualité\net valider les résultats;
   if (Données conformes ?) then (Non)
-    if (Erreur provenant de la collecte ?) then (Oui)
-      |Chercheur / Employé|
-      :Corriger ou reprendre\nla collecte des données;
-      -> Données corrigées;
-      #teal:(T)
-      detach
-    else (Non)
+    if (Collecte correcte ?) then (Oui)
       |Gestionnaire de données|
       :Corriger le nettoyage,\nle traitement ou l'analyse;
       -> Traitement corrigé;
       #orange:(Q)
+      detach
+    else (Non)
+      |Chercheur / Employé|
+      :Corriger ou reprendre\nla collecte des données;
+      -> Données corrigées;
+      #teal:(T)
       detach
     endif
   else (Oui)
@@ -1376,14 +1376,14 @@ Les connecteurs évitent de redéfinir les actions exécutées après une correc
     correctives rejoignent l'audit ici.
   end note
   :Auditer la conformité, la sécurité\net la traçabilité;
-  if (Non-conformité détectée ?) then (Oui)
+  if (Audit conforme ?) then (Oui)
+    ' Un audit conforme permet de préparer l'archivage.
+  else (Non)
     |Gestionnaire de données|
     :Mettre en œuvre les actions correctives\navec le service TSI;
     -> Actions correctives terminées;
     #purple:(A)
     detach
-  else (Non)
-    ' Un audit conforme permet de préparer l'archivage.
   endif
 
   ' 7. ARCHIVAGE ET CONSERVATION
