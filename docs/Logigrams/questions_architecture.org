@@ -3,6 +3,30 @@
 #+STARTUP: overview
 #+OPTIONS: toc:2 num:nil
 
+* Projet de courriel à la DSI
+
+** Objet
+
+Validation du socle commun et des règles de gestion des processus CSRS
+
+** Message proposé
+
+Bonjour,
+
+Dans le cadre de la dématérialisation des processus du CSRS, nous souhaitons valider avec la DSI quatre points structurants avant de poursuivre l'implémentation du visa, des ordres de mission, du Bon de sortie de fonds et de la gestion des données.
+
+1. *Socle commun et modélisation des processus* :: Par « socle commun », nous entendons les composants réutilisés par tous les processus : définition versionnée du parcours (=ProcessDefinition=), dossier individuel exécutant ce parcours (=ProcessCase=), étapes et files de service, transitions autorisées, permissions, documents privés et historique d'audit. Le =data model= décrit les données métier propres au dossier, tandis que le =state graph= décrit ses états et les passages autorisés entre eux. Par exemple, un dossier d'achat peut suivre le parcours « brouillon → validation DAF → correction ou signature → validation DG → approbation ou rejet → exécution → clôture », une correction le renvoyant à une étape antérieure sans effacer l'historique. La DSI valide-t-elle ce principe de socle typé, auditable et versionné ? Pour le visa avant arrivée et la prolongation, recommande-t-elle une seule définition comportant deux variantes ou deux définitions distinctes ?
+
+2. *Référentiel organisationnel et vocabulaire* :: Afin d'éviter les erreurs d'affectation, pouvez-vous confirmer les intitulés officiels, responsabilités et rattachements de la DRD, de la DRV et du service I2A, ainsi que l'intitulé « Bon de sortie de fonds (BSF) » et le service propriétaire de ce document ? Quel référentiel doit faire autorité lorsque les appellations diffèrent entre l'organigramme, les procédures et l'application ?
+
+3. *Routage, prise en charge et blocages* :: Une étape est proposée à une file de service ; un agent autorisé la réclame pour la traiter et une reprise par un autre agent doit être motivée et auditée. Nous proposons de bloquer la soumission lorsque aucune file ne couvre l'unité demandeuse ou lorsque deux files de même précision sont candidates. Exemple : deux files d'assistance actives couvrent exactement la même unité et le système ne peut pas choisir de destinataire sans ambiguïté. La DSI confirme-t-elle ce blocage explicite, ou faut-il prévoir une priorité, une file centrale de repli ou un arbitrage administratif ?
+
+4. *Périmètre du MVP* :: Le MVP, ou produit minimum viable, désigne la première version utilisable couvrant les parcours essentiels. La proposition actuelle n'inclut ni rappels automatiques, ni escalades, ni planificateur d'échéances ; les utilisateurs suivent les dossiers dans leur boîte de travail. La DSI confirme-t-elle cette limite pour le premier lot et identifie-t-elle une automatisation indispensable dès le démarrage ?
+
+Une réponse sur ces quatre points permettra de stabiliser le vocabulaire, les règles de routage et les interfaces avant la généralisation du socle aux autres processus.
+
+Cordialement,
+
 * Processus de gestion des données
 
 ** Décisions
@@ -13,7 +37,6 @@
 - D05 :: Les décisions, corrections et confirmations doivent utiliser révisions optimistes, =service queues= et événements =append-only= ; les dossiers terminaux restent immutables.
   # revisions optimites?  Qu'est ce ?
 - D06 :: Les documents de gouvernance utilisent le stockage privé, le contrôle antivirus, les permissions =server-side= et l'export d'audit du socle.
-# > Qu'est ce que le socle ici ?   
 
 ** Questions ouvertes
 
@@ -34,7 +57,6 @@
 ** Décisions constatées
 
 - D01 :: Le visa doit réutiliser le noyau auditable =ProcessCase= avec un =data model= et un =state graph= typés et versionnés, sans mini-BPM administrable.
-# > expliquer le ProcessCase et le data /state model utilises  
 - D02 :: les validations dans l'application ont valeur de signature.
 - D03 :: Les étapes internes passent par des =service queues= avec =claim= et =takeover= audité ; les actions des visiteurs, coursiers et agents MAE sont saisies par un agent interne.
   # expliquer service queues claim takeover, comment sont ils audite.
@@ -45,15 +67,12 @@
 ** Questions ouvertes
 
 - Q01 :: Faut-il une seule =ProcessDefinition= avec un type =before_arrival/extension=, ou deux définitions et deux =state graphs= ?
-# > expliquer  
 - Q02 :: Qui initie une demande avant arrivée : le visiteur avec une identité externe, un chercheur hôte, ou une assistante agissant comme =proxy= ?
   
 - Q03 :: Comment router DRD ou DRV, puis I2A, secrétariat et coursier : par unité d'origine, type de visiteur ou =service queue= explicite ?
-  # >  DRV DRD I2A ?
 - Q04 :: Quel =chain of custody= tracer pour le passeport original : remise, dépôt MAE, retrait, stockage temporaire et restitution ?
 - Q05 :: Les délais de 24 h, 48 h et 15 à 30 jours sont-ils des =due dates= contraignantes, des SLA indicatifs ou de simples informations ?
 - Q06 :: Quel événement déclenche le délai de deux semaines avant expiration et faut-il un =scheduler= malgré l'absence de =reminder= dans le MVP ?
-# >   MVP minimum Viable Product.
 - Q07 :: Quels templates et quelle numérotation appliquer à la note verbale, à la prolongation et au formulaire officiel ?
 - Q08 :: Comment représenter les statuts externes du MAE, notamment dossier incomplet, refus, perte ou délai dépassé, sans intégration directe ?
 - Q09 :: Quelle classification, visibilité, durée de conservation et règle de destruction appliquer à chaque type de pièce d'identité ?
@@ -63,7 +82,6 @@
 ** Décisions
 
 - D03 :: une absence ou une égalité de routage bloque la soumission.
-# > donne un exemple condisant a un blocage  
 - D04 :: Un agent autorisé effectue un =claim= ; un autre peut faire un =takeover= motivé et audité, sous réserve d'un =RoleGrant= actif.
 - D05 :: Django applique toutes les permissions et transitions =server-side= ; la UI n'utilise que les capacités renvoyées par l'API.
 - D06 :: Les écritures utilisent une transaction, un verrou et une révision optimiste ; une ancienne révision produit =409 stale_revision= et les événements sont =append-only=.
@@ -81,7 +99,7 @@
 - Q03 :: Faut-il permettre des participants externes ou une demande créée pour un autre employé, alors que le =data model= actuel ne couvre que des utilisateurs internes ?
 - Q04 :: Comment corriger une erreur découverte après clôture : nouveau dossier lié, =superseding version= ou acte d'annulation, sans rouvrir le dossier ?
 - Q05 :: Quels liens typés relieront ultérieurement une mission à son BSF, à un achat ou à une réservation de véhicule externe ?
-# > BSF
+
 * Processus d'élaboration du Bon de sortie de fonds (BSF)
 
 ** Décisions
@@ -118,7 +136,6 @@
 - Q05 :: Quel =data model= décrit la demande d'achat, ses lignes, quantités, projet, budget, urgence et bénéficiaire ?
 - Q06 :: Quelles =service queues= et quelle =segregation of duties= appliquer entre demandeur, DAF, DG, Cellule achat, réception et paiement ?
 - Q07 :: Quel =state graph= conserve les corrections, resoumissions et signatures successives de la DAF et du DG ?
-  # > state graph ? give an example
 - Q08 :: Combien de quotations sont requises, selon quels seuils, et comment documenter une exception ou un fournisseur unique ?
 - Q09 :: La =supplier database= est-elle interne à l'Application ou synchronisée avec un référentiel comptable ou documentaire externe ?
 - Q10 :: Quels critères, validations et déclarations de conflit d'intérêts rendent la sélection du fournisseur auditable ?
