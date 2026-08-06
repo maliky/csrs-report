@@ -157,6 +157,10 @@ React fournit la boite de travail, le formulaire responsive, la fiche avec les d
 - [X] Build React sous Node 24 et vingt tests Vitest, dont la boite de processus, la prise en charge et le depot multipart.
 - [ ] Validation Selenium a 360 et 1440 pixels avec une base pilote configuree ; elle reste a effectuer apres creation des files et delegations de demonstration.
 
+* TODO <2026-08-01 sam. 12:37> Amelioration graphique Siaka
+au survol sur le graphique enlever les information redondante comme date, jour ouvert ou le pourcentage, et affichier plutot les message ajouter ce jour la.  les jour avec message peuvent etrer montrer grahiquement qvec un cerlcel dont lq bordure est duune autre couleur pqr exemple rouge et peut etre qussi plus epqisse.
+
+
 * <2026-07-31 ven.> Cadrage des workflows issus des quatre premiers logigrammes
 ** Objet de cette phase
 
