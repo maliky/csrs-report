@@ -1,0 +1,52 @@
+* Acronymes métier et institutionnels
+
+- BPL :: Bonnes pratiques de laboratoire ; développement à confirmer avec le service Assurance Qualité.
+- BSF :: Bon de sortie de fonds.
+- CSRS :: Centre Suisse de Recherches Scientifiques en Côte d'Ivoire.
+- DA :: Demande d'achat.
+- DAF :: Direction administrative et financière.
+- DG :: Direction générale ou Directeur général, selon le contexte.
+- DRD :: Direction recherche et développement ; cet intitulé doit être confirmé, car le dépôt contient aussi une ancienne utilisation de DRD pour la coordination de la recherche scientifique.
+- DRV :: Direction de la valorisation et des expertises ; cet intitulé doit être confirmé, car un ancien organigramme emploie une autre appellation.
+- DSI :: Direction des systèmes d'information ; appellation à confirmer, car l'unité informatique du projet est actuellement nommée TSI.
+- FC :: Finances-Comptabilité.
+- FCFA :: Franc de la Communauté financière africaine.
+- I2A :: Intendance, accueil et assistance.
+- MAE :: Ministère des Affaires étrangères.
+- PGD :: Plan de gestion des données.
+- POS :: Procédure opératoire standard ; développement à confirmer avec le service Assurance Qualité.
+- RH :: Ressources humaines.
+- RSE :: Responsabilité sociétale des entreprises ; développement à confirmer institutionnellement.
+- TDR :: Termes de référence.
+- TSI :: Technologies et systèmes d'information.
+- TVA :: Taxe sur la valeur ajoutée.
+- UAR :: Unité d'appui à la recherche.
+
+* Acronymes techniques du système d'information
+
+- API :: Application Programming Interface, ou interface de programmation.
+- CORS :: Cross-Origin Resource Sharing, ou partage de ressources entre origines.
+- CSRF :: Cross-Site Request Forgery, ou falsification de requête intersite.
+- D3 :: Data-Driven Documents, bibliothèque JavaScript de visualisation.
+- DNS :: Domain Name System, ou système de noms de domaine.
+- HTTP :: HyperText Transfer Protocol.
+- HTTPS :: HyperText Transfer Protocol Secure, c'est-à-dire HTTP protégé par TLS.
+- IP :: Internet Protocol.
+- JSON :: JavaScript Object Notation.
+- JWT :: JSON Web Token.
+- MSW :: Mock Service Worker, outil de simulation d'API pour le développement et les tests.
+- MVP :: Minimum Viable Product, ou produit minimum viable.
+- MWE :: Minimal Working Example, ou exemple minimal fonctionnel.
+- PWA :: Progressive Web App, ou application web progressive.
+- REST :: Representational State Transfer.
+- SHA-256 :: Secure Hash Algorithm sur 256 bits.
+- SLA :: Service Level Agreement, ou accord de niveau de service.
+- SMS :: Short Message Service.
+- SMTP :: Simple Mail Transfer Protocol.
+- TLS :: Transport Layer Security.
+- UI :: User Interface, ou interface utilisateur.
+- URL :: Uniform Resource Locator, ou adresse d'une ressource.
+- UX :: User Experience, ou expérience utilisateur.
+- VPS :: Virtual Private Server, ou serveur privé virtuel.
+- WCAG :: Web Content Accessibility Guidelines, ou règles d'accessibilité des contenus web.
+- WSL :: Windows Subsystem for Linux.
