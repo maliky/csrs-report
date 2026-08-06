@@ -2,6 +2,22 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-06 jeu.> Réconciliation destructive des comptes pilotes
+** Source et cible
+
+Le chargeur lit désormais =docs/organogram.org=. Ses 40 propriétés =DEMO_ALIAS=, complétées exclusivement par =dev= et =secretariat_dg=, définissent les 42 comptes autorisés après une remise à zéro. La sélection conserve d'abord le compte portant déjà l'alias canonique, puis utilise l'adresse canonique comme recours; les alias et adresses sont ensuite normalisés sans changer inutilement l'identifiant interne du compte retenu.
+
+** Nettoyage et exploitation
+
+L'option =--prune-noncanonical-users= supprime tous les autres comptes et les agrégats qui les référencent dans les tâches, processus, agendas et délégations. La purge est transactionnelle, sa simulation est annulée et l'écriture exige =--confirm-prune=. Les scripts =seed_pilot.sh --clean-accounts= et =seed_pilot.ps1 -CleanAccounts= exécutent la simulation, imposent une sauvegarde vérifiée et demandent la confirmation littérale =SUPPRIMER= avant la reconstruction des scénarios et la réinitialisation des mots de passe.
+
+** Vérification
+
+- [X] L'organigramme canonique est chargé depuis =docs/= et expose 40 alias uniques.
+- [X] La simulation conserve comptes et données, y compris en présence d'une collision alias/adresse.
+- [X] La purge retire les données protégées liées aux anciens comptes et aboutit exactement à 42 comptes.
+- [X] Tests complets Django, Ruff, Mypy, migrations et syntaxe Bash validés.
+
 * <2026-08-06 jeu.> Bascule vers React et parité du graphique D3
 ** Interface principale
 
@@ -25,7 +41,7 @@ L'infobulle expose la date, le jour calendrier, les jours ouvrés écoulés, la 
 * <2026-08-05 mer.> Organigramme canonique et agenda hebdomadaire de la Direction générale
 ** Résultat
 
-L’organigramme révisé d’août 2026 est retranscrit dans =organogram.org=. Le seed et les tests lisent cette arborescence au lieu de maintenir une seconde hiérarchie en Python. Chaque unité porte un code, un type, un nom court et, lorsque nécessaire, un compte fonctionnel fictif. Le jeu d’illustration comprend désormais =secretariat_dg= rattaché à la Direction générale et conserve =rh= au Service Capital humain.
+L’organigramme révisé d’août 2026 est retranscrit dans =docs/organogram.org=. Le seed et les tests lisent cette arborescence au lieu de maintenir une seconde hiérarchie en Python. Chaque unité porte un code, un type, un nom court et, lorsque nécessaire, un compte fonctionnel fictif. Le jeu d’illustration comprend désormais =secretariat_dg= rattaché à la Direction générale et conserve =rh= au Service Capital humain.
 
 Le module Django =agenda= sépare quatre responsabilités : le secrétariat DG enregistre les groupes de visiteurs et leurs départs, les RH enregistrent congés, absences et missions, le secrétariat prépare et génère le rapport, et le DG consulte les versions figées. Les rôles =AGENDA_SECRETARIAT=, =AGENDA_HR= et =AGENDA_VIEWER= appliquent ces autorisations côté serveur et la session React n’expose que les capacités correspondantes.
 

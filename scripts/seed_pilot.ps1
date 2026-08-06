@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$DryRunOnly
+    [switch]$DryRunOnly,
+    [switch]$CleanAccounts
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +20,10 @@ function Read-PlainTextSecret {
 }
 
 function Invoke-Seed {
-    param([switch]$DryRun)
+    param(
+        [switch]$DryRun,
+        [switch]$ConfirmPrune
+    )
 
     $arguments = @(
         "compose", "-p", $script:project, "-f", "compose.yml",
@@ -29,8 +33,14 @@ function Invoke-Seed {
         "web", "python", "manage.py", "seed_pilot_users",
         "--replace-legacy", "--reset-password"
     )
+    if ($script:cleanAccounts) {
+        $arguments += "--prune-noncanonical-users"
+    }
     if ($DryRun) {
         $arguments += "--dry-run"
+    }
+    if ($ConfirmPrune) {
+        $arguments += "--confirm-prune"
     }
     & docker @arguments
     if ($LASTEXITCODE -ne 0) {
@@ -49,6 +59,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 $projectLine = Get-Content $envFile | Where-Object { $_ -match "^COMPOSE_PROJECT_NAME=" } | Select-Object -Last 1
 $script:project = if ($projectLine) { ($projectLine -split "=", 2)[1].Trim() } else { "csrs" }
+$script:cleanAccounts = $CleanAccounts.IsPresent
 if (-not $script:project) {
     $script:project = "csrs"
 }
@@ -65,7 +76,20 @@ try {
 
     Invoke-Seed -DryRun
     if (-not $DryRunOnly) {
-        Invoke-Seed
+        if ($CleanAccounts) {
+            & (Join-Path $PSScriptRoot "backup_db.ps1")
+            if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+                throw "La sauvegarde obligatoire a echoue."
+            }
+            $confirmation = Read-Host "Taper SUPPRIMER pour confirmer la purge des comptes non canoniques"
+            if ($confirmation -cne "SUPPRIMER") {
+                throw "Purge annulee; aucune modification n'a ete appliquee."
+            }
+            Invoke-Seed -ConfirmPrune
+        }
+        else {
+            Invoke-Seed
+        }
     }
 }
 finally {

@@ -1,6 +1,8 @@
+from datetime import timedelta
 from io import StringIO
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import models
 from django.db.models import Count
 from django.test import override_settings
@@ -9,6 +11,19 @@ from django.utils.crypto import get_random_string
 import pytest
 
 from accounts.models import User
+from access.models import GrantScope, RoleGrant, ScopedRole
+from agenda.models import (
+    VisitorVisit,
+    WeeklyAgendaDraft,
+    WeeklyAgendaVersion,
+)
+from processes.models import (
+    ProcessCase,
+    ProcessDefinition,
+    ProcessDocument,
+    ProcessEvent,
+    ProcessSignature,
+)
 from work.models import (
     NotificationDelivery,
     OrganizationUnit,
@@ -29,6 +44,7 @@ from work.management.commands.seed_pilot_users import (
     UNIT_SHORT_NAMES,
     UNIT_SPECS,
 )
+from work.organogram import canonical_organogram_path
 
 
 def test_pilot_dashboard_host_is_allowed_by_local_configuration() -> None:
@@ -41,6 +57,12 @@ def test_pilot_dashboard_host_prefers_preproduction_configuration() -> None:
         ALLOWED_HOSTS=["localhost", "127.0.0.1", "preprod.example.com"]
     ):
         assert Command._dashboard_request_host() == "preprod.example.com"
+
+
+def test_canonical_organogram_lives_in_docs() -> None:
+    path = canonical_organogram_path()
+    assert path.parent.name == "docs"
+    assert path.name == "organogram.org"
 
 
 @pytest.mark.django_db
@@ -308,6 +330,146 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         title="Formaliser le tableau de priorites"
     ).exists()
     assert ProgressSeriesCache.objects.count() == 73
+
+
+@pytest.mark.django_db
+def test_clean_accounts_prunes_every_noncanonical_user_and_related_data(
+    monkeypatch,
+) -> None:
+    demo_password = f"Demo9!{get_random_string(18)}"
+    admin_password = f"Admin9!{get_random_string(18)}"
+    monkeypatch.setenv("CSRS_DEMO_PASSWORD", demo_password)
+    monkeypatch.setenv("CSRS_ADMIN_PASSWORD", admin_password)
+    call_command("seed_pilot_users", verbosity=0)
+
+    dg = User.objects.get(login_alias="dg")
+    dg_id = dg.pk
+    User.objects.filter(pk=dg_id).update(email="ancienne-dg@demo.invalid")
+    duplicate = User.objects.create_user(
+        "dg@demo.invalid", demo_password, login_alias="ancienne_dg"
+    )
+    obsolete = User.objects.create_user(
+        "obsolete@example.test", demo_password, login_alias="obsolete"
+    )
+    obsolete_grant = RoleGrant.objects.create(
+        user=obsolete,
+        role=ScopedRole.objects.get(code="AGENDA_VIEWER"),
+        unit=OrganizationUnit.objects.get(code="CA"),
+        scope=GrantScope.UNIT_TREE,
+        granted_by=User.objects.get(login_alias="dev"),
+        grant_reason="Délégation liée à un ancien compte.",
+    )
+    obsolete_task = Task.objects.create(
+        code="OBSOLETE-ACCOUNT-TASK",
+        title="Donnée liée à un ancien compte",
+        description="Cette tâche doit disparaître avec son auteur.",
+        created_by=obsolete,
+    )
+    obsolete_visit = VisitorVisit.objects.create(
+        party_size=1,
+        recorded_by=obsolete,
+        updated_by=obsolete,
+    )
+    obsolete_draft = WeeklyAgendaDraft.objects.create(
+        week_start=timezone.localdate() - timedelta(days=timezone.localdate().weekday()),
+        updated_by=obsolete,
+    )
+    obsolete_version = WeeklyAgendaVersion.objects.create(
+        draft=obsolete_draft,
+        week_start=obsolete_draft.week_start,
+        version=1,
+        snapshot={},
+        snapshot_sha256="0" * 64,
+        storage_provider="local",
+        storage_key="agenda/obsolete.pdf",
+        pdf_sha256="1" * 64,
+        pdf_size=1,
+        generated_by=obsolete,
+    )
+    obsolete_process = ProcessCase.objects.create(
+        definition=ProcessDefinition.objects.create(
+            code="OBSOLETE_CLEANUP", version=1, name="Nettoyage"
+        ),
+        reference="PROC-OBSOLETE-CLEANUP",
+        initiator=obsolete,
+        origin_unit=OrganizationUnit.objects.get(code="DG"),
+        origin_unit_name="Direction générale",
+        calendar_id=TaskAssignment.objects.filter(task__code__startswith="PIL-")
+        .values_list("calendar", flat=True)
+        .first(),
+    )
+    obsolete_event = ProcessEvent.objects.create(
+        case=obsolete_process,
+        actor=obsolete,
+        kind="created",
+        to_status="draft",
+    )
+    ProcessDocument.objects.create(
+        case=obsolete_process,
+        kind="other",
+        provider="local",
+        object_key="processes/obsolete.txt",
+        original_name="obsolete.txt",
+        content_type="text/plain",
+        size=1,
+        sha256="2" * 64,
+        scan_status="clean",
+        uploaded_by=obsolete,
+    )
+    ProcessSignature.objects.create(
+        case=obsolete_process,
+        signer=obsolete,
+        event=obsolete_event,
+        confirmation="Signature obsolète",
+        snapshot={},
+        snapshot_sha256="3" * 64,
+        document_manifest=[],
+    )
+
+    with pytest.raises(CommandError, match="--confirm-prune"):
+        call_command(
+            "seed_pilot_users",
+            prune_noncanonical_users=True,
+            reset_password=True,
+            verbosity=0,
+        )
+
+    output = StringIO()
+    call_command(
+        "seed_pilot_users",
+        prune_noncanonical_users=True,
+        reset_password=True,
+        dry_run=True,
+        stdout=output,
+        verbosity=0,
+    )
+    assert "ancienne_dg" in output.getvalue()
+    assert "obsolete" in output.getvalue()
+    assert User.objects.filter(pk__in=(duplicate.pk, obsolete.pk)).count() == 2
+    assert Task.objects.filter(pk=obsolete_task.pk).exists()
+    assert VisitorVisit.objects.filter(pk=obsolete_visit.pk).exists()
+    assert WeeklyAgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
+    assert ProcessCase.objects.filter(pk=obsolete_process.pk).exists()
+    assert RoleGrant._base_manager.filter(pk=obsolete_grant.pk).exists()
+    assert User.objects.get(pk=dg_id).email == "ancienne-dg@demo.invalid"
+
+    call_command(
+        "seed_pilot_users",
+        prune_noncanonical_users=True,
+        confirm_prune=True,
+        reset_password=True,
+        verbosity=0,
+    )
+
+    expected = {(spec.alias, spec.email) for spec in PILOT_USERS}
+    assert len(PILOT_USERS) == 42
+    assert set(User.objects.values_list("login_alias", "email")) == expected
+    assert User.objects.get(login_alias="dg").pk == dg_id
+    assert not Task.objects.filter(pk=obsolete_task.pk).exists()
+    assert not VisitorVisit.objects.filter(pk=obsolete_visit.pk).exists()
+    assert not WeeklyAgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
+    assert not ProcessCase.objects.filter(pk=obsolete_process.pk).exists()
+    assert not RoleGrant._base_manager.filter(pk=obsolete_grant.pk).exists()
 
 
 @pytest.mark.django_db

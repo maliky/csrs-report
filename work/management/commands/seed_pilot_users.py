@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from uuid import uuid4
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -18,6 +19,19 @@ from django.utils import timezone
 
 from accounts.models import User
 from access.models import GrantScope, RoleGrant, ScopedRole
+from agenda.models import (
+    StaffAvailability,
+    VisitorVisit,
+    WeeklyAgendaDraft,
+    WeeklyAgendaVersion,
+)
+from processes.models import (
+    ProcessCase,
+    ProcessDocument,
+    ProcessEvent,
+    ProcessSignature,
+    ProcessWorkItem,
+)
 from work.models import (
     ActionPlan,
     ActivityKind,
@@ -207,17 +221,24 @@ class Command(BaseCommand):
         parser.add_argument("--replace-legacy", action="store_true")
         parser.add_argument("--reset-password", action="store_true")
         parser.add_argument("--refresh-scenarios-only", action="store_true")
+        parser.add_argument("--prune-noncanonical-users", action="store_true")
+        parser.add_argument("--confirm-prune", action="store_true")
 
     def handle(self, *args: object, **options: object) -> None:
         dry_run = cast(bool, options["dry_run"])
         refresh_only = cast(bool, options["refresh_scenarios_only"])
+        prune_users = cast(bool, options["prune_noncanonical_users"])
+        confirm_prune = cast(bool, options["confirm_prune"])
         if refresh_only:
-            if cast(bool, options["replace_legacy"]) or cast(
-                bool, options["reset_password"]
+            if (
+                cast(bool, options["replace_legacy"])
+                or cast(bool, options["reset_password"])
+                or prune_users
+                or confirm_prune
             ):
                 raise CommandError(
                     "--refresh-scenarios-only est incompatible avec le remplacement "
-                    "des comptes ou des mots de passe."
+                    "des comptes, leur purge ou les mots de passe."
                 )
             users = self._existing_scenario_users()
             with transaction.atomic():
@@ -236,6 +257,14 @@ class Command(BaseCommand):
             )
             return
 
+        if confirm_prune and not prune_users:
+            raise CommandError("--confirm-prune exige --prune-noncanonical-users.")
+        if prune_users and not dry_run and not confirm_prune:
+            raise CommandError(
+                "La purge réelle exige --confirm-prune après une simulation et une "
+                "sauvegarde vérifiée."
+            )
+
         demo_password = os.environ.get("CSRS_DEMO_PASSWORD", "")
         admin_password = os.environ.get("CSRS_ADMIN_PASSWORD", "")
         reset_password = cast(bool, options["reset_password"])
@@ -248,6 +277,11 @@ class Command(BaseCommand):
         if credentials_required or demo_password or admin_password:
             self._validate_passwords(demo_password, admin_password)
         with transaction.atomic():
+            retained_user_ids: dict[str, int] | None = None
+            if prune_users:
+                retained_user_ids = self._select_canonical_users()
+                self._delete_noncanonical_users(retained_user_ids)
+                self._prepare_retained_users(retained_user_ids)
             if cast(bool, options["replace_legacy"]):
                 self._delete_legacy_demo()
             units = self._ensure_units()
@@ -255,12 +289,15 @@ class Command(BaseCommand):
                 demo_password,
                 admin_password,
                 reset_password=reset_password,
+                retained_user_ids=retained_user_ids,
             )
             self._ensure_hierarchy(users, units)
             self._ensure_agenda_roles(users, units)
             self._ensure_scenarios(users)
             self._warm_progress_caches()
             self._assert_counts()
+            if prune_users:
+                self._assert_exact_user_set()
             if demo_password and admin_password:
                 self._assert_authentication(users, demo_password, admin_password)
             else:
@@ -306,6 +343,151 @@ class Command(BaseCommand):
             )
         if len(demo_password) < 8 or len(admin_password) < 8:
             raise CommandError("Chaque mot de passe doit contenir au moins 8 caracteres.")
+
+    @staticmethod
+    def _select_canonical_users() -> dict[str, int]:
+        """Select at most one retained row per canonical alias, preferring aliases."""
+        retained: dict[str, int] = {}
+        used_ids: set[int] = set()
+        for spec in PILOT_USERS:
+            user_id = (
+                User.objects.filter(login_alias__iexact=spec.alias)
+                .values_list("pk", flat=True)
+                .first()
+            )
+            if user_id is not None:
+                retained[spec.alias] = user_id
+                used_ids.add(user_id)
+        for spec in PILOT_USERS:
+            if spec.alias in retained:
+                continue
+            user_id = (
+                User.objects.filter(email__iexact=spec.email)
+                .exclude(pk__in=used_ids)
+                .values_list("pk", flat=True)
+                .first()
+            )
+            if user_id is not None:
+                retained[spec.alias] = user_id
+                used_ids.add(user_id)
+        return retained
+
+    def _delete_noncanonical_users(self, retained_user_ids: dict[str, int]) -> None:
+        """Delete every aggregate connected to users outside the canonical set."""
+        retained_ids = set(retained_user_ids.values())
+        targets = User.objects.exclude(pk__in=retained_ids)
+        target_rows = list(targets.values_list("pk", "login_alias", "email"))
+        if not target_rows:
+            self.stdout.write("purge comptes: aucun compte non canonique")
+            return
+        target_ids = [row[0] for row in target_rows]
+
+        task_ids = list(
+            Task.objects.filter(
+                Q(created_by_id__in=target_ids)
+                | Q(assignments__employee_id__in=target_ids)
+                | Q(assignments__manager_id__in=target_ids)
+                | Q(assignments__progress_entries__author_id__in=target_ids)
+                | Q(assignments__activities__actor_id__in=target_ids)
+            )
+            .distinct()
+            .values_list("pk", flat=True)
+        )
+        proposals = TaskProposal.objects.filter(
+            Q(employee_id__in=target_ids)
+            | Q(reviewed_by_id__in=target_ids)
+            | Q(accepted_assignment__task_id__in=task_ids)
+        ).distinct()
+
+        case_ids = list(
+            ProcessCase.objects.filter(
+                Q(initiator_id__in=target_ids)
+                | Q(mission_participants__user_id__in=target_ids)
+                | Q(work_items__claimed_by_id__in=target_ids)
+                | Q(events__actor_id__in=target_ids)
+                | Q(documents__uploaded_by_id__in=target_ids)
+                | Q(signature__signer_id__in=target_ids)
+            )
+            .distinct()
+            .values_list("pk", flat=True)
+        )
+
+        draft_ids = list(
+            WeeklyAgendaDraft.objects.filter(
+                Q(updated_by_id__in=target_ids)
+                | Q(versions__generated_by_id__in=target_ids)
+            )
+            .distinct()
+            .values_list("pk", flat=True)
+        )
+        visits = VisitorVisit.objects.filter(
+            Q(recorded_by_id__in=target_ids) | Q(updated_by_id__in=target_ids)
+        ).distinct()
+        availability = StaffAvailability.objects.filter(
+            Q(employee_id__in=target_ids)
+            | Q(recorded_by_id__in=target_ids)
+            | Q(updated_by_id__in=target_ids)
+        ).distinct()
+        grants = RoleGrant._base_manager.filter(
+            Q(user_id__in=target_ids)
+            | Q(granted_by_id__in=target_ids)
+            | Q(revoked_by_id__in=target_ids)
+        ).distinct()
+
+        counts = {
+            "users": len(target_ids),
+            "tasks": len(task_ids),
+            "proposals": proposals.count(),
+            "processes": len(case_ids),
+            "agenda_drafts": len(draft_ids),
+            "visits": visits.count(),
+            "availability": availability.count(),
+            "grants": grants.count(),
+        }
+        labels = sorted(alias or email for _, alias, email in target_rows)
+        self.stdout.write(
+            "purge comptes: "
+            + " ".join(f"{name}={count}" for name, count in counts.items())
+        )
+        self.stdout.write("comptes non canoniques: " + ", ".join(labels))
+
+        grants.delete()
+        visits.delete()
+        availability.delete()
+        if draft_ids:
+            WeeklyAgendaVersion._base_manager.filter(draft_id__in=draft_ids).delete()
+            WeeklyAgendaDraft.objects.filter(pk__in=draft_ids).delete()
+
+        if case_ids:
+            ProcessSignature._base_manager.filter(case_id__in=case_ids).delete()
+            ProcessDocument.objects.filter(replaced_by__case_id__in=case_ids).update(
+                replaced_by=None
+            )
+            ProcessDocument.objects.filter(case_id__in=case_ids).update(replaced_by=None)
+            ProcessDocument._base_manager.filter(case_id__in=case_ids).delete()
+            ProcessEvent._base_manager.filter(case_id__in=case_ids).delete()
+            ProcessWorkItem.objects.filter(case_id__in=case_ids).delete()
+            ProcessCase.objects.filter(pk__in=case_ids).delete()
+
+        proposals.delete()
+        if task_ids:
+            TaskActivity.objects.filter(
+                supersedes__isnull=False,
+            ).filter(
+                Q(assignment__task_id__in=task_ids)
+                | Q(supersedes__assignment__task_id__in=task_ids)
+            ).update(supersedes=None)
+            Task.objects.filter(pk__in=task_ids).delete()
+        User.objects.filter(pk__in=target_ids).delete()
+
+    @staticmethod
+    def _prepare_retained_users(retained_user_ids: dict[str, int]) -> None:
+        """Release aliases and emails so swaps can be normalized deterministically."""
+        for user_id in retained_user_ids.values():
+            User.objects.filter(pk=user_id).update(
+                login_alias=None,
+                email=f"reconcile-{user_id}-{uuid4().hex}@demo.invalid",
+            )
 
     @staticmethod
     def _delete_legacy_demo() -> None:
@@ -368,27 +550,30 @@ class Command(BaseCommand):
         admin_password: str,
         *,
         reset_password: bool,
+        retained_user_ids: dict[str, int] | None = None,
     ) -> dict[str, User]:
         users: dict[str, User] = {}
         for spec in PILOT_USERS:
             is_admin = spec.alias == "dev"
-            user, created = User.objects.update_or_create(
-                email=spec.email,
-                defaults={
-                    "login_alias": spec.alias,
-                    "position": spec.position,
-                    "first_name": "",
-                    "last_name": "",
-                    "phone": "",
-                    "is_active": True,
-                    "is_staff": is_admin,
-                    "is_superuser": is_admin,
-                    "is_it_admin": is_admin,
-                },
-            )
+            retained_id = (retained_user_ids or {}).get(spec.alias)
+            if retained_id is None:
+                user, created = User.objects.get_or_create(email=spec.email)
+            else:
+                user = User.objects.get(pk=retained_id)
+                created = False
+            user.email = spec.email
+            user.login_alias = spec.alias
+            user.position = spec.position
+            user.first_name = ""
+            user.last_name = ""
+            user.phone = ""
+            user.is_active = True
+            user.is_staff = is_admin
+            user.is_superuser = is_admin
+            user.is_it_admin = is_admin
             if created or reset_password or not user.has_usable_password():
                 user.set_password(admin_password if is_admin else demo_password)
-                user.save(update_fields=["password"])
+            user.save()
             users[spec.alias] = user
         return users
 
@@ -1003,6 +1188,15 @@ class Command(BaseCommand):
                 "Le nombre d'appartenances organisationnelles est incoherent."
             )
         Command._assert_scenario_counts(tuple(aliases))
+
+    @staticmethod
+    def _assert_exact_user_set() -> None:
+        expected = {(spec.alias, spec.email) for spec in PILOT_USERS}
+        actual = set(User.objects.values_list("login_alias", "email"))
+        if actual != expected:
+            raise CommandError(
+                "La base ne contient pas exactement les comptes canoniques attendus."
+            )
 
     @staticmethod
     def _assert_scenario_counts(aliases: tuple[str, ...]) -> None:

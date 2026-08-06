@@ -63,7 +63,7 @@ Le compte fictif `secretariat_dg` ouvre `/app/agenda`, notifie l’arrivée d’
 
 Le compte `rh` ouvre `/app/absences` et enregistre les congés, absences et missions avec l’agent et la période concernée. Les RH n’accèdent pas au rapport complet. Les PDF sont conservés dans le stockage privé déjà monté sur `/private-media` et ne sont jamais servis par WhiteNoise. Les noms facultatifs des visiteurs et les versions générées ne font l’objet d’aucune purge automatique tant que la durée institutionnelle de conservation n’a pas été confirmée.
 
-L’activité hebdomadaire provient des tâches qui chevauchent la semaine et de leurs progressions ou observations. Le taux d’un agent est la moyenne de ses tâches retenues, calculée à la fin de la semaine; les services sans activité ne sont pas ajoutés au PDF. L’organigramme d’août 2026 qui fixe l’ordre des services se trouve dans [`organogram.org`](organogram.org).
+L’activité hebdomadaire provient des tâches qui chevauchent la semaine et de leurs progressions ou observations. Le taux d’un agent est la moyenne de ses tâches retenues, calculée à la fin de la semaine; les services sans activité ne sont pas ajoutés au PDF. L’organigramme d’août 2026 qui fixe l’ordre des services se trouve dans [`docs/organogram.org`](docs/organogram.org).
 
 ### Deux modes de développement React
 
@@ -240,6 +240,26 @@ Le chargeur de population fictive exige temporairement deux variables distinctes
 
 Sous PowerShell, les commandes équivalentes sont `.\scripts\seed_pilot.ps1` et `.\scripts\seed_pilot.ps1 -DryRunOnly`.
 
+### Remettre les comptes d'un déploiement à l'état canonique
+
+La cible canonique comprend les 40 alias de [`docs/organogram.org`](docs/organogram.org), le compte technique `dev` et le compte fonctionnel `secretariat_dg`. Le mode de nettoyage supprime tous les autres utilisateurs et l'ensemble des tâches, processus, agendas, visites, indisponibilités et délégations qui les référencent. Il reconstruit ensuite les scénarios pilotes et réinitialise les mots de passe des 42 comptes.
+
+Depuis le checkout de chaque hôte Linux ou WSL :
+
+```bash
+./scripts/seed_pilot.sh --clean-accounts --dry-run-only
+./scripts/seed_pilot.sh --clean-accounts
+```
+
+Sous PowerShell :
+
+```powershell
+.\scripts\seed_pilot.ps1 -CleanAccounts -DryRunOnly
+.\scripts\seed_pilot.ps1 -CleanAccounts
+```
+
+La seconde commande rejoue la simulation, exige une sauvegarde vérifiée par le script de backup, puis demande de saisir exactement `SUPPRIMER` avant la transaction destructive. Le projet Docker Compose est lu dans le `.env` propre à l'hôte. Pour un appel direct exceptionnel, la commande Django réelle exige conjointement `--prune-noncanonical-users` et `--confirm-prune`; il ne faut pas contourner le script sur un déploiement contenant des données à sauvegarder.
+
 ### Actualiser les scénarios pilotes existants
 
 Sur une base où les comptes pilotes existent déjà, `--refresh-scenarios-only` recale les données fictives sur les douze dernières semaines sans créer de compte ni modifier de mot de passe. La commande reconstruit les historiques, observations et caches des 73 affectations `PIL-*`, puis remet les 42 propositions pilotes dans leurs états de référence. Elle exige les 15 acteurs des scénarios, mais pas les variables de mot de passe.
@@ -250,10 +270,10 @@ Depuis le checkout de déploiement, avec un compte autorisé à utiliser Docker,
 ./scripts/backup_db.sh
 
 project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -n 1)"
-docker-compose -p "$project" -f compose.yml exec -T web \
+docker compose -p "$project" -f compose.yml exec -T web \
   python manage.py seed_pilot_users --refresh-scenarios-only --dry-run
 
-docker-compose -p "$project" -f compose.yml exec -T web \
+docker compose -p "$project" -f compose.yml exec -T web \
   python manage.py seed_pilot_users --refresh-scenarios-only
 ```
 

@@ -21,7 +21,7 @@ timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 database_output="backups/csrs_${timestamp}.dump"
 documents_output="backups/csrs_documents_${timestamp}.tar.gz"
 manifest_output="backups/csrs_${timestamp}.sha256"
-compose=(docker-compose -p "$project" -f compose.yml)
+compose=(docker compose -p "$project" -f compose.yml)
 
 "${compose[@]}" exec -T db \
     pg_dump --format=custom --no-owner --username "$postgres_user" "$postgres_db" > "$database_output"

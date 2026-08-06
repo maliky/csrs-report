@@ -29,7 +29,7 @@ class OrgUnitSpec:
 
 
 def canonical_organogram_path() -> Path:
-    return Path(settings.BASE_DIR) / "organogram.org"
+    return Path(settings.BASE_DIR) / "docs" / "organogram.org"
 
 
 def load_organogram(  # noqa: C901 - validation mirrors the compact Org grammar

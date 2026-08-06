@@ -348,4 +348,5 @@ Ce document est la référence canonique de la structure organisationnelle utili
 - Les intitulés sont conservés tels qu’ils apparaissent dans le PDF source, y compris les intitulés qui devront éventuellement être confirmés par la DSI.
 - Les codes sont des identifiants techniques stables et ne remplacent pas les intitulés institutionnels.
 - Les alias de démonstration représentent des fonctions fictives. Ils ne correspondent à aucune identité réelle.
+- Les 40 propriétés =DEMO_ALIAS= définissent les comptes métier canoniques. Le compte technique =dev= et le compte fonctionnel =secretariat_dg= sont les deux seules extensions autorisées, soit 42 comptes après une remise à zéro complète.
 - Le compte fictif =secretariat_dg= est rattaché directement à la Direction générale pour tester la préparation de l’agenda hebdomadaire.
