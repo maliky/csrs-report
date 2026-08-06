@@ -20,6 +20,9 @@ test("réduit la barre latérale et mémorise le choix", async () => {
   const team = screen.getByRole("link", { name: "Mon équipe" });
   const proposals = screen.getByRole("link", { name: "Propositions" });
   expect(
+    screen.getByRole("link", { name: "Interface classique" }),
+  ).toHaveAttribute("href", "/classique/");
+  expect(
     team.compareDocumentPosition(proposals) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Réduire le menu" }));

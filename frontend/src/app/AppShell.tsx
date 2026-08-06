@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   ClipboardList,
   ExternalLink,
   Lightbulb,
@@ -10,6 +11,7 @@ import {
   Route,
   Settings,
   Users,
+  UserRoundCheck,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -164,6 +166,26 @@ export function AppShell() {
               <span className={styles.navLabel}>Processus</span>
             </NavLink>
           )}
+          {session.capabilities.view_weekly_agenda && (
+            <NavLink
+              to="/agenda"
+              className={navClass}
+              title="Agenda hebdomadaire"
+            >
+              <CalendarDays size={iconSize} aria-hidden="true" />
+              <span className={styles.navLabel}>Agenda</span>
+            </NavLink>
+          )}
+          {session.capabilities.manage_availability && (
+            <NavLink
+              to="/absences"
+              className={navClass}
+              title="Absences et missions"
+            >
+              <UserRoundCheck size={iconSize} aria-hidden="true" />
+              <span className={styles.navLabel}>Absences et missions</span>
+            </NavLink>
+          )}
           <NavLink to="/propositions" className={navClass} title="Propositions">
             <Lightbulb size={iconSize} aria-hidden="true" />
             <span className={styles.navLabel}>Propositions</span>
@@ -180,7 +202,11 @@ export function AppShell() {
           )}
         </nav>
         <div className={styles.sidebarSecondary}>
-          <a href="/" className={styles.navItem} title="Interface classique">
+          <a
+            href="/classique/"
+            className={styles.navItem}
+            title="Interface classique"
+          >
             <ExternalLink size={iconSize} aria-hidden="true" />
             <span className={styles.navLabel}>Interface classique</span>
           </a>

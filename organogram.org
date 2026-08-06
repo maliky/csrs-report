@@ -1,17 +1,351 @@
-- Alias: Fonction :  Responsable principal
-- dg: Direction generale: -           
-- daf: Direction administrative et financiere: dg          
-- drv: Direction recherche, ressources et valorisation: dg          
-- finances: Responsable comptabilite, finances et caisse: daf         
-- kpon: Responsable technologies et systemes d'information: daf         
-- formation: Responsable formation et renforcement des capacites: drv         
-- valorisation: Responsable valorisation et partenariats: drv         
-- comptable: Comptable: finances    
-- caissier: Caissier: finances    
-- atall: Agent technologies et systemes d'information: kpon        
-- assistant: Assistant de formation: formation   
-- bibliothecaire: Bibliothecaire: formation   
-- communication: Charge de communication: valorisation 
-- partenariat: Charge des partenariats: valorisation 
+#+TITLE: Organigramme du CSRS — août 2026
+#+LANGUAGE: fr
+#+STARTUP: overview
 
+Ce document est la référence canonique de la structure organisationnelle utilisée par les données de démonstration et les tests. Il retranscrit le document « Organigramme du CSRS — Structure organisationnelle révisée » daté d’août 2026. L’imbrication des titres définit les rattachements et leur ordre définit l’ordre institutionnel d’affichage.
 
+* Conseil d’administration
+:PROPERTIES:
+:UNIT_CODE: CA
+:UNIT_KIND: governance
+:SHORT_NAME: conseil-administration
+:END:
+** Conseil scientifique
+:PROPERTIES:
+:UNIT_CODE: CS
+:UNIT_KIND: governance
+:SHORT_NAME: conseil-scientifique
+:END:
+*** Comité d’éthique
+:PROPERTIES:
+:UNIT_CODE: ETH
+:UNIT_KIND: committee
+:SHORT_NAME: ethique
+:END:
+** Direction générale
+:PROPERTIES:
+:UNIT_CODE: DG
+:UNIT_KIND: direction
+:SHORT_NAME: dg
+:DEMO_ALIAS: dg
+:DEMO_POSITION: Direction générale
+:END:
+*** Pool de coordonnateurs de grands programmes / portefeuilles
+:PROPERTIES:
+:UNIT_CODE: POOL
+:UNIT_KIND: coordination
+:SHORT_NAME: pool-coordonnateurs
+:DEMO_ALIAS: coordination
+:DEMO_POSITION: Coordination des grands programmes et portefeuilles
+:END:
+*** Pôle Pilotage stratégique, performance et innovation
+:PROPERTIES:
+:UNIT_CODE: PSPI
+:UNIT_KIND: pole
+:SHORT_NAME: pilotage-strategique
+:DEMO_ALIAS: pilotage
+:DEMO_POSITION: Responsable du pilotage stratégique, de la performance et de l’innovation
+:END:
+**** Cellule Contrôle de gestion
+:PROPERTIES:
+:UNIT_CODE: CG
+:UNIT_KIND: cell
+:SHORT_NAME: controle-gestion
+:DEMO_ALIAS: controle
+:DEMO_POSITION: Responsable du contrôle de gestion
+:END:
+**** Cellule Contrôle interne
+:PROPERTIES:
+:UNIT_CODE: CI
+:UNIT_KIND: cell
+:SHORT_NAME: controle-interne
+:DEMO_ALIAS: controle_interne
+:DEMO_POSITION: Responsable du contrôle interne
+:END:
+**** Cellule Communication & RSE
+:PROPERTIES:
+:UNIT_CODE: RSE
+:UNIT_KIND: cell
+:SHORT_NAME: communication-rse
+:DEMO_ALIAS: communication
+:DEMO_POSITION: Responsable communication et RSE
+:END:
+**** Cellule Genre, Équité, Inclusion
+:PROPERTIES:
+:UNIT_CODE: GEI
+:UNIT_KIND: cell
+:SHORT_NAME: genre-equite-inclusion
+:DEMO_ALIAS: genre
+:DEMO_POSITION: Responsable genre, équité et inclusion
+:END:
+*** CSRS Expertise
+:PROPERTIES:
+:UNIT_CODE: CEX
+:UNIT_KIND: expertise
+:SHORT_NAME: expertise
+:DEMO_ALIAS: expertise
+:DEMO_POSITION: Responsable CSRS Expertise
+:END:
+*** Direction des programmes
+:PROPERTIES:
+:UNIT_CODE: DP
+:UNIT_KIND: direction
+:SHORT_NAME: programmes
+:DEMO_ALIAS: programmes
+:DEMO_POSITION: Direction des programmes
+:END:
+**** Programme Biodiversité et solutions fondées sur la nature
+:PROPERTIES:
+:UNIT_CODE: PRG-BIO
+:UNIT_KIND: programme
+:SHORT_NAME: biodiversite
+:DEMO_ALIAS: biodiversite
+:DEMO_POSITION: Responsable du programme Biodiversité et solutions fondées sur la nature
+:END:
+***** Unité de Recherche Gestion de la faune et des habitats naturels
+:PROPERTIES:
+:UNIT_CODE: UR-FAUNE
+:UNIT_KIND: research-unit
+:SHORT_NAME: faune-habitats
+:DEMO_ALIAS: faune
+:DEMO_POSITION: Responsable de l’unité Gestion de la faune et des habitats naturels
+:END:
+***** Unité de Recherche Valorisation des plantes utilitaires et des écosystèmes
+:PROPERTIES:
+:UNIT_CODE: UR-PLANTES
+:UNIT_KIND: research-unit
+:SHORT_NAME: plantes-ecosystemes
+:DEMO_ALIAS: plantes
+:DEMO_POSITION: Responsable de l’unité Valorisation des plantes utilitaires et des écosystèmes
+:END:
+**** Programme Santé animale, santé humaine et santé de l’environnement
+:PROPERTIES:
+:UNIT_CODE: PRG-SANTE
+:UNIT_KIND: programme
+:SHORT_NAME: sante-globale
+:DEMO_ALIAS: sante
+:DEMO_POSITION: Responsable du programme Santé animale, humaine et environnementale
+:END:
+***** Unité de Recherche Clinique et épidémiologique
+:PROPERTIES:
+:UNIT_CODE: UR-CLINEPI
+:UNIT_KIND: research-unit
+:SHORT_NAME: clinique-epidemiologique
+:DEMO_ALIAS: clinique_epi
+:DEMO_POSITION: Responsable de l’unité Clinique et épidémiologique
+:END:
+***** Unité de Recherche Épidémiologie humaine et vétérinaire
+:PROPERTIES:
+:UNIT_CODE: UR-EPI
+:UNIT_KIND: research-unit
+:SHORT_NAME: epidemiologie
+:DEMO_ALIAS: epidemiologie
+:DEMO_POSITION: Responsable de l’unité Épidémiologie humaine et vétérinaire
+:END:
+***** Unité de Recherche Environnement et santé publique
+:PROPERTIES:
+:UNIT_CODE: UR-SANTE-PUB
+:UNIT_KIND: research-unit
+:SHORT_NAME: environnement-sante
+:DEMO_ALIAS: sante_publique
+:DEMO_POSITION: Responsable de l’unité Environnement et santé publique
+:END:
+**** Programme Agriculture durable, nutrition et santé
+:PROPERTIES:
+:UNIT_CODE: PRG-AGR
+:UNIT_KIND: programme
+:SHORT_NAME: agriculture-nutrition
+:DEMO_ALIAS: agriculture
+:DEMO_POSITION: Responsable du programme Agriculture durable, nutrition et santé
+:END:
+***** Unité de Recherche Transition agroécologique et systèmes durables de production agricole
+:PROPERTIES:
+:UNIT_CODE: UR-AGRO
+:UNIT_KIND: research-unit
+:SHORT_NAME: transition-agroecologique
+:DEMO_ALIAS: agroecologie
+:DEMO_POSITION: Responsable de l’unité Transition agroécologique
+:END:
+***** Unité de Recherche Nutrition, technologie alimentaire et nutrition
+:PROPERTIES:
+:UNIT_CODE: UR-NUTRITION
+:UNIT_KIND: research-unit
+:SHORT_NAME: nutrition
+:DEMO_ALIAS: nutrition
+:DEMO_POSITION: Responsable de l’unité Nutrition et technologie alimentaire
+:END:
+**** Programme Systèmes sociaux et économie
+:PROPERTIES:
+:UNIT_CODE: PRG-SSE
+:UNIT_KIND: programme
+:SHORT_NAME: systemes-sociaux-economie
+:DEMO_ALIAS: societe
+:DEMO_POSITION: Responsable du programme Systèmes sociaux et économie
+:END:
+***** Unité de Recherche Gouvernance politique et développement social
+:PROPERTIES:
+:UNIT_CODE: UR-GOUV
+:UNIT_KIND: research-unit
+:SHORT_NAME: gouvernance
+:DEMO_ALIAS: gouvernance
+:DEMO_POSITION: Responsable de l’unité Gouvernance politique et développement social
+:END:
+***** Unité de Recherche Économie du développement, de l’environnement et de la santé
+:PROPERTIES:
+:UNIT_CODE: UR-ECO
+:UNIT_KIND: research-unit
+:SHORT_NAME: economie-developpement
+:DEMO_ALIAS: economie
+:DEMO_POSITION: Responsable de l’unité Économie du développement
+:END:
+**** Unité de Recherche Clinique
+:PROPERTIES:
+:UNIT_CODE: UR-CLIN
+:UNIT_KIND: research-unit
+:SHORT_NAME: recherche-clinique
+:DEMO_ALIAS: clinique
+:DEMO_POSITION: Responsable de l’unité de Recherche Clinique
+:END:
+**** Unité d’Appui à la Recherche
+:PROPERTIES:
+:UNIT_CODE: UAR
+:UNIT_KIND: support-unit
+:SHORT_NAME: appui-recherche
+:DEMO_ALIAS: uar
+:DEMO_POSITION: Responsable de l’Unité d’Appui à la Recherche
+:END:
+**** Unité GLP
+:PROPERTIES:
+:UNIT_CODE: GLP
+:UNIT_KIND: support-unit
+:SHORT_NAME: glp
+:DEMO_ALIAS: qualite
+:DEMO_POSITION: Responsable de l’Unité GLP
+:END:
+**** Plateforme scientifique, technologique et analytique
+:PROPERTIES:
+:UNIT_CODE: PSTA
+:UNIT_KIND: platform
+:SHORT_NAME: plateforme-scientifique
+:DEMO_ALIAS: plateforme
+:DEMO_POSITION: Responsable de la plateforme scientifique, technologique et analytique
+:END:
+***** Laboratoires
+:PROPERTIES:
+:UNIT_CODE: LAB
+:UNIT_KIND: laboratory
+:SHORT_NAME: laboratoires
+:DEMO_ALIAS: labo
+:DEMO_POSITION: Responsable des laboratoires
+:END:
+***** Instrumentation et technologies émergentes
+:PROPERTIES:
+:UNIT_CODE: ITE
+:UNIT_KIND: platform-unit
+:SHORT_NAME: instrumentation
+:DEMO_ALIAS: instrumentation
+:DEMO_POSITION: Responsable instrumentation et technologies émergentes
+:END:
+***** Données et méthodes quantitatives
+:PROPERTIES:
+:UNIT_CODE: DMQ
+:UNIT_KIND: platform-unit
+:SHORT_NAME: donnees-methodes
+:DEMO_ALIAS: donnees
+:DEMO_POSITION: Responsable données et méthodes quantitatives
+:END:
+**** Stations expérimentales
+:PROPERTIES:
+:UNIT_CODE: STA
+:UNIT_KIND: station
+:SHORT_NAME: stations
+:DEMO_ALIAS: stations
+:DEMO_POSITION: Responsable des stations expérimentales
+:END:
+*** Direction administrative et financière
+:PROPERTIES:
+:UNIT_CODE: DAF
+:UNIT_KIND: direction
+:SHORT_NAME: daf
+:DEMO_ALIAS: daf
+:DEMO_POSITION: Direction administrative et financière
+:END:
+**** Service Capital humain
+:PROPERTIES:
+:UNIT_CODE: SCH
+:UNIT_KIND: service
+:SHORT_NAME: capital-humain
+:DEMO_ALIAS: rh
+:DEMO_POSITION: Responsable du service Capital humain
+:END:
+**** Service Finance et Comptabilité
+:PROPERTIES:
+:UNIT_CODE: SFC
+:UNIT_KIND: service
+:SHORT_NAME: finances-comptabilite
+:DEMO_ALIAS: finances
+:DEMO_POSITION: Responsable du service Finance et Comptabilité
+:END:
+***** Cellule Finances
+:PROPERTIES:
+:UNIT_CODE: CFIN
+:UNIT_KIND: cell
+:SHORT_NAME: finances
+:DEMO_ALIAS: caissier
+:DEMO_POSITION: Responsable de la cellule Finances
+:END:
+***** Cellule Comptabilité
+:PROPERTIES:
+:UNIT_CODE: CCOMPTA
+:UNIT_KIND: cell
+:SHORT_NAME: comptabilite
+:DEMO_ALIAS: comptable
+:DEMO_POSITION: Responsable de la cellule Comptabilité
+:END:
+**** Service Technologie et Système d’Information
+:PROPERTIES:
+:UNIT_CODE: STSI
+:UNIT_KIND: service
+:SHORT_NAME: technologie-si
+:DEMO_ALIAS: kpon
+:DEMO_POSITION: Responsable technologie et système d’information
+:END:
+***** Cellule Informatique
+:PROPERTIES:
+:UNIT_CODE: INFO
+:UNIT_KIND: cell
+:SHORT_NAME: informatique
+:DEMO_ALIAS: atall
+:DEMO_POSITION: Responsable de la cellule Informatique
+:END:
+**** Cellule Achat
+:PROPERTIES:
+:UNIT_CODE: ACH
+:UNIT_KIND: cell
+:SHORT_NAME: achats
+:DEMO_ALIAS: achats
+:DEMO_POSITION: Responsable de la cellule Achat
+:END:
+**** Cellule Moyens généraux
+:PROPERTIES:
+:UNIT_CODE: MG
+:UNIT_KIND: cell
+:SHORT_NAME: moyens-generaux
+:DEMO_ALIAS: moyens
+:DEMO_POSITION: Responsable de la cellule Moyens généraux
+:END:
+**** Cellule Documentation et archives
+:PROPERTIES:
+:UNIT_CODE: DOC
+:UNIT_KIND: cell
+:SHORT_NAME: documentation
+:DEMO_ALIAS: documentation
+:DEMO_POSITION: Responsable de la cellule Documentation et archives
+:END:
+
+* Notes d’utilisation
+
+- Les intitulés sont conservés tels qu’ils apparaissent dans le PDF source, y compris les intitulés qui devront éventuellement être confirmés par la DSI.
+- Les codes sont des identifiants techniques stables et ne remplacent pas les intitulés institutionnels.
+- Les alias de démonstration représentent des fonctions fictives. Ils ne correspondent à aucune identité réelle.
+- Le compte fictif =secretariat_dg= est rattaché directement à la Direction générale pour tester la préparation de l’agenda hebdomadaire.

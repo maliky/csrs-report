@@ -4,6 +4,13 @@ from django.urls import reverse
 from accounts.models import User
 
 
+def test_root_redirects_to_react_and_preserves_the_period() -> None:
+    response = Client().get("/?month=2026-08&tasks=with")
+
+    assert response.status_code == 302
+    assert response.url == "/app/?month=2026-08&tasks=with"
+
+
 def test_react_shell_requires_a_session() -> None:
     response = Client().get(reverse("react-app"))
 

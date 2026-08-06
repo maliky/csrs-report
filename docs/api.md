@@ -10,7 +10,7 @@ Référence de l'API utilisée par l'interface React de CSRS Report.
 - Schéma OpenAPI : `/api/v1/openapi/`
 - Interface Swagger : `/api/v1/documentation/`
 
-Le code Django et le schéma OpenAPI restent les sources de vérité. Cette référence décrit le comportement vérifié le 24 juillet 2026.
+Le code Django et le schéma OpenAPI restent les sources de vérité. Cette référence décrit le comportement vérifié le 5 août 2026.
 
 ## Authentification et CSRF
 
@@ -232,6 +232,15 @@ Valeurs possibles de `status` : `submitted`, `accepted`, `rejected`.
 | `POST` | `/api/v1/proposals/{id}/resubmit/` | Resoumission par l'auteur |
 | `GET` | `/api/v1/team/` | Arbre d'équipe et nombre de tâches sur la période |
 | `GET` | `/api/v1/team/{id}/` | Tâches visibles d'un collaborateur |
+| `GET`, `POST` | `/api/v1/visits/` | Visites de la semaine et notification d'une arrivée |
+| `POST` | `/api/v1/visits/{id}/departure/` | Notification du départ d'un groupe de visiteurs |
+| `GET`, `POST` | `/api/v1/availability/` | Indisponibilités de la semaine et nouvelle déclaration RH |
+| `PATCH` | `/api/v1/availability/{id}/` | Correction d'une indisponibilité avec contrôle de révision |
+| `POST` | `/api/v1/availability/{id}/cancel/` | Annulation motivée d'une indisponibilité |
+| `GET` | `/api/v1/agenda/preview/` | Brouillon et synthèse hebdomadaire non figée |
+| `PUT` | `/api/v1/agenda/draft/` | Enregistrement des événements majeurs du brouillon |
+| `GET`, `POST` | `/api/v1/agenda/versions/` | Archives visibles ou génération d'une version PDF figée |
+| `GET` | `/api/v1/agenda/versions/{id}/pdf/` | Téléchargement privé d'une version PDF |
 
 ## Session
 
@@ -579,6 +588,24 @@ Seul l'auteur peut resoumettre une proposition rejetée.
 ```
 
 Réponse `200` : `Proposal` avec le statut `submitted`.
+
+## Agenda hebdomadaire
+
+Le paramètre facultatif `week=YYYY-MM-DD` est normalisé au lundi de la semaine. Les routes de visite et de préparation sont réservées au secrétariat DG, les indisponibilités aux RH, et les archives au secrétariat DG et au DG. Une ressource hors autorisation répond `404` afin de ne pas révéler son existence.
+
+### Visiteurs
+
+`POST /api/v1/visits/` exige `party_size` et accepte `visitor_names`, une liste facultative dont la taille ne peut pas dépasser le nombre déclaré. `POST /api/v1/visits/{id}/departure/` exige la `revision` courante.
+
+### Congés, absences et missions
+
+`POST /api/v1/availability/` reçoit `employee_id`, `kind` (`leave`, `absence` ou `mission`), `start_date`, `end_date` et une `note` facultative. La correction ajoute `revision`; l'annulation ajoute `revision` et `reason`. Deux indisponibilités actives ne peuvent pas se chevaucher pour un agent.
+
+### Aperçu, génération et archives
+
+`GET /api/v1/agenda/preview/` agrège les événements majeurs, les arrivées et départs, les indisponibilités et les tâches qui ont une activité dans la semaine. Les tâches sont regroupées par service puis par agent avec progression, variation et dernière observation hebdomadaire.
+
+`PUT /api/v1/agenda/draft/` enregistre `week_start`, `major_events` et la `revision` attendue. `POST /api/v1/agenda/versions/` reçoit `week_start` et crée une nouvelle version immuable : instantané JSON, empreintes SHA-256 et PDF A4 dans le stockage privé. Une génération ultérieure produit une nouvelle version sans modifier les précédentes.
 
 ## Erreurs
 

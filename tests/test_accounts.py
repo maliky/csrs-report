@@ -27,6 +27,7 @@ def test_activation_link_sets_initial_password(client) -> None:
         {"new_password1": password, "new_password2": password},
     )
     assert response.status_code == 302
+    assert response.url == reverse("react-app")
     user.refresh_from_db()
     assert user.check_password(password)
 
@@ -58,3 +59,17 @@ def test_login_page_labels_both_accepted_identifiers(client) -> None:
     assert "mot de passe" in content
     assert 'name="password"' in content
     assert 'type="password"' in content
+
+
+@pytest.mark.django_db
+def test_login_redirects_to_the_react_interface_by_default(client) -> None:
+    password = f"Aa9!{get_random_string(20)}"
+    User.objects.create_user("react.user@example.test", password, login_alias="react")
+
+    response = client.post(
+        reverse("login"),
+        {"username": "react", "password": password},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("react-app")

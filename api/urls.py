@@ -2,6 +2,7 @@ from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from api import views
+from agenda import api as agenda_api
 from processes import api as process_api
 
 app_name = "api"
@@ -15,6 +16,41 @@ urlpatterns = [
     ),
     path("session/", views.SessionView.as_view(), name="session"),
     path("session/logout/", views.LogoutView.as_view(), name="logout"),
+    path("visits/", agenda_api.VisitListCreateView.as_view(), name="visit-list"),
+    path(
+        "visits/<int:pk>/departure/",
+        agenda_api.VisitDepartureView.as_view(),
+        name="visit-departure",
+    ),
+    path(
+        "availability/",
+        agenda_api.AvailabilityListCreateView.as_view(),
+        name="availability-list",
+    ),
+    path(
+        "availability/<int:pk>/",
+        agenda_api.AvailabilityDetailView.as_view(),
+        name="availability-detail",
+    ),
+    path(
+        "availability/<int:pk>/cancel/",
+        agenda_api.AvailabilityCancelView.as_view(),
+        name="availability-cancel",
+    ),
+    path(
+        "agenda/preview/", agenda_api.AgendaPreviewView.as_view(), name="agenda-preview"
+    ),
+    path("agenda/draft/", agenda_api.AgendaDraftView.as_view(), name="agenda-draft"),
+    path(
+        "agenda/versions/",
+        agenda_api.AgendaVersionListCreateView.as_view(),
+        name="agenda-version-list",
+    ),
+    path(
+        "agenda/versions/<int:pk>/pdf/",
+        agenda_api.AgendaVersionPdfView.as_view(),
+        name="agenda-version-pdf",
+    ),
     path("processes/", process_api.ProcessListView.as_view(), name="process-list"),
     path(
         "processes/mission-orders/",

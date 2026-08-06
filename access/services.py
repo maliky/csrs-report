@@ -25,6 +25,10 @@ MISSION_SIGN_PERMISSION = "sign_mission_order"
 MISSION_DISTRIBUTION_PERMISSION = "work_mission_distribution"
 MISSION_FLEET_PERMISSION = "work_mission_fleet"
 PROCESS_EXPORT_PERMISSION = "export_process"
+VISITOR_PERMISSION = "manage_visitor_visits"
+AVAILABILITY_PERMISSION = "manage_staff_availability"
+AGENDA_PREPARE_PERMISSION = "prepare_weekly_agenda"
+AGENDA_VIEW_PERMISSION = "view_weekly_agenda"
 
 
 def grant_has_permission(grant: RoleGrant, permission: str) -> bool:
@@ -94,6 +98,19 @@ def has_scoped_permission(
     if user.is_superuser or user.is_it_admin:
         return True
     return unit_id in scoped_unit_ids(user, permission, at)
+
+
+def has_active_permission(
+    user: User, permission: str, at: datetime | None = None
+) -> bool:
+    """Check a role permission whose feature spans its delegated tree."""
+    if not user.is_active:
+        return False
+    if user.is_superuser or user.is_it_admin:
+        return True
+    return any(
+        grant_has_permission(grant, permission) for grant in active_role_grants(user, at)
+    )
 
 
 def active_memberships(on_day: date | None = None) -> QuerySet[OrganizationMembership]:

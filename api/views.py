@@ -16,6 +16,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
+from agenda.services import (
+    can_manage_availability,
+    can_manage_visits,
+    can_prepare_agenda,
+    can_view_agenda,
+)
 from api.presenters import (
     assignment_detail_payload,
     assignment_summary_payload,
@@ -145,6 +151,10 @@ class SessionView(APIView):
                     "view_processes": may_create_mission(user)
                     or visible_cases(user).exists(),
                     "create_mission_order": may_create_mission(user),
+                    "manage_visits": can_manage_visits(user),
+                    "manage_availability": can_manage_availability(user),
+                    "prepare_weekly_agenda": can_prepare_agenda(user),
+                    "view_weekly_agenda": can_view_agenda(user),
                 },
             }
         )

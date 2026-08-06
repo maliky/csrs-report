@@ -4,6 +4,118 @@
  */
 
 export interface paths {
+    "/api/v1/agenda/draft/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["agenda_draft_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agenda/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["agenda_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agenda/versions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["agenda_versions_retrieve"];
+        put?: never;
+        post: operations["agenda_versions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agenda/versions/{id}/pdf/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["agenda_versions_pdf_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/availability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["availability_retrieve"];
+        put?: never;
+        post: operations["availability_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/availability/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["availability_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/availability/{id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["availability_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/": {
         parameters: {
             query?: never;
@@ -389,6 +501,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visits/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["visits_retrieve"];
+        put?: never;
+        post: operations["visits_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{id}/departure/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["visits_departure_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -409,6 +553,27 @@ export interface components {
          * @enum {string}
          */
         ActionEnum: "submit" | "abandon" | "claim" | "takeover" | "send_to_signature" | "request_correction" | "reject" | "sign" | "complete_distribution" | "complete_fleet" | "place_legal_hold" | "release_legal_hold";
+        Availability: {
+            employee_id: number;
+            kind: components["schemas"]["AvailabilityKindEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description * `leave` - Congé
+         *     * `absence` - Absence
+         *     * `mission` - Mission
+         * @enum {string}
+         */
+        AvailabilityKindEnum: "leave" | "absence" | "mission";
+        Cancel: {
+            revision: number;
+            reason: string;
+        };
         /**
          * @description * `accept` - accept
          *     * `reject` - reject
@@ -417,7 +582,7 @@ export interface components {
         DecisionEnum: "accept" | "reject";
         DocumentUpload: {
             revision: number;
-            kind: components["schemas"]["KindEnum"];
+            kind: components["schemas"]["DocumentUploadKindEnum"];
             /** Format: uri */
             file: string;
         };
@@ -429,7 +594,18 @@ export interface components {
          *     * `other` - Autre pièce
          * @enum {string}
          */
-        KindEnum: "terms_of_reference" | "invitation" | "ticket" | "order_draft" | "other";
+        DocumentUploadKindEnum: "terms_of_reference" | "invitation" | "ticket" | "order_draft" | "other";
+        Draft: {
+            /** Format: date */
+            week_start: string;
+            /** @default  */
+            major_events: string;
+            revision?: number | null;
+        };
+        Generate: {
+            /** Format: date */
+            week_start: string;
+        };
         Mission: {
             mission_type: components["schemas"]["MissionTypeEnum"];
             destination: string;
@@ -459,6 +635,17 @@ export interface components {
         Observation: {
             revision: number;
             message: string;
+        };
+        PatchedAvailabilityUpdate: {
+            employee_id?: number;
+            kind?: components["schemas"]["AvailabilityKindEnum"];
+            /** Format: date */
+            start_date?: string;
+            /** Format: date */
+            end_date?: string;
+            /** @default  */
+            note: string;
+            revision?: number;
         };
         PatchedMissionUpdate: {
             mission_type?: components["schemas"]["MissionTypeEnum"];
@@ -559,6 +746,9 @@ export interface components {
         ProposalResubmit: {
             revision: number;
         };
+        Revision: {
+            revision: number;
+        };
         /**
          * @description * `workload` - workload
          *     * `due` - due
@@ -592,6 +782,10 @@ export interface components {
          * @enum {string}
          */
         TransitionEnum: "validate" | "reject" | "close_early";
+        VisitCreate: {
+            party_size: number;
+            visitor_names?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -601,6 +795,235 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    agenda_draft_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Draft"];
+                "application/x-www-form-urlencoded": components["schemas"]["Draft"];
+                "multipart/form-data": components["schemas"]["Draft"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    agenda_preview_retrieve: {
+        parameters: {
+            query?: {
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    agenda_versions_retrieve: {
+        parameters: {
+            query?: {
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    agenda_versions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Generate"];
+                "application/x-www-form-urlencoded": components["schemas"]["Generate"];
+                "multipart/form-data": components["schemas"]["Generate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    agenda_versions_pdf_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+        };
+    };
+    availability_retrieve: {
+        parameters: {
+            query?: {
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    availability_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Availability"];
+                "application/x-www-form-urlencoded": components["schemas"]["Availability"];
+                "multipart/form-data": components["schemas"]["Availability"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    availability_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAvailabilityUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAvailabilityUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedAvailabilityUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    availability_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Cancel"];
+                "application/x-www-form-urlencoded": components["schemas"]["Cancel"];
+                "multipart/form-data": components["schemas"]["Cancel"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     dashboard_retrieve: {
         parameters: {
             query?: {
@@ -1297,6 +1720,85 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    visits_retrieve: {
+        parameters: {
+            query?: {
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    visits_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["VisitCreate"];
+                "multipart/form-data": components["schemas"]["VisitCreate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    visits_departure_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Revision"];
+                "application/x-www-form-urlencoded": components["schemas"]["Revision"];
+                "multipart/form-data": components["schemas"]["Revision"];
+            };
+        };
         responses: {
             200: {
                 headers: {

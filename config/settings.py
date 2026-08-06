@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "work",
     "access",
     "processes",
+    "agenda",
     "api",
 ]
 
@@ -118,7 +119,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 AUTHENTICATION_BACKENDS = ["accounts.backends.AliasOrEmailBackend"]
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "dashboard"
+LOGIN_REDIRECT_URL = "react-app"
 LOGOUT_REDIRECT_URL = "login"
 
 REST_FRAMEWORK = {
@@ -136,6 +137,9 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API metier versionnee pour l'interface React CSRS Report.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "AvailabilityKindEnum": "agenda.models.AvailabilityKind",
+    },
 }
 
 # Short-lived bearer tokens let Observable read authorized JSON without sharing
@@ -173,6 +177,13 @@ PROCESS_DOCUMENT_MAX_BYTES = int(
 )
 PROCESS_DOCUMENT_SCAN_REQUIRED = (
     os.environ.get("PROCESS_DOCUMENT_SCAN_REQUIRED", "1") == "1"
+)
+AGENDA_PDF_FONT_PATH = os.environ.get(
+    "AGENDA_PDF_FONT_PATH", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+)
+AGENDA_PDF_FONT_BOLD_PATH = os.environ.get(
+    "AGENDA_PDF_FONT_BOLD_PATH",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
 )
 CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "clamav")
 CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))

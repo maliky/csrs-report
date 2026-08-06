@@ -26,5 +26,5 @@ def activate(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
         form.save()
         login(request, user)
         messages.success(request, "Votre compte est active.")
-        return redirect("dashboard")
+        return redirect("react-app")
     return render(request, "accounts/activate.html", {"form": form})

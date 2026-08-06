@@ -17,6 +17,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import User
+from access.models import GrantScope, RoleGrant, ScopedRole
 from work.models import (
     ActionPlan,
     ActivityKind,
@@ -46,6 +47,7 @@ from work.pilot_scenarios import (
     build_pilot_scenario,
     scenario_counts,
 )
+from work.organogram import OrgUnitSpec, load_organogram
 from work.progress_cache import rebuild_progress_caches
 from work.services import set_primary_membership, set_primary_supervisor, week_start_for
 
@@ -63,185 +65,76 @@ class PilotUserSpec:
         return f"{self.alias}@demo.invalid"
 
 
-PILOT_USERS = (
-    PilotUserSpec("dev", "Administrateur technique", None, None),
-    PilotUserSpec("dg", "Direction generale", "DG", None),
-    PilotUserSpec("daf", "Direction administrative et financiere", "DAF", "dg"),
-    PilotUserSpec("drv", "Direction de la valorisation et des expertises", "DRV", "dg"),
-    PilotUserSpec(
-        "finances", "Responsable comptabilite, finances et caisse", "FIN", "daf"
-    ),
-    PilotUserSpec(
-        "kpon", "Responsable technologies et systemes d'information", "TSI", "daf"
-    ),
-    PilotUserSpec(
-        "formation", "Responsable formation et renforcement des capacites", "FOR", "drv"
-    ),
-    PilotUserSpec(
-        "valorisation", "Responsable valorisation et partenariats", "VAL", "drv"
-    ),
-    PilotUserSpec("comptable", "Comptable", "FIN", "finances"),
-    PilotUserSpec("caissier", "Caissier", "FIN", "finances"),
-    PilotUserSpec("atall", "Agent technologies et systemes d'information", "TSI", "kpon"),
-    PilotUserSpec("assistant", "Assistant de formation", "FOR", "formation"),
-    PilotUserSpec("bibliothecaire", "Bibliothecaire", "FOR", "formation"),
-    PilotUserSpec("communication", "Charge de communication", "VAL", "valorisation"),
-    PilotUserSpec("partenariat", "Charge des partenariats", "VAL", "valorisation"),
-    PilotUserSpec("jardinier", "Jardinier", "VAL", "valorisation"),
-    PilotUserSpec("ct", "Conseiller technique de la direction", "CT", "dg", False),
-    PilotUserSpec(
-        "rse", "Responsable communication institutionnelle et RSE", "RSE", "dg", False
-    ),
-    PilotUserSpec("genre", "Responsable genre, equite et inclusion", "GEI", "dg", False),
-    PilotUserSpec("ethique", "Responsable ethique", "ETH", "dg", False),
-    PilotUserSpec("suivi", "Responsable suivi et evaluation", "SE", "dg", False),
-    PilotUserSpec("controle", "Responsable controle de gestion", "CG", "dg", False),
-    PilotUserSpec(
-        "rh", "Responsable ressources humaines et moyens generaux", "RH", "daf", False
-    ),
-    PilotUserSpec(
-        "i2a", "Responsable intendance, accueil et assistance", "I2A", "daf", False
-    ),
-    PilotUserSpec(
-        "achats", "Responsable achats et approvisionnements", "ACH", "daf", False
-    ),
-    PilotUserSpec(
-        "documentation", "Responsable documentation et archives", "DOC", "daf", False
-    ),
-    PilotUserSpec(
-        "recherche", "Coordonnateur recherche scientifique", "DRD", "drd", False
-    ),
-    PilotUserSpec("clinique", "Responsable recherche clinique", "CLIN", "drd", False),
-    PilotUserSpec("observatoire", "Responsable observatoires", "OBS", "drd", False),
-    PilotUserSpec("labo", "Responsable laboratoire central", "LAB", "drd", False),
-    PilotUserSpec("microscopie", "Responsable unite de microscopie", "MIC", "drd", False),
-    PilotUserSpec("sante", "Responsable axe sante", "AX-SAN", "recherche", False),
-    PilotUserSpec(
-        "environnement", "Responsable axe environnement", "AX-ENV", "recherche", False
-    ),
-    PilotUserSpec(
-        "securite", "Responsable axe securite alimentaire", "AX-SEC", "recherche", False
-    ),
-    PilotUserSpec(
-        "societe", "Responsable axe sciences sociales", "AX-SOC", "recherche", False
-    ),
-    PilotUserSpec(
-        "qualite", "Responsable bonnes pratiques de laboratoire", "GLP", "labo", False
-    ),
-    PilotUserSpec(
-        "patrimoine", "Responsable patrimoine et logistique", "PAT", "i2a", False
-    ),
-    PilotUserSpec(
-        "stations",
-        "Responsable stations, bureaux et logements",
-        "STA",
-        "patrimoine",
-        False,
-    ),
-    PilotUserSpec("drd", "Direction recherche et developpement", "DRD-DIR", "dg", False),
-    PilotUserSpec("uar", "Responsable unite d'appui a la recherche", "UAR", "drd", False),
-    PilotUserSpec(
-        "ressources", "Responsable gestion technique des ressources", "UGT", "drd", False
-    ),
-    PilotUserSpec(
-        "capitalisation",
-        "Responsable capitalisation et valorisation",
-        "CAP",
-        "drv",
-        False,
-    ),
-    PilotUserSpec(
-        "biodiversite", "Responsable axe biodiversite", "AX-BIO", "recherche", False
-    ),
-    PilotUserSpec(
-        "agriculture",
-        "Responsable axe agriculture et nutrition",
-        "AX-AGR",
-        "recherche",
-        False,
-    ),
-    PilotUserSpec("moyens", "Responsable cellule moyens generaux", "MG", "rh", False),
+ORGANOGRAM_SPECS = load_organogram()
+UNIT_SPECS = tuple(
+    (spec.code, spec.long_name, spec.parent_code) for spec in ORGANOGRAM_SPECS
 )
+UNIT_SHORT_NAMES = {spec.code: spec.short_name for spec in ORGANOGRAM_SPECS}
 
-UNIT_SPECS = (
-    ("CSRS-DEMO", "CSRS", None),
-    ("DG", "Direction generale", "CSRS-DEMO"),
-    ("DAF", "Direction administrative et financiere", "DG"),
-    ("DRV", "Direction de la valorisation et des expertises", "DG"),
-    ("DRD-DIR", "Direction recherche et developpement", "DG"),
-    ("FIN", "Comptabilite, finances et caisse", "DAF"),
-    ("TSI", "Technologies et systemes d'information", "DAF"),
-    ("FOR", "Formation et renforcement des capacites", "DRV"),
-    ("VAL", "Valorisation et partenariats", "DRV"),
-    ("CT", "Conseillers techniques", "DG"),
-    ("RSE", "Communication institutionnelle et RSE", "DG"),
-    ("GEI", "Genre, equite et inclusion", "DG"),
-    ("ETH", "Ethique", "DG"),
-    ("SE", "Suivi et evaluation", "DG"),
-    ("CG", "Controle de gestion", "DG"),
-    ("RH", "Ressources humaines et moyens generaux", "DAF"),
-    ("I2A", "Intendance, accueil et assistance", "DAF"),
-    ("ACH", "Achats et approvisionnements", "DAF"),
-    ("DOC", "Documentation et archives", "DAF"),
-    ("DRD", "Coordination de la recherche scientifique", "DRD-DIR"),
-    ("CLIN", "Recherche clinique", "DRD-DIR"),
-    ("OBS", "Observatoires", "DRD-DIR"),
-    ("LAB", "Laboratoire central", "DRD-DIR"),
-    ("MIC", "Microscopie", "DRD-DIR"),
-    ("AX-SAN", "Axe sante", "DRD"),
-    ("AX-ENV", "Axe environnement", "DRD"),
-    ("AX-SEC", "Axe securite alimentaire", "DRD"),
-    ("AX-SOC", "Axe sciences sociales", "DRD"),
-    ("GLP", "Bonnes pratiques de laboratoire", "LAB"),
-    ("PAT", "Patrimoine et logistique", "I2A"),
-    ("STA", "Stations, bureaux et logements", "PAT"),
-    ("UAR", "Unite d'appui a la recherche", "DRD-DIR"),
-    ("UGT", "Gestion technique des ressources", "DRD-DIR"),
-    ("CAP", "Capitalisation et valorisation", "DRV"),
-    ("AX-BIO", "Axe biodiversite", "DRD"),
-    ("AX-AGR", "Axe agriculture et nutrition", "DRD"),
-    ("MG", "Moyens generaux", "RH"),
-)
-
-UNIT_SHORT_NAMES = {
-    "CSRS-DEMO": "csrs",
-    "DG": "dg",
-    "DAF": "daf",
-    "DRV": "drv",
-    "DRD-DIR": "drd",
-    "FIN": "finances",
-    "TSI": "tsi",
-    "FOR": "formation",
-    "VAL": "valorisation",
-    "CT": "ct",
-    "RSE": "rse",
-    "GEI": "gei",
-    "ETH": "ethique",
-    "SE": "suivi-evaluation",
-    "CG": "controle-gestion",
-    "RH": "rh",
-    "I2A": "intendance",
-    "ACH": "achats",
-    "DOC": "documentation",
-    "DRD": "recherche",
-    "CLIN": "clinique",
-    "OBS": "observatoires",
-    "LAB": "laboratoire",
-    "MIC": "microscopie",
-    "AX-SAN": "sante",
-    "AX-ENV": "environnement",
-    "AX-SEC": "securite-alimentaire",
-    "AX-SOC": "sciences-sociales",
-    "GLP": "glp",
-    "PAT": "patrimoine",
-    "STA": "stations",
-    "UAR": "appui-recherche",
-    "UGT": "ressources-techniques",
-    "CAP": "capitalisation",
-    "AX-BIO": "biodiversite",
-    "AX-AGR": "agriculture",
-    "MG": "moyens-generaux",
+SCENARIO_ALIASES = {
+    "agriculture",
+    "atall",
+    "biodiversite",
+    "caissier",
+    "communication",
+    "comptable",
+    "daf",
+    "finances",
+    "kpon",
+    "labo",
+    "programmes",
+    "sante",
+    "societe",
+    "uar",
 }
+
+
+def _pilot_users_from_organogram(
+    specs: tuple[OrgUnitSpec, ...],
+) -> tuple[PilotUserSpec, ...]:
+    by_code = {spec.code: spec for spec in specs}
+    alias_by_code = {
+        spec.code: spec.demo_alias for spec in specs if spec.demo_alias is not None
+    }
+
+    def manager_alias(spec: OrgUnitSpec) -> str | None:
+        parent_code = spec.parent_code
+        while parent_code is not None:
+            alias = alias_by_code.get(parent_code)
+            if alias is not None:
+                return alias
+            parent_code = by_code[parent_code].parent_code
+        return None
+
+    users: list[PilotUserSpec] = [
+        PilotUserSpec("dev", "Administrateur technique", None, None, False)
+    ]
+    for spec in specs:
+        if spec.demo_alias is None or spec.demo_position is None:
+            continue
+        users.append(
+            PilotUserSpec(
+                spec.demo_alias,
+                spec.demo_position,
+                spec.code,
+                manager_alias(spec),
+                spec.demo_alias in SCENARIO_ALIASES,
+            )
+        )
+        if spec.code == "DG":
+            users.append(
+                PilotUserSpec(
+                    "secretariat_dg",
+                    "Secrétaire de la Direction générale",
+                    "DG",
+                    "dg",
+                    False,
+                )
+            )
+    return tuple(users)
+
+
+PILOT_USERS = _pilot_users_from_organogram(ORGANOGRAM_SPECS)
 
 LEGACY_EMAILS = (
     "responsable.demo@example.invalid",
@@ -364,6 +257,7 @@ class Command(BaseCommand):
                 reset_password=reset_password,
             )
             self._ensure_hierarchy(users, units)
+            self._ensure_agenda_roles(users, units)
             self._ensure_scenarios(users)
             self._warm_progress_caches()
             self._assert_counts()
@@ -437,23 +331,35 @@ class Command(BaseCommand):
     @staticmethod
     def _ensure_units() -> dict[str, OrganizationUnit]:
         units: dict[str, OrganizationUnit] = {}
+        spec_by_code = {spec.code: spec for spec in ORGANOGRAM_SPECS}
+        canonical_codes = set(spec_by_code)
+        OrganizationUnit.objects.exclude(code__in=canonical_codes).update(active=False)
         for code, long_name, _parent_code in UNIT_SPECS:
+            spec = spec_by_code[code]
             unit, _ = OrganizationUnit.objects.update_or_create(
                 code=code,
                 defaults={
                     "short_name": UNIT_SHORT_NAMES[code],
                     "long_name": long_name,
+                    "kind": spec.kind,
+                    "display_order": spec.display_order,
                     "active": True,
                 },
             )
             units[code] = unit
+        OrganizationUnitLink.objects.filter(
+            collaborator_service__code__in=canonical_codes
+        ).exclude(supervisor_service__code__in=canonical_codes).delete()
         for code, _long_name, supervisor_code in UNIT_SPECS:
             if supervisor_code is None:
                 continue
-            OrganizationUnitLink.objects.get_or_create(
-                supervisor_service=units[supervisor_code],
+            OrganizationUnitLink.objects.update_or_create(
                 collaborator_service=units[code],
+                defaults={"supervisor_service": units[supervisor_code]},
             )
+            OrganizationUnitLink.objects.filter(collaborator_service=units[code]).exclude(
+                supervisor_service=units[supervisor_code],
+            ).delete()
         return units
 
     @staticmethod
@@ -511,6 +417,33 @@ class Command(BaseCommand):
             if line.start_date != start:
                 line.start_date = start
                 line.save(update_fields=["start_date"])
+
+    @staticmethod
+    def _ensure_agenda_roles(
+        users: dict[str, User], units: dict[str, OrganizationUnit]
+    ) -> None:
+        """Give the dedicated fictitious accounts their dated agenda roles."""
+        dev = users["dev"]
+        specs = (
+            ("secretariat_dg", "AGENDA_SECRETARIAT", "DG"),
+            ("rh", "AGENDA_HR", "CA"),
+            ("dg", "AGENDA_VIEWER", "CA"),
+        )
+        valid_from = timezone.now() - timedelta(weeks=12)
+        for alias, role_code, unit_code in specs:
+            role = ScopedRole.objects.get(code=role_code)
+            RoleGrant.objects.get_or_create(
+                user=users[alias],
+                role=role,
+                unit=units[unit_code],
+                scope=GrantScope.UNIT_TREE,
+                revoked_at__isnull=True,
+                defaults={
+                    "valid_from": valid_from,
+                    "granted_by": dev,
+                    "grant_reason": "Rôle fictif du scénario d’agenda hebdomadaire.",
+                },
+            )
 
     def _ensure_scenarios(self, users: dict[str, User]) -> None:
         today = timezone.localdate()
@@ -1121,14 +1054,16 @@ class Command(BaseCommand):
             },
         }
         with override_settings(STORAGES=storage):
-            for alias in ("dg", "daf", "kpon", "atall", "jardinier"):
+            for alias in ("dg", "daf", "kpon", "atall", "secretariat_dg", "rh"):
+                if alias not in users:
+                    continue
                 client = Client()
                 if demo_password:
                     if not client.login(username=alias, password=demo_password):
                         raise CommandError(f"Echec de session pour {alias}.")
                 else:
                     client.force_login(users[alias])
-                response = client.get("/", secure=True, HTTP_HOST=host)
+                response = client.get("/app/", secure=True, HTTP_HOST=host)
                 if response.status_code != 200:
                     raise CommandError(
                         f"Tableau de bord indisponible pour {alias}: {response.status_code}."

@@ -24,6 +24,10 @@ export const sessionFixture: Session = {
     admin: false,
     view_processes: true,
     create_mission_order: true,
+    manage_visits: true,
+    manage_availability: true,
+    prepare_weekly_agenda: true,
+    view_weekly_agenda: true,
   },
 };
 

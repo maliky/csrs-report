@@ -83,7 +83,7 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         == len(UNIT_SPECS) - 1
     )
     daf = OrganizationUnit.objects.get(code="DAF")
-    assert daf.long_name == "Direction administrative et financiere"
+    assert daf.long_name == "Direction administrative et financière"
     assert daf.short_name == "daf"
     assert (
         dict(
@@ -96,9 +96,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     assert (
         OrganizationUnitLink.objects.filter(
             supervisor_service__code="DG",
-            collaborator_service__code__in=("DAF", "DRV"),
+            collaborator_service__code__in=("DAF", "CEX", "DP", "POOL", "PSPI"),
         ).count()
-        == 2
+        == 5
     )
     assert (
         ReportingLine.objects.filter(is_primary=True, end_date__isnull=True).count()
@@ -232,9 +232,9 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         )
     )
     assert len(messages) == len(set(messages))
-    assert any("(formation)" in message for message in messages)
+    assert any("(communication-rse)" in message for message in messages)
     assert not any(
-        "Direction administrative et financiere" in message for message in messages
+        "Direction administrative et financière" in message for message in messages
     )
     assert not any(" a ete " in message or " apres " in message for message in messages)
     assert TaskActivity.objects.filter(kind="reopened").exists()
@@ -274,7 +274,11 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         for assignment in delayed_over_one_week
     )
 
-    retained_aliases = {spec.alias for spec in PILOT_USERS if spec.has_scenarios}
+    retained_aliases = set(Command._existing_scenario_users()) | {
+        "dev",
+        "secretariat_dg",
+        "rh",
+    }
     password_hashes = dict(
         User.objects.filter(login_alias__in=retained_aliases).values_list(
             "login_alias", "password"
@@ -289,7 +293,7 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
 
     call_command("seed_pilot_users", refresh_scenarios_only=True, verbosity=0)
 
-    assert User.objects.count() == len(retained_aliases) == 16
+    assert User.objects.count() == len(retained_aliases)
     assert (
         dict(
             User.objects.filter(login_alias__in=retained_aliases).values_list(
@@ -322,50 +326,46 @@ def test_pilot_hierarchy_matches_revised_tree(monkeypatch) -> None:
         )
 
     assert direct_children("dg") == {
+        "secretariat_dg",
+        "coordination",
+        "pilotage",
+        "expertise",
+        "programmes",
         "daf",
-        "drv",
-        "drd",
-        "ct",
-        "rse",
-        "genre",
-        "ethique",
-        "suivi",
+    }
+    assert direct_children("pilotage") == {
         "controle",
+        "controle_interne",
+        "communication",
+        "genre",
     }
     assert direct_children("daf") == {
         "finances",
         "kpon",
         "rh",
-        "i2a",
         "achats",
+        "moyens",
         "documentation",
     }
-    assert direct_children("drv") == {
-        "formation",
-        "valorisation",
-        "capitalisation",
-    }
-    assert direct_children("drd") == {
-        "recherche",
+    assert direct_children("programmes") == {
+        "biodiversite",
+        "sante",
+        "agriculture",
+        "societe",
         "clinique",
-        "observatoire",
-        "labo",
-        "microscopie",
         "uar",
-        "ressources",
+        "qualite",
+        "plateforme",
+        "stations",
     }
     assert direct_children("kpon") == {"atall"}
-    assert direct_children("valorisation") == {
-        "communication",
-        "partenariat",
-        "jardinier",
+    assert direct_children("finances") == {"caissier", "comptable"}
+    assert direct_children("biodiversite") == {"faune", "plantes"}
+    assert direct_children("sante") == {
+        "clinique_epi",
+        "epidemiologie",
+        "sante_publique",
     }
-    assert direct_children("recherche") == {
-        "sante",
-        "environnement",
-        "securite",
-        "societe",
-        "biodiversite",
-        "agriculture",
-    }
-    assert direct_children("patrimoine") == {"stations"}
+    assert direct_children("agriculture") == {"agroecologie", "nutrition"}
+    assert direct_children("societe") == {"gouvernance", "economie"}
+    assert direct_children("plateforme") == {"labo", "instrumentation", "donnees"}

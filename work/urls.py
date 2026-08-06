@@ -1,11 +1,19 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from work import views
 
 urlpatterns = [
     path("app/", views.react_app, name="react-app"),
     path("app/<path:route>/", views.react_app, name="react-app-route"),
-    path("", views.dashboard, name="dashboard"),
+    path(
+        "",
+        RedirectView.as_view(
+            pattern_name="react-app", permanent=False, query_string=True
+        ),
+        name="home",
+    ),
+    path("classique/", views.dashboard, name="dashboard"),
     path("taches/nouvelle/", views.create_assignment, name="assignment-create"),
     path("taches/<int:pk>/", views.assignment_detail, name="assignment-detail"),
     path(

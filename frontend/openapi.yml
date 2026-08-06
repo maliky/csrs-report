@@ -4,6 +4,234 @@ info:
   version: 1.0.0
   description: API metier versionnee pour l'interface React CSRS Report.
 paths:
+  /api/v1/agenda/draft/:
+    put:
+      operationId: agenda_draft_update
+      tags:
+      - agenda
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Draft'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Draft'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Draft'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/agenda/preview/:
+    get:
+      operationId: agenda_preview_retrieve
+      parameters:
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - agenda
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/agenda/versions/:
+    get:
+      operationId: agenda_versions_retrieve
+      parameters:
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - agenda
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: agenda_versions_create
+      tags:
+      - agenda
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Generate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Generate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Generate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/agenda/versions/{id}/pdf/:
+    get:
+      operationId: agenda_versions_pdf_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - agenda
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/availability/:
+    get:
+      operationId: availability_retrieve
+      parameters:
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - availability
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: availability_create
+      tags:
+      - availability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Availability'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Availability'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Availability'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/availability/{id}/:
+    patch:
+      operationId: availability_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - availability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilityUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilityUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilityUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/availability/{id}/cancel/:
+    post:
+      operationId: availability_cancel_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - availability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cancel'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cancel'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cancel'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/dashboard/:
     get:
       operationId: dashboard_retrieve
@@ -717,6 +945,86 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/visits/:
+    get:
+      operationId: visits_retrieve
+      parameters:
+      - in: query
+        name: week
+        schema:
+          type: string
+          format: date
+      tags:
+      - visits
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: visits_create
+      tags:
+      - visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VisitCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VisitCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/visits/{id}/departure/:
+    post:
+      operationId: visits_departure_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Revision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Revision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Revision'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
 components:
   schemas:
     ActionEnum:
@@ -747,6 +1055,49 @@ components:
         * `complete_fleet` - complete_fleet
         * `place_legal_hold` - place_legal_hold
         * `release_legal_hold` - release_legal_hold
+    Availability:
+      type: object
+      properties:
+        employee_id:
+          type: integer
+          minimum: 1
+        kind:
+          $ref: '#/components/schemas/AvailabilityKindEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        note:
+          type: string
+          default: ''
+      required:
+      - employee_id
+      - end_date
+      - kind
+      - start_date
+    AvailabilityKindEnum:
+      enum:
+      - leave
+      - absence
+      - mission
+      type: string
+      description: |-
+        * `leave` - Congé
+        * `absence` - Absence
+        * `mission` - Mission
+    Cancel:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+      required:
+      - reason
+      - revision
     DecisionEnum:
       enum:
       - accept
@@ -762,7 +1113,7 @@ components:
           type: integer
           minimum: 1
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/DocumentUploadKindEnum'
         file:
           type: string
           format: uri
@@ -770,7 +1121,7 @@ components:
       - file
       - kind
       - revision
-    KindEnum:
+    DocumentUploadKindEnum:
       enum:
       - terms_of_reference
       - invitation
@@ -784,6 +1135,29 @@ components:
         * `ticket` - Billet de transport
         * `order_draft` - Projet d'ordre de mission
         * `other` - Autre pièce
+    Draft:
+      type: object
+      properties:
+        week_start:
+          type: string
+          format: date
+        major_events:
+          type: string
+          default: ''
+        revision:
+          type: integer
+          minimum: 0
+          nullable: true
+      required:
+      - week_start
+    Generate:
+      type: object
+      properties:
+        week_start:
+          type: string
+          format: date
+      required:
+      - week_start
     Mission:
       type: object
       properties:
@@ -852,6 +1226,26 @@ components:
       required:
       - message
       - revision
+    PatchedAvailabilityUpdate:
+      type: object
+      properties:
+        employee_id:
+          type: integer
+          minimum: 1
+        kind:
+          $ref: '#/components/schemas/AvailabilityKindEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        note:
+          type: string
+          default: ''
+        revision:
+          type: integer
+          minimum: 1
     PatchedMissionUpdate:
       type: object
       properties:
@@ -1071,6 +1465,14 @@ components:
           minimum: 1
       required:
       - revision
+    Revision:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+      required:
+      - revision
     SourceEnum:
       enum:
       - workload
@@ -1139,6 +1541,20 @@ components:
         * `validate` - validate
         * `reject` - reject
         * `close_early` - close_early
+    VisitCreate:
+      type: object
+      properties:
+        party_size:
+          type: integer
+          maximum: 999
+          minimum: 1
+        visitor_names:
+          type: array
+          items:
+            type: string
+            maxLength: 160
+      required:
+      - party_size
   securitySchemes:
     cookieAuth:
       type: apiKey

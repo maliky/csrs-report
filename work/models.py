@@ -21,10 +21,12 @@ class OrganizationUnit(models.Model):
     long_name = models.CharField("nom long", max_length=180)
     short_name = models.CharField("nom court", max_length=80)
     code = models.CharField("code", max_length=32, unique=True)
+    kind = models.CharField("type d'unite", max_length=32, default="unit")
+    display_order = models.PositiveIntegerField("ordre d'affichage", default=0)
     active = models.BooleanField("active", default=True)
 
     class Meta:
-        ordering = ["long_name"]
+        ordering = ["display_order", "long_name"]
 
     def __str__(self) -> str:
         return self.long_name

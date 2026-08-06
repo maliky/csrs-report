@@ -95,8 +95,99 @@ export type Session = {
     admin: boolean;
     view_processes: boolean;
     create_mission_order: boolean;
+    manage_visits: boolean;
+    manage_availability: boolean;
+    prepare_weekly_agenda: boolean;
+    view_weekly_agenda: boolean;
   };
 };
+
+export type AgendaPerson = Pick<Person, "id" | "name" | "position">;
+
+export type VisitorVisit = {
+  id: number;
+  revision: number;
+  party_size: number;
+  visitor_names: string[];
+  arrived_at: string;
+  departed_at: string | null;
+  cancelled_at: string | null;
+};
+
+export type VisitList = { week_start: string; visits: VisitorVisit[] };
+
+export type StaffAvailability = {
+  id: number;
+  revision: number;
+  employee: AgendaPerson;
+  kind: "leave" | "absence" | "mission";
+  kind_label: string;
+  start_date: string;
+  end_date: string;
+  note: string;
+  cancelled_at: string | null;
+};
+
+export type AvailabilityOptions = {
+  week_start: string;
+  items: StaffAvailability[];
+  employees: AgendaPerson[];
+  kinds: { value: StaffAvailability["kind"]; label: string }[];
+};
+
+export type AgendaTask = {
+  id: number;
+  title: string;
+  status: string;
+  status_label: string;
+  percentage: number;
+  progress_delta: number;
+  observation: string;
+};
+
+export type AgendaSnapshot = {
+  schema_version: number;
+  week_start: string;
+  week_end: string;
+  major_events: string;
+  arrivals: VisitorVisit[];
+  departures: VisitorVisit[];
+  availability: Array<
+    Omit<StaffAvailability, "revision" | "cancelled_at"> & {
+      employee: AgendaPerson;
+    }
+  >;
+  units: Array<{
+    id: number;
+    code: string;
+    name: string;
+    display_order: number;
+    employees: Array<{
+      person: AgendaPerson;
+      completion_rate: number;
+      tasks: AgendaTask[];
+    }>;
+  }>;
+};
+
+export type AgendaPreview = {
+  draft: { week_start: string; major_events: string; revision: number };
+  snapshot: AgendaSnapshot;
+};
+
+export type AgendaVersion = {
+  id: number;
+  week_start: string;
+  version: number;
+  snapshot_sha256: string;
+  pdf_sha256: string;
+  pdf_size: number;
+  generated_by: AgendaPerson;
+  generated_at: string;
+  pdf_url: string;
+};
+
+export type AgendaVersions = { versions: AgendaVersion[] };
 
 export type ProcessSummary = {
   id: number;

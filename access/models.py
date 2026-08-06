@@ -48,6 +48,10 @@ class ScopedRole(models.Model):
             ("work_mission_distribution", "Distribuer les ordres de mission"),
             ("work_mission_fleet", "Preparer les vehicules de mission"),
             ("export_process", "Exporter un dossier de processus"),
+            ("manage_visitor_visits", "Enregistrer les visites"),
+            ("manage_staff_availability", "Gérer les indisponibilités"),
+            ("prepare_weekly_agenda", "Préparer l'agenda hebdomadaire"),
+            ("view_weekly_agenda", "Consulter l'agenda hebdomadaire"),
         ]
 
     def __str__(self) -> str:

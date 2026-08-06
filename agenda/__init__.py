@@ -1,0 +1,1 @@
+"""Weekly institutional agenda application."""

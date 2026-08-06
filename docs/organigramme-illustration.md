@@ -1,7 +1,7 @@
 # Organigramme d'illustration
 
-Le chargeur reprend les directions, cellules, services, unités et axes internes présentés dans l'[organigramme du Plan stratégique CSRS 2024–2028](https://www.csrs.ch/storage/app/media/rapports/PLAN%20STRATEGIQUE%20%20CSRS%202024%20-%202028.pdf), notamment la DG, la DAF, la DRD, la DVE, les fonctions transversales, les unités scientifiques et les services de support.
+Le fichier [`organogram.org`](../organogram.org) est la référence canonique de l’organigramme révisé du CSRS d’août 2026. Ses titres définissent la hiérarchie et ses propriétés `UNIT_CODE`, `UNIT_KIND`, `SHORT_NAME`, `DEMO_ALIAS` et `DEMO_POSITION` alimentent directement le chargeur et les tests.
 
-Il crée 44 comptes organisationnels fictifs et le compte technique `dev`. Les alias désignent une fonction (`drd`, `finances`, `uar`, `labo`, `rh`, etc.) et ne reprennent aucun nom, email, téléphone ou autre identité publié par le CSRS. Les membres d'organes externes, associés et partenaires ne sont pas chargés.
+Le chargeur crée un compte fonctionnel fictif pour chaque unité opérationnelle déclarée dans l’Org, le compte technique `dev`, le compte `dg` et le compte `secretariat_dg`. `rh` est rattaché au Service Capital humain. Aucun alias, email ou intitulé de démonstration ne représente une identité personnelle réelle.
 
-Les alias historiques déjà utilisés dans les parcours restent stables. `drv` représente désormais la Direction de la valorisation et des expertises, tandis que `drd` représente la Direction recherche et développement. Les comptes structurels supplémentaires rendent tout l'organigramme navigable; les 73 tâches historiques demeurent concentrées sur les 15 comptes des parcours métier afin de garder le jeu de données lisible et reproductible.
+Les 73 tâches d’illustration restent réparties sur quatorze comptes opérationnels et la Direction générale afin de conserver les scénarios de progression, de retard, de blocage, de correction et de validation. Le secrétariat DG, les RH et le DG reçoivent respectivement les rôles de préparation, de saisie des indisponibilités et de lecture de l’agenda hebdomadaire.
