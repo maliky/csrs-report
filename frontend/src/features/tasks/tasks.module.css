@@ -150,6 +150,32 @@
   font-size: 0.85rem;
   font-weight: 750;
 }
+.overdueNotice {
+  width: fit-content;
+  margin: 0 0 0.5rem auto;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #d89d9d;
+  border-radius: 999px;
+  color: #741616;
+  background: #fbeaea;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.chartLegend {
+  margin: 0 0 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+.chartLegend summary {
+  width: fit-content;
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 750;
+}
+.chartLegend p {
+  margin: 0.35rem 0 0;
+}
 .gridLine {
   stroke: #d9ded9;
   stroke-width: 1;
@@ -162,12 +188,12 @@
   fill: #f8dede;
 }
 .area {
-  fill: var(--color-primary);
+  fill: var(--chart-color, var(--color-primary));
   opacity: 0.08;
 }
 .line {
   fill: none;
-  stroke: var(--color-primary);
+  stroke: var(--chart-color, var(--color-primary));
   stroke-width: 3;
 }
 .serverLine {
@@ -188,13 +214,13 @@
   stroke-dasharray: 5 5;
 }
 .dotObserved {
-  fill: var(--color-accent);
+  fill: var(--chart-color, var(--color-accent));
   stroke: var(--color-surface);
   stroke-width: 2;
 }
 .dotCarried {
   fill: var(--color-surface);
-  stroke: var(--color-primary);
+  stroke: var(--chart-color, var(--color-primary));
   stroke-width: 1.2;
 }
 .previewDot {
@@ -229,6 +255,15 @@
   fill: var(--color-ink);
   font-size: 10px;
   font-weight: 750;
+}
+.startLabel {
+  fill: #65736d;
+}
+.todayLabel {
+  fill: #44515a;
+}
+.dueLabel {
+  fill: #7d342f;
 }
 .axisLabel {
   fill: var(--color-muted);

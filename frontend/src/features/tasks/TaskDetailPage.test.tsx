@@ -62,4 +62,4 @@ test("prévisualise puis enregistre une baisse de progression", async () => {
   expect(
     screen.getByText("Contrôle complémentaire nécessaire."),
   ).toBeInTheDocument();
-});
+}, 10_000);

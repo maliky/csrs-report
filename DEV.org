@@ -2,6 +2,55 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-06 jeu.> Bascule vers React et parité du graphique D3
+** Interface principale
+
+React reste servi sous =/app/= afin de préserver tous les liens existants, mais devient la destination par défaut. La racine conserve les paramètres de période et redirige vers =/app/= ; une connexion ou une activation sans destination explicite aboutit également dans React. Le tableau Django historique demeure un recours réversible sous =/classique/= et le lien correspondant reste disponible dans la barre latérale React.
+
+Dans =/app/equipe=, toutes les branches racines sont ouvertes au premier affichage et chargent automatiquement leur profil une seule fois. Les collaborateurs du niveau suivant sont visibles mais leurs branches et leurs requêtes de détail restent fermées jusqu'à une action explicite.
+
+** Graphique de progression
+
+Le composant React conserve D3 pour les échelles, la courbe en escalier, la sélection du point le plus proche et la compression des jours non ouvrés. Les trois repères portent désormais leur date complète dans le SVG : début, aujourd'hui et fin prévue. Une tâche ouverte en retard garde la zone rose entre échéance et date courante et affiche le nombre de jours ouvrés de retard sans exiger un survol.
+
+L'infobulle expose la date, le jour calendrier, les jours ouvrés écoulés, la progression, le retard et la nature réelle ou reportée du point. La table alternative reprend les jours ouvrés et le retard, tandis qu'une légende accessible explique les points pleins et creux, les bandes grises et la zone rose. La couleur reste stable par action institutionnelle et une tâche close ne prolonge jamais sa zone de retard.
+
+** Vérification attendue
+
+- [X] Redirections racine, connexion et activation vers React, avec =/classique/= encore accessible.
+- [X] Premier niveau de l'équipe ouvert, descendants fermés et chargement unique des profils.
+- [X] Dates, zone de retard, nombre de jours, infobulle et table alternative validés dans le graphique React.
+- [X] Tests Django et React, build Vite et contrôle navigateur aux largeurs téléphone et ordinateur.
+
+* <2026-08-05 mer.> Organigramme canonique et agenda hebdomadaire de la Direction générale
+** Résultat
+
+L’organigramme révisé d’août 2026 est retranscrit dans =organogram.org=. Le seed et les tests lisent cette arborescence au lieu de maintenir une seconde hiérarchie en Python. Chaque unité porte un code, un type, un nom court et, lorsque nécessaire, un compte fonctionnel fictif. Le jeu d’illustration comprend désormais =secretariat_dg= rattaché à la Direction générale et conserve =rh= au Service Capital humain.
+
+Le module Django =agenda= sépare quatre responsabilités : le secrétariat DG enregistre les groupes de visiteurs et leurs départs, les RH enregistrent congés, absences et missions, le secrétariat prépare et génère le rapport, et le DG consulte les versions figées. Les rôles =AGENDA_SECRETARIAT=, =AGENDA_HR= et =AGENDA_VIEWER= appliquent ces autorisations côté serveur et la session React n’expose que les capacités correspondantes.
+
+** Rapport et conservation
+
+L’aperçu couvre une semaine du lundi au dimanche. Il retient les agents possédant une tâche qui chevauche la semaine ou une activité datée dans la semaine, les regroupe selon leur appartenance principale puis affiche chaque tâche, son taux de fin de semaine, son écart hebdomadaire et sa dernière observation. Le taux de l’agent est la moyenne arithmétique arrondie de ses tâches retenues. Les services sans activité sont omis et une tâche sans nouvelle saisie conserve son dernier taux connu sans mention =NON PARVENU=.
+
+Chaque génération produit un instantané JSON canonique, son empreinte SHA-256 et un PDF A4 ReportLab stocké dans le stockage privé. Les versions sont append-only, numérotées sous verrou transactionnel et restent réimprimables même si les visites, indisponibilités, tâches ou événements majeurs changent ensuite. Le PDF reprend les encadrés =ÉVÉNEMENTS MAJEURS=, =ARRIVÉES DE VISITEURS=, =DÉPARTS DE VISITEURS= et =CONGÉS, ABSENCES ET MISSIONS=, puis les activités en cartes de service.
+
+Les noms de visiteurs sont facultatifs et limités au nombre déclaré. Ils ne sont visibles que du secrétariat dans la saisie et du secrétariat ou du DG dans les versions générées. Aucune purge automatique n’est activée avant confirmation d’une durée institutionnelle de conservation.
+
+** Interfaces et contrat
+
+- =/app/agenda= : visites en cours, événements majeurs, aperçu, génération et archives ; le DG reçoit une vue d’archives en lecture seule.
+- =/app/absences= : saisie, correction et annulation motivée des congés, absences et missions par les RH.
+- =/api/v1/visits/=, =/api/v1/availability/= et =/api/v1/agenda/= : API session et CSRF, révisions optimistes et téléchargement PDF autorisé.
+- Le contrat OpenAPI et les types TypeScript sont régénérés avec les nouvelles capacités et les nouveaux endpoints.
+
+** Vérification
+
+- [X] Organigramme Org analysable, codes et alias uniques, hiérarchie institutionnelle testée.
+- [X] Modèles audités, validations de dates, chevauchements, permissions et séparation secrétariat/RH/DG testés.
+- [X] Agrégation des tâches et progressions et immutabilité des versions PDF testées.
+- [X] Build TypeScript/Vite et tests React existants validés après ajout de la navigation.
+
 * <2026-08-02 dim.> Préproduction =ent.csrs.ch= sur le nouvel hôte
 ** Décisions confirmées
 

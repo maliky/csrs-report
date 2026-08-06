@@ -117,6 +117,7 @@ export function TeamPage() {
               key={node.employee.id}
               node={node}
               periodQuery={data.period.query}
+              depth={0}
             />
           ))}
         </div>
@@ -143,11 +144,15 @@ export function TeamPage() {
 function TeamTreeNode({
   node,
   periodQuery,
+  depth,
 }: {
   node: FilteredTeamNode;
   periodQuery: string;
+  depth: number;
 }) {
-  const [hasOpened, setHasOpened] = useState(false);
+  const initiallyOpen = depth === 0;
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
+  const [hasOpened, setHasOpened] = useState(initiallyOpen);
   const profile = useApi<TeamEmployee>(
     `/api/v1/team/${node.employee.id}/?${periodQuery}`,
     hasOpened && node.task_count > 0,
@@ -157,7 +162,9 @@ function TeamTreeNode({
     <details
       className={`${styles.node} ${!node.matchesFilter ? styles.contextNode : ""}`}
       data-team-employee-id={node.employee.id}
+      open={isOpen}
       onToggle={(event) => {
+        setIsOpen(event.currentTarget.open);
         if (event.currentTarget.open) setHasOpened(true);
       }}
     >
@@ -205,6 +212,7 @@ function TeamTreeNode({
                   key={child.employee.id}
                   node={child}
                   periodQuery={periodQuery}
+                  depth={depth + 1}
                 />
               ))}
             </div>

@@ -30,9 +30,9 @@ mypy accounts work config
 python manage.py makemigrations --check --dry-run
 ```
 
-## Interface React progressive
+## Interface React principale
 
-L'interface métier React est disponible sous `/app/`. Elle utilise la même session Django et les mêmes autorisations serveur que l'interface classique, qui reste accessible à la racine. L'administration Django continue de gérer les comptes, services, rôles et délégations.
+L'interface métier React est disponible sous `/app/` et constitue l'interface par défaut. La racine `/`, la connexion et l'activation d'un compte y conduisent automatiquement. Elle utilise la même session Django et les mêmes autorisations serveur que l'interface classique, dont le point d'entrée de secours reste disponible sous `/classique/`. L'administration Django continue de gérer les comptes, services, rôles et délégations.
 
 ### Avec quoi React interagit
 
@@ -55,7 +55,15 @@ La navigation React utilise une barre latérale gauche. Elle est ouverte et rét
 
 Le dashboard `/app/propositions` filtre par statut, collaborateur et période chevauchante. Une proposition validée mène à la progression de la tâche créée; une proposition soumise ou rejetée mène à son détail. L'auteur peut corriger ses propositions et resoumettre un rejet, tandis que les décisions restent réservées aux responsables autorisés. Les écritures utilisent toujours une révision optimiste et les erreurs API gardent une enveloppe JSON stable.
 
-La synthèse `/app/equipe` reprend l'arbre dépliable de l'interface classique. Ouvrir la ligne d'un collaborateur charge une seule fois ses tâches dans la branche; les titres mènent ensuite au détail de progression. Le filtre segmenté `Tous / Avec tâches / Sans tâche` porte sur les tâches propres à chaque personne pour la période sélectionnée et conserve les ancêtres nécessaires à la lecture de la hiérarchie. Son état est conservé dans l'URL avec `tasks=with` ou `tasks=without`, y compris lors d'un changement de semaine ou de mois.
+La synthèse `/app/equipe` reprend l'arbre dépliable de l'interface classique. Les branches du premier niveau sont ouvertes à l'arrivée et chargent une seule fois leurs tâches; les niveaux inférieurs restent fermés jusqu'à leur ouverture explicite. Les titres mènent au détail de progression. Le filtre segmenté `Tous / Avec tâches / Sans tâche` porte sur les tâches propres à chaque personne pour la période sélectionnée et conserve les ancêtres nécessaires à la lecture de la hiérarchie. Son état est conservé dans l'URL avec `tasks=with` ou `tasks=without`, y compris lors d'un changement de semaine ou de mois.
+
+### Agenda hebdomadaire de la Direction générale
+
+Le compte fictif `secretariat_dg` ouvre `/app/agenda`, notifie l’arrivée d’un groupe de visiteurs avec un nombre obligatoire et des noms facultatifs, puis marque son départ. Il complète les événements majeurs, vérifie l’aperçu regroupé par service et agent et génère une version PDF A4 figée. Le DG peut consulter et réimprimer les versions archivées sans modifier le brouillon.
+
+Le compte `rh` ouvre `/app/absences` et enregistre les congés, absences et missions avec l’agent et la période concernée. Les RH n’accèdent pas au rapport complet. Les PDF sont conservés dans le stockage privé déjà monté sur `/private-media` et ne sont jamais servis par WhiteNoise. Les noms facultatifs des visiteurs et les versions générées ne font l’objet d’aucune purge automatique tant que la durée institutionnelle de conservation n’a pas été confirmée.
+
+L’activité hebdomadaire provient des tâches qui chevauchent la semaine et de leurs progressions ou observations. Le taux d’un agent est la moyenne de ses tâches retenues, calculée à la fin de la semaine; les services sans activité ne sont pas ajoutés au PDF. L’organigramme d’août 2026 qui fixe l’ordre des services se trouve dans [`organogram.org`](organogram.org).
 
 ### Deux modes de développement React
 

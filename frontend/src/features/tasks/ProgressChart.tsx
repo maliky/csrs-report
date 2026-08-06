@@ -1,5 +1,11 @@
 import { area, bisector, curveStepAfter, line, scaleLinear } from "d3";
-import { useId, useMemo, useState, type KeyboardEvent } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 import type { ChartPoint } from "../../lib/api/types";
 import { dayLabel, formatDate } from "../../lib/format";
 import styles from "./tasks.module.css";
@@ -8,6 +14,17 @@ const WIDTH = 760;
 const HEIGHT = 300;
 const MARGIN = { top: 46, right: 22, bottom: 46, left: 46 };
 const NON_WORKING_DAY_WEIGHT = 0.18;
+const CHART_PALETTE = [
+  "#006b54",
+  "#285b9b",
+  "#7a4e9d",
+  "#a14f1f",
+  "#297783",
+  "#765f18",
+];
+const NUMBER_FORMATTER = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 1,
+});
 
 type CalendarSegment = {
   day: string;
@@ -26,6 +43,30 @@ function parseDay(value: string): Date {
 
 function isoDay(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+function colorFor(value: string | number): string {
+  let hash = 0;
+  for (const character of String(value))
+    hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  return CHART_PALETTE[Math.abs(hash) % CHART_PALETTE.length];
+}
+
+function formatNumber(value: number): string {
+  return NUMBER_FORMATTER.format(value);
+}
+
+function workDayLabel(value: number): string {
+  return `${formatNumber(value)} jour${value === 1 ? "" : "s"} ouvré${value === 1 ? "" : "s"}`;
+}
+
+function calendarDay(start: string, selected: string): number {
+  return Math.max(
+    0,
+    Math.round(
+      (parseDay(selected).getTime() - parseDay(start).getTime()) / 86_400_000,
+    ),
+  );
 }
 
 function calendarDays(start: string, end: string): string[] {
@@ -69,13 +110,16 @@ export function ProgressChart({
   today,
   status,
   previewPercentage,
+  actionKey,
 }: {
   points: ChartPoint[];
   today: string;
   status: string;
   previewPercentage?: number;
+  actionKey?: string | number | null;
 }) {
   const titleId = useId();
+  const descriptionId = useId();
   const [active, setActive] = useState<number | null>(null);
   const chart = useMemo(() => {
     if (!points.length) return null;
@@ -155,15 +199,34 @@ export function ProgressChart({
   const todayIndex = chart.displayPoints.findIndex(
     (point) => point.day === today,
   );
+  const currentPoint =
+    chart.displayPoints[todayIndex] ?? chart.displayPoints.at(-1);
+  const currentOverdue = currentPoint?.overdue_days ?? 0;
   const markerData = [
-    { day: chart.start, label: "Début", className: styles.startLine },
-    { day: today, label: "Aujourd'hui", className: styles.todayLine },
-    { day: chart.due, label: "Fin prévue", className: styles.dueLine },
+    {
+      day: chart.start,
+      label: "Début",
+      className: styles.startLine,
+      labelClassName: styles.startLabel,
+    },
+    {
+      day: today,
+      label: "Aujourd'hui",
+      className: styles.todayLine,
+      labelClassName: styles.todayLabel,
+    },
+    {
+      day: chart.due,
+      label: "Fin prévue",
+      className: styles.dueLine,
+      labelClassName: styles.dueLabel,
+    },
   ].filter((marker) =>
     chart.calendar.some((segment) => segment.day === marker.day),
   );
   const lastPercentage = chart.displayPoints.at(-1)?.percentage ?? 0;
   const showOverrun = chart.isOpen && today > chart.due && lastPercentage < 100;
+  const chartColor = colorFor(actionKey ?? "sans-action");
 
   function moveSelection(event: KeyboardEvent<HTMLDivElement>) {
     if (
@@ -208,6 +271,7 @@ export function ProgressChart({
   return (
     <div
       className={styles.chartWrap}
+      style={{ "--chart-color": chartColor } as CSSProperties}
       tabIndex={0}
       onKeyDown={moveSelection}
       onFocus={() =>
@@ -221,11 +285,27 @@ export function ProgressChart({
           Aperçu non enregistré : {previewPercentage} %
         </p>
       )}
+      {showOverrun && currentOverdue > 0 && (
+        <p className={styles.overdueNotice} role="status">
+          Retard : {workDayLabel(currentOverdue)}
+        </p>
+      )}
+      <details className={styles.chartLegend}>
+        <summary>Comprendre le graphique</summary>
+        <p>
+          Les points pleins sont des saisies réelles ; les points creux
+          reportent la dernière valeur connue.
+        </p>
+        <p>
+          Les bandes grises représentent les jours non ouvrés comprimés. La zone
+          rose après l’échéance indique le retard d’une tâche ouverte.
+        </p>
+      </details>
       <svg
         className={styles.chart}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-labelledby={titleId}
+        aria-labelledby={`${titleId} ${descriptionId}`}
         onPointerMove={(event) =>
           selectFromPointer(event.clientX, event.currentTarget)
         }
@@ -235,6 +315,12 @@ export function ProgressChart({
           Progression réelle de la tâche du {formatDate(chart.start)} au{" "}
           {formatDate(chart.displayPoints.at(-1)?.day ?? chart.start)}
         </title>
+        <desc id={descriptionId}>
+          Aujourd’hui {formatDate(today)}. Fin prévue {formatDate(chart.due)}.
+          {showOverrun && currentOverdue > 0
+            ? ` Retard de ${workDayLabel(currentOverdue)}.`
+            : " Aucun retard en cours."}
+        </desc>
         {showOverrun && (
           <rect
             className={styles.overrun}
@@ -280,25 +366,34 @@ export function ProgressChart({
             </text>
           </g>
         ))}
-        {markerData.map((marker, index) => (
-          <g key={marker.label}>
-            <line
-              className={marker.className}
-              x1={chart.position(marker.day)}
-              x2={chart.position(marker.day)}
-              y1={MARGIN.top}
-              y2={HEIGHT - MARGIN.bottom}
-            />
-            <text
-              className={styles.markerLabel}
-              x={chart.position(marker.day)}
-              y={18 + (index % 2) * 14}
-              textAnchor="middle"
-            >
-              {marker.label}
-            </text>
-          </g>
-        ))}
+        {markerData.map((marker, index) => {
+          const markerPosition = chart.position(marker.day);
+          const textAnchor: "start" | "middle" | "end" =
+            markerPosition < WIDTH * 0.18
+              ? "start"
+              : markerPosition > WIDTH * 0.82
+                ? "end"
+                : "middle";
+          return (
+            <g key={marker.label}>
+              <line
+                className={marker.className}
+                x1={markerPosition}
+                x2={markerPosition}
+                y1={MARGIN.top}
+                y2={HEIGHT - MARGIN.bottom}
+              />
+              <text
+                className={`${styles.markerLabel} ${marker.labelClassName}`}
+                x={markerPosition}
+                y={14 + index * 13}
+                textAnchor={textAnchor}
+              >
+                {marker.label} {formatDate(marker.day)}
+              </text>
+            </g>
+          );
+        })}
         <path className={styles.area} d={chart.displayArea} />
         {chart.previewActive && (
           <path className={styles.serverLine} d={chart.serverPath} />
@@ -368,6 +463,12 @@ export function ProgressChart({
           <br />
           {selected.is_working_day ? "Jour ouvré" : "Jour non ouvré"}
           <br />
+          Jour calendrier : {calendarDay(chart.start, selected.day)}
+          <br />
+          Jours ouvrés écoulés : {formatNumber(selected.elapsed_work_days)}
+          <br />
+          Retard : {workDayLabel(selected.overdue_days)}
+          <br />
           {selected.observed ? "Saisie réelle" : "Valeur reportée"}
         </div>
       )}
@@ -380,6 +481,8 @@ export function ProgressChart({
                 <th>Date</th>
                 <th>Jour</th>
                 <th>Progression</th>
+                <th>Jours ouvrés écoulés</th>
+                <th>Retard</th>
                 <th>Observation</th>
               </tr>
             </thead>
@@ -393,6 +496,8 @@ export function ProgressChart({
                     <td>
                       {point.percentage} %{isPreview ? " (aperçu)" : ""}
                     </td>
+                    <td>{formatNumber(point.elapsed_work_days)}</td>
+                    <td>{workDayLabel(point.overdue_days)}</td>
                     <td>
                       {isPreview
                         ? `Non enregistré, valeur serveur ${chart.serverPoints[index].percentage} %`

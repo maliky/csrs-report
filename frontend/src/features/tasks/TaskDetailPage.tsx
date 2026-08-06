@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useLayoutEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "../../lib/router";
 import type { TaskDetail } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
@@ -26,7 +26,7 @@ export function TaskDetailPage() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (data) setDraftPercentage(data.percentage);
   }, [data]);
 
@@ -132,6 +132,7 @@ export function TaskDetailPage() {
               today={data.today}
               status={data.status}
               previewPercentage={draftPercentage ?? data.percentage}
+              actionKey={data.action?.id}
             />
           </Card>
           <Card>

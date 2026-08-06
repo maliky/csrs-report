@@ -200,8 +200,12 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             driver.find_element(By.NAME, "username").send_keys("BROWSER")
             driver.find_element(By.NAME, "password").send_keys(self.password)
             driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
-            assert driver.current_url == f"{self.live_server_url}/"
+            WebDriverWait(driver, 10).until(EC.url_to_be(f"{self.live_server_url}/app/"))
+            WebDriverWait(driver, 10).until(
+                EC.text_to_be_present_in_element((By.TAG_NAME, "h1"), "Mes tâches")
+            )
             assert "Mes tâches" in driver.page_source
+            driver.get(f"{self.live_server_url}/classique/")
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".task-card-history-chart svg")
@@ -257,7 +261,9 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             toggle.click()
             assert toggle.get_attribute("aria-expanded") == "true"
             assert "Ouvrir la tâche" in driver.page_source
-            driver.get(f"{self.live_server_url}/?month={timezone.localdate():%Y-%m}")
+            driver.get(
+                f"{self.live_server_url}/classique/?month={timezone.localdate():%Y-%m}"
+            )
             assert driver.find_element(By.CSS_SELECTOR, ".period-nav-month")
             driver.get(f"{self.live_server_url}/taches/{self.assignment.pk}/")
             WebDriverWait(driver, 5).until(
@@ -340,7 +346,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             driver.find_element(By.NAME, "username").send_keys("BROWSER")
             driver.find_element(By.NAME, "password").send_keys(self.password)
             driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
-            WebDriverWait(driver, 10).until(EC.url_to_be(f"{self.live_server_url}/"))
+            WebDriverWait(driver, 10).until(EC.url_to_be(f"{self.live_server_url}/app/"))
             for width in (360, 1440):
                 driver.set_window_size(width, 900)
                 driver.get(
@@ -411,7 +417,12 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                 By.CSS_SELECTOR, ":scope > summary"
             )
             assert member_summary.rect["height"] >= 44
-            driver.execute_script("arguments[0].click();", member_summary)
+            assert member_branch.get_attribute("open") is not None
+            subordinate_branch = driver.find_element(
+                By.CSS_SELECTOR,
+                f"details[data-team-employee-id='{self.subordinate.pk}']",
+            )
+            assert subordinate_branch.get_attribute("open") is None
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
                     (
@@ -457,6 +468,8 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             )
             assert "Date de début" in driver.page_source
             assert "Fin prévue" in driver.page_source
+            assert f"Aujourd'hui {timezone.localdate():%d/%m/%Y}" in driver.page_source
+            assert f"Fin prévue {self.assignment.due_date:%d/%m/%Y}" in driver.page_source
             chart = driver.find_element(By.CSS_SELECTOR, "svg[role='img']")
             ActionChains(driver).move_to_element(chart).perform()
             WebDriverWait(driver, 5).until(

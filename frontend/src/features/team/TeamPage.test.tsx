@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter, useLocation } from "../../lib/router";
@@ -51,16 +57,25 @@ test("charge une seule fois les tâches dans la branche du collaborateur", async
     screen.queryByRole("link", { name: "Voir la progression" }),
   ).not.toBeInTheDocument();
 
-  await user.click(summaryFor("Direction administrative et financière"));
-  expect(screen.getByText("Aucune tâche sur cette période.")).toBeVisible();
+  const root = summaryFor("Direction administrative et financière").closest(
+    "details",
+  );
+  const child = summaryFor("Awa Finances").closest("details");
+  expect(root).toHaveAttribute("open");
+  expect(child).not.toHaveAttribute("open");
+  if (!root) throw new Error("Branche racine introuvable");
+  expect(
+    within(root).getByText("Aucune tâche sur cette période."),
+  ).toBeVisible();
   await user.click(summaryFor("Awa Finances"));
 
+  if (!child) throw new Error("Branche enfant introuvable");
   expect(
-    await screen.findByRole("link", {
+    await within(child).findByRole("link", {
       name: "Finaliser les priorités de la quinzaine",
     }),
   ).toHaveAttribute("href", "/taches/31");
-  expect(screen.getAllByRole("progressbar")).toHaveLength(2);
+  expect(within(child).getAllByRole("progressbar")).toHaveLength(2);
   expect(requests).toBe(1);
 
   await user.click(summaryFor("Awa Finances"));
