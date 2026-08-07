@@ -106,6 +106,76 @@ def test_secretary_records_visit_and_hr_records_availability(
 
 
 @pytest.mark.django_db
+def test_secretary_saves_draft_and_generates_pdf_through_api(
+    tmp_path: Path, settings, client, assignment, people, unit
+) -> None:
+    settings.PROCESS_DOCUMENT_BACKEND = "local"
+    settings.PROCESS_DOCUMENT_ROOT = tmp_path
+    admin = User.objects.create_superuser(
+        "agenda-api-admin@example.test", "safe-password"
+    )
+    secretary = people["manager"]
+    grant_role(
+        user=secretary,
+        role_code="AGENDA_SECRETARIAT",
+        unit=unit,
+        granted_by=admin,
+    )
+    client.force_login(secretary)
+    monday = week_start_for(timezone.localdate())
+    draft_url = "/api/v1/agenda/draft/"
+
+    response = client.put(
+        draft_url,
+        {
+            "week_start": monday.isoformat(),
+            "major_events": "Comité hebdomadaire",
+            "revision": 0,
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["revision"] == 1
+
+    stale = client.put(
+        draft_url,
+        {
+            "week_start": monday.isoformat(),
+            "major_events": "Version périmée",
+            "revision": 0,
+        },
+        content_type="application/json",
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "stale_revision"
+
+    response = client.put(
+        draft_url,
+        {
+            "week_start": monday.isoformat(),
+            "major_events": "Comité hebdomadaire confirmé",
+            "revision": 1,
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["revision"] == 2
+
+    generated = client.post(
+        "/api/v1/agenda/versions/",
+        {"week_start": monday.isoformat()},
+        content_type="application/json",
+    )
+    assert generated.status_code == 201
+    assert generated.json()["version"] == 1
+
+    pdf = client.get(generated.json()["pdf_url"])
+    assert pdf.status_code == 200
+    assert pdf["Content-Type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF")
+
+
+@pytest.mark.django_db
 def test_week_snapshot_groups_tasks_and_uses_end_of_week_progress(
     assignment, people, unit
 ) -> None:

@@ -296,7 +296,13 @@ class AgendaDraftView(APIView):
     def put(self, request: Request) -> Response:
         serializer = DraftSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        draft = save_draft(actor=_user(request), **serializer.validated_data)
+        values = dict(serializer.validated_data)
+        expected_revision = values.pop("revision", None)
+        draft = save_draft(
+            actor=_user(request),
+            expected_revision=expected_revision,
+            **values,
+        )
         return Response(
             {
                 "week_start": draft.week_start.isoformat(),
