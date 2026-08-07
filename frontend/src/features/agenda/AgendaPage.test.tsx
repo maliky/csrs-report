@@ -70,8 +70,79 @@ test("enregistre une arrivée puis l’affiche parmi les visites en cours", asyn
   ).toBeInTheDocument();
 });
 
+test("enregistre le brouillon avant de générer une version PDF", async () => {
+  let draftRevision: number | null = null;
+  let versions: object[] = [];
+  server.use(
+    http.get("/api/v1/agenda/preview/", () =>
+      HttpResponse.json({
+        draft: { week_start: "2026-08-03", major_events: "", revision: 0 },
+        snapshot: emptySnapshot,
+      }),
+    ),
+    http.get("/api/v1/visits/", () =>
+      HttpResponse.json({ week_start: "2026-08-03", visits: [] }),
+    ),
+    http.put("/api/v1/agenda/draft/", async ({ request }) => {
+      const body = (await request.json()) as { revision: number };
+      draftRevision = body.revision;
+      return HttpResponse.json({
+        week_start: "2026-08-03",
+        major_events: "",
+        revision: 1,
+      });
+    }),
+    http.post("/api/v1/agenda/versions/", () => {
+      const version = {
+        id: 31,
+        week_start: "2026-08-03",
+        version: 1,
+        snapshot_sha256: "a".repeat(64),
+        pdf_sha256: "b".repeat(64),
+        pdf_size: 2048,
+        generated_by: {
+          id: 2,
+          name: "Secrétariat DG",
+          position: "Secrétariat",
+        },
+        generated_at: "2026-08-07T09:00:00Z",
+        pdf_url: "/api/v1/agenda/versions/31/pdf/",
+      };
+      versions = [version];
+      return HttpResponse.json(version, { status: 201 });
+    }),
+    http.get("/api/v1/agenda/versions/", () => HttpResponse.json({ versions })),
+  );
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <AgendaPage />
+    </MemoryRouter>,
+  );
+
+  await screen.findByRole("heading", { name: "Agenda hebdomadaire" });
+  expect(screen.getByLabelText("Semaine")).toHaveValue("03/08/2026");
+  expect(
+    screen.getByRole("heading", {
+      name: "Semaine du 03/08/2026 au 09/08/2026",
+    }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /Générer le PDF/ }));
+
+  expect(
+    await screen.findByText(
+      "La nouvelle version PDF est archivée et prête à imprimer.",
+    ),
+  ).toBeInTheDocument();
+  expect(draftRevision).toBe(0);
+  expect(
+    await screen.findByText("Semaine du 03/08/2026 — version 1"),
+  ).toBeInTheDocument();
+});
+
 test("permet aux RH d’ajouter un congé à la semaine", async () => {
   let items: object[] = [];
+  let submitted: Record<string, unknown> | null = null;
   const employee = { id: 9, name: "Mariam Koné", position: "Chercheuse" };
   server.use(
     http.get("/api/v1/availability/", () =>
@@ -88,6 +159,7 @@ test("permet aux RH d’ajouter un congé à la semaine", async () => {
     ),
     http.post("/api/v1/availability/", async ({ request }) => {
       const body = (await request.json()) as Record<string, unknown>;
+      submitted = body;
       items = [
         {
           id: 21,
@@ -112,6 +184,16 @@ test("permet aux RH d’ajouter un congé à la semaine", async () => {
   );
 
   await screen.findByRole("heading", { name: "Absences et missions" });
+  expect(screen.getByLabelText("Semaine")).toHaveValue("03/08/2026");
+  expect(screen.getByLabelText("Début")).toHaveValue("03/08/2026");
+  expect(screen.getByLabelText("Fin")).toHaveValue("03/08/2026");
   await user.click(screen.getByRole("button", { name: "Ajouter" }));
   expect(await screen.findByText("Mariam Koné — Congé")).toBeInTheDocument();
+  expect(screen.getByText("Du 03/08/2026 au 03/08/2026")).toBeInTheDocument();
+  expect(submitted).toEqual(
+    expect.objectContaining({
+      start_date: "2026-08-03",
+      end_date: "2026-08-03",
+    }),
+  );
 });

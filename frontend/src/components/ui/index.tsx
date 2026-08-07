@@ -2,6 +2,8 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Link, type LinkProps } from "../../lib/router";
 import styles from "./ui.module.css";
 
+export { FrenchDateInput } from "./FrenchDateInput";
+
 type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 
 export function Button({

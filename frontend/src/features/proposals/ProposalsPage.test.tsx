@@ -31,11 +31,14 @@ test("filtre les propositions par statut, période chevauchante et collaborateur
 
   await user.click(screen.getByRole("button", { name: /réinitialiser/i }));
   fireEvent.change(screen.getByLabelText("Période à partir du"), {
-    target: { value: "2026-07-20" },
+    target: { value: "20/07/2026" },
   });
   fireEvent.change(screen.getByLabelText("Période jusqu'au"), {
-    target: { value: "2026-07-23" },
+    target: { value: "23/07/2026" },
   });
+  expect(screen.getByLabelText("Période à partir du")).toHaveValue(
+    "20/07/2026",
+  );
   await user.selectOptions(screen.getByLabelText("Collaborateur"), "48");
   await user.click(screen.getByRole("button", { name: /appliquer/i }));
   expect(

@@ -8,6 +8,7 @@ import {
   ButtonLink,
   Card,
   ErrorState,
+  FrenchDateInput,
   Skeleton,
 } from "../../components/ui";
 
@@ -204,27 +205,25 @@ function ProposalForm({
           </div>
           <div className="form-field">
             <label htmlFor="start">Date de début</label>
-            <input
+            <FrenchDateInput
               id="start"
-              type="date"
               required
               value={schedule.start_date}
-              onChange={(event) =>
-                setSchedule({ ...schedule, start_date: event.target.value })
+              onValueChange={(startDate) =>
+                setSchedule({ ...schedule, start_date: startDate })
               }
             />
           </div>
           <div className="form-field">
             <label htmlFor="due">Fin prévue</label>
-            <input
+            <FrenchDateInput
               id="due"
-              type="date"
               required
               value={schedule.due_date}
               onFocus={() => setSource("due")}
-              onChange={(event) => {
+              onValueChange={(dueDate) => {
                 setSource("due");
-                setSchedule({ ...schedule, due_date: event.target.value });
+                setSchedule({ ...schedule, due_date: dueDate });
               }}
             />
           </div>

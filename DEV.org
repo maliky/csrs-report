@@ -2,6 +2,15 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-07 ven.> Format francais uniforme des dates React
+** Diagnostic confirme
+
+Les vues Django et les textes React utilisaient deja =dd/mm/yyyy=, mais douze champs React =type="date"= deleguaient encore leur affichage a la langue du navigateur et pouvaient donc apparaitre en =mm/dd/yyyy=. L'agenda affichait aussi directement trois valeurs ISO =YYYY-MM-DD=. Le contrat API reste volontairement en ISO et ne constitue pas un format visible.
+
+** Correction
+
+Un composant React commun affiche et accepte exclusivement =jj/mm/aaaa=, valide la date calendaire puis transmet =YYYY-MM-DD= a l'API. Il couvre les taches, propositions, filtres, ordres de mission, semaines d'agenda et indisponibilites ; les dates textuelles restantes de l'agenda passent par le formateur francais commun.
+
 * <2026-08-06 jeu.> Réconciliation destructive des comptes pilotes
 ** Source et cible
 

@@ -11,6 +11,7 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  FrenchDateInput,
   Skeleton,
   StatusBadge,
 } from "../../components/ui";
@@ -174,24 +175,18 @@ export function ProposalsPage() {
           </div>
           <div className="form-field">
             <label htmlFor="proposal-start">Période à partir du</label>
-            <input
+            <FrenchDateInput
               id="proposal-start"
-              type="date"
               value={draft.start}
-              onChange={(event) =>
-                setDraft({ ...draft, start: event.target.value })
-              }
+              onValueChange={(start) => setDraft({ ...draft, start })}
             />
           </div>
           <div className="form-field">
             <label htmlFor="proposal-end">Période jusqu'au</label>
-            <input
+            <FrenchDateInput
               id="proposal-end"
-              type="date"
               value={draft.end}
-              onChange={(event) =>
-                setDraft({ ...draft, end: event.target.value })
-              }
+              onValueChange={(end) => setDraft({ ...draft, end })}
             />
           </div>
           <div className={styles.filterActions}>

@@ -5,6 +5,7 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  FrenchDateInput,
   Skeleton,
 } from "../../components/ui";
 import { apiFetch, ApiError } from "../../lib/api/client";
@@ -13,6 +14,7 @@ import type {
   StaffAvailability,
 } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
+import { formatDate } from "../../lib/format";
 import styles from "./agenda.module.css";
 
 function currentWeek(): string {
@@ -109,11 +111,7 @@ export function AvailabilityPage() {
         </div>
         <label className={styles.weekPicker}>
           Semaine
-          <input
-            type="date"
-            value={week}
-            onChange={(event) => setWeek(event.target.value)}
-          />
+          <FrenchDateInput required value={week} onValueChange={setWeek} />
         </label>
       </header>
       {error && (
@@ -158,20 +156,18 @@ export function AvailabilityPage() {
           </div>
           <div className="form-field">
             <label htmlFor="start-date">Début</label>
-            <input
+            <FrenchDateInput
               id="start-date"
               name="start_date"
-              type="date"
               required
               defaultValue={editing?.start_date ?? week}
             />
           </div>
           <div className="form-field">
             <label htmlFor="end-date">Fin</label>
-            <input
+            <FrenchDateInput
               id="end-date"
               name="end_date"
-              type="date"
               required
               defaultValue={editing?.end_date ?? week}
             />
@@ -227,7 +223,8 @@ export function AvailabilityPage() {
                     {item.employee.name} — {item.kind_label}
                   </strong>
                   <small>
-                    Du {item.start_date} au {item.end_date}
+                    Du {formatDate(item.start_date)} au{" "}
+                    {formatDate(item.end_date)}
                     {item.note ? ` — ${item.note}` : ""}
                   </small>
                 </div>

@@ -12,6 +12,7 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  FrenchDateInput,
   Skeleton,
 } from "../../components/ui";
 import { apiFetch, ApiError } from "../../lib/api/client";
@@ -23,6 +24,7 @@ import type {
   VisitorVisit,
 } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
+import { formatDate, formatDateTime } from "../../lib/format";
 import styles from "./agenda.module.css";
 
 function isoWeekStart(value = new Date()): string {
@@ -33,13 +35,6 @@ function isoWeekStart(value = new Date()): string {
     value.getDate() - day,
   );
   return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
-}
-
-function formatMoment(value: string): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 export function AgendaPage() {
@@ -140,11 +135,11 @@ function SecretaryAgenda() {
         </div>
         <label className={styles.weekPicker}>
           Semaine
-          <input
-            type="date"
+          <FrenchDateInput
+            required
             value={week}
-            onChange={(event) =>
-              setWeek(isoWeekStart(new Date(`${event.target.value}T12:00:00`)))
+            onValueChange={(isoDate) =>
+              setWeek(isoWeekStart(new Date(`${isoDate}T12:00:00`)))
             }
           />
         </label>
@@ -198,7 +193,8 @@ function SecretaryAgenda() {
           <div>
             <p className="eyebrow">Aperçu des données</p>
             <h2 id="preview-title">
-              Semaine du {snapshot.week_start} au {snapshot.week_end}
+              Semaine du {formatDate(snapshot.week_start)} au{" "}
+              {formatDate(snapshot.week_end)}
             </h2>
           </div>
         </div>
@@ -355,7 +351,7 @@ function VisitorPanel({
                 {visit.party_size > 1 ? "s" : ""}
                 <small>
                   {visit.visitor_names.join(", ") ||
-                    formatMoment(visit.arrived_at)}
+                    formatDateTime(visit.arrived_at)}
                 </small>
               </span>
               <Button variant="secondary" onClick={() => void depart(visit)}>
@@ -396,11 +392,12 @@ function VersionList({ versions }: { versions: AgendaVersions["versions"] }) {
             <Card className={styles.version} key={version.id}>
               <div>
                 <strong>
-                  Semaine du {version.week_start} — version {version.version}
+                  Semaine du {formatDate(version.week_start)} — version{" "}
+                  {version.version}
                 </strong>
                 <small>
                   Générée par {version.generated_by.name} le{" "}
-                  {formatMoment(version.generated_at)}
+                  {formatDateTime(version.generated_at)}
                 </small>
               </div>
               <a
