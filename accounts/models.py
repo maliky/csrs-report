@@ -7,6 +7,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
+from simple_history.models import HistoricalRecords
 
 
 class UserManager(BaseUserManager["User"]):
@@ -61,6 +62,10 @@ class User(AbstractUser):
         "telephone verifie le", null=True, blank=True
     )
     is_it_admin = models.BooleanField("administrateur IT", default=False)
+    history = HistoricalRecords(
+        excluded_fields=("password", "last_login"),
+        m2m_fields=("groups", "user_permissions"),
+    )
 
     USERNAME_FIELD = "email"  # type: ignore[misc]
     REQUIRED_FIELDS: list[str] = []  # type: ignore[misc]

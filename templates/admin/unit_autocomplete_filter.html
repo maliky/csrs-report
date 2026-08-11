@@ -1,0 +1,14 @@
+{% load i18n %}
+<div class="admin-unit-filter">
+  <h3>{% blocktranslate with filter_title=title %}Par {{ filter_title }}{% endblocktranslate %}</h3>
+  <form method="get">
+    {% for key, value in spec.preserved_parameters %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <label class="visually-hidden" for="unit-filter-{{ spec.parameter_name }}">{{ title }}</label>
+    <input id="unit-filter-{{ spec.parameter_name }}" type="search" name="{{ spec.parameter_name }}" value="{{ spec.value|default_if_none:'' }}" list="unit-filter-options-{{ spec.parameter_name }}" placeholder="Code ou unité" autocomplete="off">
+    <datalist id="unit-filter-options-{{ spec.parameter_name }}">
+      {% for unit in spec.unit_options %}<option value="{{ unit.code }}">{{ unit }}</option>{% endfor %}
+    </datalist>
+    <button type="submit">Filtrer</button>
+    {% if spec.value %}<a href="?{% for key, value in spec.preserved_parameters %}{{ key|urlencode }}={{ value|urlencode }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}">Effacer</a>{% endif %}
+  </form>
+</div>

@@ -8,9 +8,10 @@ from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from enum import StrEnum
+from hashlib import sha256
 from math import ceil
 from statistics import mean, median
-from typing import Iterable, Iterator, TypeAlias, cast
+from typing import Any, Iterable, Iterator, TypeAlias, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -34,6 +35,8 @@ from work.models import (
     Holiday,
     InstitutionalAction,
     OrganizationMembership,
+    OrganizationUnit,
+    OrganizationUnitLink,
     ProgressEntry,
     ProposalStatus,
     ReportingLine,
@@ -791,8 +794,13 @@ def assignable_employee_ids(manager: User, on_day: date | None = None) -> frozen
 
 
 @transaction.atomic
-def set_primary_membership(
-    *, user: User, unit_id: int, start_date: date
+def set_primary_membership(  # noqa: C901
+    *,
+    user: User,
+    unit_id: int,
+    start_date: date,
+    actor: User | None = None,
+    reason: str = "Modification de l'appartenance principale",
 ) -> OrganizationMembership:
     """Ensure one open primary service membership without erasing old records."""
     current = list(
@@ -810,11 +818,55 @@ def set_primary_membership(
             same.job_title = user.position
             update_fields.append("job_title")
         if update_fields:
+            attribute_history(same, actor, reason)
             same.save(update_fields=update_fields)
         return same
+    target_secondary = (
+        OrganizationMembership.objects.select_for_update()
+        .filter(
+            user=user,
+            unit_id=unit_id,
+            is_primary=False,
+            end_date__isnull=True,
+        )
+        .order_by("-start_date", "-pk")
+        .first()
+    )
+    if len(current) == 1 and current[0].start_date == start_date:
+        membership = current[0]
+        if target_secondary is not None:
+            target_secondary.end_date = start_date
+            attribute_history(target_secondary, actor, reason)
+            target_secondary.save(update_fields=["end_date"])
+        membership.unit_id = unit_id
+        membership.job_title = user.position
+        attribute_history(membership, actor, reason)
+        membership.save(update_fields=["unit", "job_title"])
+        return membership
+    previous_day = start_date - timedelta(days=1)
     for membership in current:
-        membership.is_primary = False
-        membership.save(update_fields=["is_primary"])
+        if membership.start_date >= start_date:
+            raise ValidationError(
+                "La date d'effet doit suivre le rattachement principal courant."
+            )
+        membership.end_date = previous_day
+        attribute_history(membership, actor, reason)
+        membership.save(update_fields=["end_date"])
+    if target_secondary is not None and target_secondary.start_date == start_date:
+        target_secondary.is_primary = True
+        if not target_secondary.job_title and user.position:
+            target_secondary.job_title = user.position
+        attribute_history(target_secondary, actor, reason)
+        target_secondary.save(update_fields=["is_primary", "job_title"])
+        return target_secondary
+    if target_secondary is not None:
+        if target_secondary.start_date > start_date:
+            raise ValidationError(
+                "La date d'effet precede une appartenance existante a cette unite."
+            )
+        target_secondary.end_date = previous_day
+        attribute_history(target_secondary, actor, reason)
+        target_secondary.save(update_fields=["end_date"])
     membership = OrganizationMembership(
         user=user,
         unit_id=unit_id,
@@ -822,35 +874,85 @@ def set_primary_membership(
         start_date=start_date,
         is_primary=True,
     )
+    attribute_history(membership, actor, reason)
     membership.save()
     return membership
 
 
 @transaction.atomic
 def set_primary_supervisor(
-    *, employee: User, supervisor: User, unit_id: int, start_date: date
+    *,
+    employee: User,
+    supervisor: User,
+    unit_id: int,
+    start_date: date,
+    actor: User | None = None,
+    reason: str = "Modification du responsable principal",
+    require_supervisor_membership: bool = False,
 ) -> ReportingLine:
     """Set one primary line and transfer active assignment responsibility."""
     if employee == supervisor:
         raise ValidationError("Une personne ne peut pas etre son propre responsable.")
-    set_primary_membership(user=employee, unit_id=unit_id, start_date=start_date)
+    set_primary_membership(
+        user=employee,
+        unit_id=unit_id,
+        start_date=start_date,
+        actor=actor,
+        reason=reason,
+    )
+    validate_supervisor_unit(
+        supervisor=supervisor,
+        employee_unit_id=unit_id,
+        on_day=start_date,
+        require_membership=require_supervisor_membership,
+    )
     old_lines = list(
         ReportingLine.objects.select_for_update().filter(
             employee=employee, is_primary=True, end_date__isnull=True
         )
     )
-    if any(line.supervisor_id == supervisor.pk for line in old_lines):
-        return next(line for line in old_lines if line.supervisor_id == supervisor.pk)
+    same = next(
+        (
+            line
+            for line in old_lines
+            if line.supervisor_id == supervisor.pk and line.unit_id == unit_id
+        ),
+        None,
+    )
+    if same is not None:
+        return same
     old_managers = {line.supervisor_id for line in old_lines}
+    if len(old_lines) == 1 and old_lines[0].start_date == start_date:
+        line = old_lines[0]
+        line.supervisor = supervisor
+        line.unit_id = unit_id
+        attribute_history(line, actor, reason)
+        line.full_clean()
+        line.save(update_fields=["supervisor", "unit"])
+        _transfer_active_assignments(employee, supervisor, old_managers)
+        return line
+    previous_day = start_date - timedelta(days=1)
     for line in old_lines:
-        line.is_primary = False
-        line.save(update_fields=["is_primary"])
+        if line.start_date >= start_date:
+            raise ValidationError(
+                "La date d'effet doit suivre le rattachement hierarchique courant."
+            )
+        line.end_date = previous_day
+        attribute_history(line, actor, reason)
+        line.save(update_fields=["end_date"])
     existing_line = ReportingLine.objects.filter(
         employee=employee, supervisor=supervisor, end_date__isnull=True
     ).first()
     if existing_line:
         existing_line.is_primary = True
         existing_line.unit_id = unit_id
+        if existing_line.start_date < start_date:
+            existing_line.end_date = previous_day
+            attribute_history(existing_line, actor, reason)
+            existing_line.save(update_fields=["end_date"])
+            existing_line = None
+    if existing_line:
+        attribute_history(existing_line, actor, reason)
         existing_line.full_clean()
         existing_line.save(update_fields=["is_primary", "unit"])
         line = existing_line
@@ -862,10 +964,34 @@ def set_primary_supervisor(
             start_date=start_date,
             is_primary=True,
         )
+        attribute_history(line, actor, reason)
         line.full_clean()
         line.save()
+    _transfer_active_assignments(employee, supervisor, old_managers)
+    return line
+
+
+def attribute_history(
+    instance: object, actor: User | None, reason: str | None = None
+) -> None:
+    """Attach simple-history metadata to one pending model save."""
+    history_instance = cast(Any, instance)
+    if actor is not None:
+        history_instance._history_user = actor
+    if reason:
+        history_instance._change_reason = reason[:100]
+
+
+def _transfer_active_assignments(
+    employee: User, supervisor: User, old_manager_ids: set[int]
+) -> None:
+    """Transfer current task authority after a primary-manager change."""
+    if not old_manager_ids or old_manager_ids == {supervisor.pk}:
+        return
     assignments = TaskAssignment.objects.select_for_update().filter(
-        employee=employee, manager_id__in=old_managers, status__in=ACTIVE_STATES
+        employee=employee,
+        manager_id__in=old_manager_ids,
+        status__in=ACTIVE_STATES,
     )
     for assignment in assignments:
         task = assignment.task
@@ -875,12 +1001,255 @@ def set_primary_supervisor(
             task.created_by = supervisor
             task.save()
             assignment.task = task
-        elif task.created_by_id in old_managers:
+        elif task.created_by_id in old_manager_ids:
             task.created_by = supervisor
             task.save(update_fields=["created_by"])
         assignment.manager = supervisor
         assignment.save(update_fields=["manager", "task"])
-    return line
+
+
+def validate_supervisor_unit(
+    *,
+    supervisor: User,
+    employee_unit_id: int,
+    on_day: date,
+    require_membership: bool,
+) -> None:
+    """Require the supervisor's unit to contain the employee unit in its tree."""
+    supervisor_membership = primary_membership(supervisor, on_day)
+    if supervisor_membership is None:
+        if require_membership:
+            raise ValidationError(
+                {"supervisor": "Le responsable doit avoir une unite principale."}
+            )
+        return
+    queue: deque[int] = deque([supervisor_membership.unit_id])
+    visited: set[int] = set()
+    while queue:
+        unit_id = queue.popleft()
+        if unit_id == employee_unit_id:
+            return
+        if unit_id in visited:
+            continue
+        visited.add(unit_id)
+        queue.extend(
+            OrganizationUnitLink.objects.filter(
+                supervisor_service_id=unit_id
+            ).values_list("collaborator_service_id", flat=True)
+        )
+    raise ValidationError(
+        {
+            "supervisor": (
+                "L'unite du responsable doit etre la meme que celle du "
+                "collaborateur ou se trouver au-dessus dans l'organigramme."
+            )
+        }
+    )
+
+
+def organization_state_token(user: User) -> str:
+    """Return a stable token for optimistic organization edits in the admin."""
+    memberships = OrganizationMembership.objects.filter(
+        user=user, end_date__isnull=True
+    ).order_by("pk")
+    lines = ReportingLine.objects.filter(employee=user, end_date__isnull=True).order_by(
+        "pk"
+    )
+    payload = [
+        *(
+            f"m:{row.pk}:{row.unit_id}:{int(row.is_primary)}:{row.start_date}"
+            for row in memberships
+        ),
+        *(
+            f"r:{row.pk}:{row.supervisor_id}:{row.unit_id}:{int(row.is_primary)}:{row.start_date}"
+            for row in lines
+        ),
+    ]
+    return sha256("|".join(payload).encode()).hexdigest()
+
+
+@transaction.atomic
+def update_user_organization(  # noqa: C901
+    *,
+    actor: User,
+    user: User,
+    unit_ids: set[int],
+    primary_unit_id: int | None,
+    supervisor_id: int | None,
+    effective_date: date,
+    expected_token: str | None,
+) -> None:
+    """Apply the current organization fields exposed by the user admin."""
+    if not actor.is_active or not (actor.is_it_admin or actor.is_superuser):
+        raise PermissionDenied("Seul un administrateur IT peut modifier l'organigramme.")
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    list(
+        OrganizationMembership.objects.select_for_update().filter(
+            user=locked_user, end_date__isnull=True
+        )
+    )
+    list(
+        ReportingLine.objects.select_for_update().filter(
+            employee=locked_user, end_date__isnull=True
+        )
+    )
+    if (
+        expected_token is not None
+        and organization_state_token(locked_user) != expected_token
+    ):
+        raise ValidationError(
+            "L'organisation de cet utilisateur a change depuis l'ouverture du formulaire. Rechargez la page."
+        )
+    if primary_unit_id is None and unit_ids:
+        raise ValidationError(
+            {"primary_unit": "Choisissez l'unite principale parmi les unites actuelles."}
+        )
+    if primary_unit_id is not None and primary_unit_id not in unit_ids:
+        raise ValidationError(
+            {"primary_unit": "L'unite principale doit faire partie des unites actuelles."}
+        )
+    active_ids = set(
+        OrganizationUnit.objects.filter(pk__in=unit_ids, active=True).values_list(
+            "pk", flat=True
+        )
+    )
+    if active_ids != unit_ids:
+        raise ValidationError("Seules les unites actives peuvent etre selectionnees.")
+    reason = "Mise a jour de l'organisation depuis la fiche utilisateur"
+    if primary_unit_id is not None:
+        set_primary_membership(
+            user=locked_user,
+            unit_id=primary_unit_id,
+            start_date=effective_date,
+            actor=actor,
+            reason=reason,
+        )
+    open_memberships = list(
+        OrganizationMembership.objects.select_for_update().filter(
+            user=locked_user, end_date__isnull=True
+        )
+    )
+    current_ids = {item.unit_id for item in open_memberships}
+    for unit_id in sorted(unit_ids - current_ids):
+        membership = OrganizationMembership(
+            user=locked_user,
+            unit_id=unit_id,
+            job_title=locked_user.position,
+            start_date=effective_date,
+            is_primary=False,
+        )
+        attribute_history(membership, actor, reason)
+        membership.save()
+    for membership in open_memberships:
+        if membership.unit_id in unit_ids or membership.is_primary:
+            continue
+        membership.end_date = max(
+            membership.start_date, effective_date - timedelta(days=1)
+        )
+        attribute_history(membership, actor, reason)
+        membership.save(update_fields=["end_date"])
+    current_line = (
+        ReportingLine.objects.select_for_update()
+        .filter(employee=locked_user, is_primary=True, end_date__isnull=True)
+        .first()
+    )
+    if supervisor_id is None:
+        if current_line is not None:
+            current_line.end_date = max(
+                current_line.start_date, effective_date - timedelta(days=1)
+            )
+            attribute_history(current_line, actor, reason)
+            current_line.save(update_fields=["end_date"])
+        return
+    if primary_unit_id is None:
+        raise ValidationError({"supervisor": "Choisissez d'abord une unite principale."})
+    supervisor = User.objects.get(pk=supervisor_id, is_active=True)
+    set_primary_supervisor(
+        employee=locked_user,
+        supervisor=supervisor,
+        unit_id=primary_unit_id,
+        start_date=effective_date,
+        actor=actor,
+        reason=reason,
+        require_supervisor_membership=True,
+    )
+
+
+def unit_hierarchy_state_token(unit: OrganizationUnit) -> str:
+    """Return a stable token for optimistic unit-tree edits."""
+    links = OrganizationUnitLink.objects.filter(
+        Q(supervisor_service=unit) | Q(collaborator_service=unit)
+    ).order_by("pk")
+    payload = "|".join(
+        f"{link.pk}:{link.supervisor_service_id}:{link.collaborator_service_id}"
+        for link in links
+    )
+    return sha256(payload.encode()).hexdigest()
+
+
+@transaction.atomic
+def update_unit_hierarchy(
+    *,
+    actor: User,
+    unit: OrganizationUnit,
+    parent_id: int | None,
+    child_ids: set[int],
+    expected_token: str | None,
+) -> None:
+    """Replace one unit's parent and direct children without silent overwrites."""
+    if not actor.is_active or not (actor.is_it_admin or actor.is_superuser):
+        raise PermissionDenied("Seul un administrateur IT peut modifier l'organigramme.")
+    locked_unit = OrganizationUnit.objects.select_for_update().get(pk=unit.pk)
+    list(OrganizationUnitLink.objects.select_for_update().all())
+    if (
+        expected_token is not None
+        and unit_hierarchy_state_token(locked_unit) != expected_token
+    ):
+        raise ValidationError(
+            "La hierarchie de cette unite a change depuis l'ouverture du formulaire. Rechargez la page."
+        )
+    if locked_unit.pk in child_ids or parent_id == locked_unit.pk:
+        raise ValidationError("Une unite ne peut pas etre rattachee a elle-meme.")
+    selected_ids = set(child_ids)
+    if parent_id is not None:
+        selected_ids.add(parent_id)
+    active_ids = set(
+        OrganizationUnit.objects.filter(pk__in=selected_ids, active=True).values_list(
+            "pk", flat=True
+        )
+    )
+    if active_ids != selected_ids:
+        raise ValidationError("Seules les unites actives peuvent etre rattachees.")
+    reason = "Mise a jour de la hierarchie des unites depuis l'administration"
+    current_parent = OrganizationUnitLink.objects.filter(
+        collaborator_service=locked_unit
+    ).first()
+    if current_parent is not None and current_parent.supervisor_service_id != parent_id:
+        attribute_history(current_parent, actor, reason)
+        current_parent.delete()
+        current_parent = None
+    if parent_id is not None and current_parent is None:
+        parent_link = OrganizationUnitLink(
+            supervisor_service_id=parent_id,
+            collaborator_service=locked_unit,
+        )
+        attribute_history(parent_link, actor, reason)
+        parent_link.save()
+    current_children = {
+        link.collaborator_service_id: link
+        for link in OrganizationUnitLink.objects.filter(supervisor_service=locked_unit)
+    }
+    for child_id, link in current_children.items():
+        if child_id not in child_ids:
+            attribute_history(link, actor, reason)
+            link.delete()
+    for child_id in sorted(child_ids - current_children.keys()):
+        child_link = OrganizationUnitLink(
+            supervisor_service=locked_unit,
+            collaborator_service_id=child_id,
+        )
+        attribute_history(child_link, actor, reason)
+        child_link.save()
 
 
 def ensure_manage(user: User, assignment: TaskAssignment) -> None:

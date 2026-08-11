@@ -1,0 +1,3 @@
+.field-organization_units label[for="id_organization_units"]:empty {
+    display: none;
+}

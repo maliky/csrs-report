@@ -285,15 +285,15 @@ def test_daily_rows_are_real_carried_and_stop_at_completion(
 def test_daily_rows_include_non_working_calendar_days(
     assignment: TaskAssignment,
 ) -> None:
-    national_day = date(2026, 8, 7)
-    rows = daily_progress_rows(assignment, today=national_day)
+    non_working_day = assignment.start_date + timedelta(days=5)
+    rows = daily_progress_rows(assignment, today=non_working_day)
     by_day = {row.day: row for row in rows}
 
-    assert len(rows) == (national_day - assignment.start_date).days + 1
-    assert by_day[national_day].is_working_day is False
+    assert len(rows) == (non_working_day - assignment.start_date).days + 1
+    assert by_day[non_working_day].is_working_day is False
     assert (
-        by_day[national_day].elapsed_work_days
-        == by_day[national_day - timedelta(days=1)].elapsed_work_days
+        by_day[non_working_day].elapsed_work_days
+        == by_day[non_working_day - timedelta(days=1)].elapsed_work_days
     )
 
 

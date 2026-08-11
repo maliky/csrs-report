@@ -179,6 +179,8 @@ def grant_role(
         granted_by=actor,
         grant_reason=reason.strip(),
     )
+    grant._history_user = actor  # type: ignore[attr-defined]
+    grant._change_reason = "Attribution d'une delegation"  # type: ignore[attr-defined]
     grant.save()
     return grant
 
@@ -195,5 +197,7 @@ def revoke_role(*, actor: User, grant: RoleGrant, reason: str) -> RoleGrant:
     grant.revoked_at = timezone.now()
     grant.revoked_by = actor
     grant.revoke_reason = reason.strip()
+    grant._history_user = actor  # type: ignore[attr-defined]
+    grant._change_reason = "Revocation d'une delegation"  # type: ignore[attr-defined]
     grant.save(update_fields=["revoked_at", "revoked_by", "revoke_reason"])
     return grant

@@ -2,6 +2,162 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-11 mar.> Administration auditee de l'organigramme
+** Besoins confirmes
+
+- L'administrateur IT doit pouvoir rattacher une personne a ses unites et a son responsable depuis la fiche utilisateur, avec une interaction proche du selecteur de groupes Django.
+- Une unite possede au plus une unite superieure et peut regrouper plusieurs unites directement rattachees.
+- Le champ =unit= d'une ligne hierarchique principale doit etre deduit de l'appartenance principale du collaborateur plutot que saisi une seconde fois.
+- Les comptes =@demo.invalid= sont conserves pour l'instant.
+- Aucune donnee creee ou modifiee depuis le 10/08/2026 ne doit etre supprimee par le nettoyage des anciennes unites.
+
+** Decision d'architecture
+
+=User= reste la source de l'identite et des droits techniques globaux. Les champs d'organisation affiches dans sa fiche d'administration sont des champs de formulaire calcules; ils enregistrent les relations datees dans =OrganizationMembership= et =ReportingLine= sans ajouter de colonnes redondantes au compte. Les groupes Django restent reserves aux permissions techniques globales et une delegation metier datee continue d'utiliser =RoleGrant= avec une unite et une portee.
+
+Une =ReportingLine= principale photographie l'unite principale du collaborateur a sa date d'effet. Le responsable peut appartenir a cette meme unite ou a une unite situee au-dessus dans =OrganizationUnitLink=. Une ligne secondaire conserve un choix d'unite uniquement lorsque le collaborateur possede plusieurs appartenances valides et que la relation serait ambigue.
+
+Chaque unite subordonnee possede un seul parent; cette regle est imposee en base et les cycles restent refuses par le modele. Les fiches d'unite exposent simultanement une =unite superieure= et un selecteur multiple =unites directement rattachees=. Un jeton de l'etat charge bloque toute sauvegarde qui ecraserait une modification plus recente des appartenances, lignes ou liens.
+
+=django-simple-history= couvre aussi les utilisateurs, unites et liens d'unites. L'historique utilisateur exclut =password= et =last_login=, mais conserve l'identite minimale, l'activation, les droits techniques, les groupes et les permissions. La migration cree un etat initial des lignes deja presentes sans inventer d'auteur. L'historique d'un compte est conserve trois ans apres sa desactivation; aucune purge automatique n'est activee dans ce lot.
+
+L'administration Django sous =/admin/= est toujours rendue en français, y compris lorsque le navigateur ou son cookie demande l'anglais. Le =LocaleMiddleware= standard reste inchangé pour le reste de l'application; un middleware ciblé active seulement la locale française pendant le rendu des routes d'administration.
+
+** Procedure complete pour ajouter une personne a l'organigramme et a une equipe
+
+Une insertion organisationnelle utilise trois relations distinctes: =OrganizationUnitLink= place une unite sous une autre unite, =OrganizationMembership= place une personne dans une ou plusieurs unites avec une seule unite principale et =ReportingLine= place cette personne dans l'equipe de son responsable. Ajouter seulement un compte, une appartenance ou un groupe Django ne suffit donc pas pour faire apparaitre correctement la personne dans =/app/equipe=.
+
+*** Diagramme PlantUML du processus
+
+Ce diagramme est conserve comme source et n'est pas compile dans le depot.
+
+#+begin_src plantuml
+@startuml
+title Insérer un utilisateur dans l'organigramme et une équipe
+
+start
+:Se connecter comme administrateur IT;
+
+if (La structure d'accueil existe ?) then (oui)
+  :Ouvrir l'unité existante et vérifier son parent;
+else (non)
+  :Créer OrganizationUnit\n(code stable, noms, type, ordre, active);
+  if (L'unité dépend d'une structure existante ?) then (oui)
+    :Choisir l'Unité supérieure;
+  else (nouvelle racine)
+    :Laisser l'Unité supérieure vide;
+  endif
+  if (Des unités existantes doivent dépendre\nde la nouvelle unité ?) then (oui)
+    :Choisir les Unités directement rattachées;
+  endif
+  :Enregistrer et vérifier l'absence\nde second parent ou de cycle;
+endif
+
+if (Le compte utilisateur existe ?) then (oui)
+  :Rechercher puis ouvrir sa fiche User;
+else (non)
+  :Créer User sans mot de passe partagé;
+endif
+
+:Ajouter les Unités actuelles;
+:Choisir une seule Unité principale;
+
+if (L'utilisateur est une racine réelle ?) then (oui)
+  :Laisser Responsable principal vide;
+else (non)
+  :Choisir le Responsable principal\ndans la même unité ou une unité ancêtre;
+endif
+
+:Saisir la Date d'effet en jj/mm/aaaa;
+:Enregistrer la fiche utilisateur;
+
+fork
+  :Créer ou actualiser\nOrganizationMembership;
+fork again
+  :Créer ou actualiser\nReportingLine;
+fork again
+  :Clôturer les anciennes relations\nsans supprimer leur historique;
+end fork
+
+if (Une délégation métier est nécessaire ?) then (oui)
+  :Créer RoleGrant avec rôle, unité,\nportée, dates et motif;
+else (non)
+  :Ne pas utiliser un groupe Django\npour remplacer la hiérarchie;
+endif
+
+if (Le compte vient d'être créé ?) then (oui)
+  :Envoyer le lien d'activation;
+endif
+
+:Vérifier Membership et ReportingLine dans admin;
+:Vérifier la présence dans /app/equipe\ndu responsable à la date d'effet;
+stop
+@enduml
+#+end_src
+
+*** Cas A - Creer un utilisateur dans une structure existante
+
+1. Se connecter avec un compte actif portant =is_it_admin= ou =is_superuser=, ouvrir =/admin/accounts/user/add/= et verifier que l'unite d'accueil ainsi que le responsable existent deja. Aucun autre compte ne peut creer un utilisateur ou modifier son organisation cote serveur.
+2. Renseigner l'email institutionnel, l'identifiant court facultatif, le prenom, le nom, la fonction et le telephone facultatif. Ne jamais saisir de mot de passe partage: le compte est cree avec un mot de passe inutilisable jusqu'a son activation.
+3. Dans =Organisation actuelle=, utiliser le selecteur double =Unites actuelles= pour faire passer l'unite d'accueil et les eventuelles unites secondaires de la colonne disponible a la colonne choisie. Une personne peut avoir plusieurs appartenances actuelles, mais une seule doit etre choisie comme =Unite principale=.
+4. Choisir le =Responsable principal=. Son unite principale doit etre l'unite du collaborateur ou une unite placee au-dessus dans l'organigramme. Laisser ce champ vide uniquement pour une racine reelle, par exemple la fonction institutionnelle la plus haute.
+5. Verifier la =Date d'effet= au format =jj/mm/aaaa=, puis enregistrer. L'application cree l'appartenance principale et la ligne hierarchique avec leur auteur d'audit.
+6. Dans la liste des utilisateurs, selectionner ensuite le compte et lancer l'action =Envoyer un lien d'activation=. Verifier l'adresse avant l'envoi; aucun code d'activation ni mot de passe ne doit etre copie dans =DEV.org=, Git ou un journal.
+
+*** Cas B - Inserer un utilisateur deja cree dans une structure existante
+
+1. Ouvrir =/admin/accounts/user/=, rechercher la personne par son email, son identifiant ou son nom, puis ouvrir sa fiche. Ne pas creer un second compte si l'adresse ou l'identite existe deja.
+2. Dans =Organisation actuelle=, ajouter l'unite d'accueil au selecteur =Unites actuelles=, choisir cette unite comme =Unite principale= si elle devient son rattachement principal, puis choisir le =Responsable principal=.
+3. Indiquer la date reelle de prise d'effet et enregistrer. Si la personne avait deja une unite principale ou un responsable, l'application cloture les anciennes relations la veille sans les supprimer, cree les nouvelles et transfere au nouveau responsable les taches encore planifiees, en cours ou en attente de validation.
+4. Une unite secondaire peut etre conservee lorsqu'elle represente une affectation reelle; elle ne doit pas servir a contourner la hierarchie ou les delegations =RoleGrant=.
+
+*** Cas C - Creer une structure ou une nouvelle branche avant d'y placer des utilisateurs
+
+1. Ouvrir =/admin/work/organizationunit/add/=. Renseigner un =code= institutionnel stable et unique, un nom court, un nom long, le type, l'ordre d'affichage et laisser =active= coche. Un code ne doit pas etre reutilise pour une autre structure apres sa mise en service.
+2. Pour creer une unite sous une structure existante, choisir son =Unite superieure=. Pour creer une nouvelle unite de coordination au-dessus de plusieurs unites existantes, choisir ces dernieres dans =Unites directement rattachees=. Une unite subordonnee ne peut avoir qu'un seul parent et toute boucle hierarchique est refusee.
+3. Enregistrer puis rouvrir la fiche afin de verifier le parent et les enfants. Lors d'une reorganisation, reaffecter explicitement une unite existante a son nouveau parent; ne pas creer un doublon portant un autre code pour representer la meme entite.
+4. Creer ou modifier ensuite chaque utilisateur selon le cas A ou B: ajouter l'unite aux =Unites actuelles=, choisir l'unite principale, choisir le responsable et saisir la date d'effet. Creer l'unite seule ne deplace aucun utilisateur et ne cree aucune equipe automatiquement.
+5. Si le futur responsable n'est pas encore rattache, commencer par sa propre fiche et son unite principale, puis rattacher ses collaborateurs. Le responsable doit appartenir a la meme unite ou a une unite ancetre au jour d'effet.
+
+*** Verification et droits apres insertion
+
+1. Rouvrir la fiche utilisateur et controler les unites actuelles, l'unite principale, le responsable et la date d'effet. Les relations datees restent consultables sous =/admin/work/organizationmembership/= et =/admin/work/reportingline/=.
+2. Se connecter comme responsable et ouvrir =/app/equipe=. Le collaborateur doit apparaitre a partir de la date d'effet; le filtre =Tous= affiche aussi une personne sans tache, tandis que =Avec taches= peut normalement la masquer.
+3. Si la personne doit administrer tout un service sans etre le responsable principal de chaque agent, ne pas l'ajouter directement a un groupe metier. Ouvrir =/admin/access/rolegrant/add/=, choisir le role, l'unite, la portee =Ce service uniquement= ou =Ce service et ses sous-services=, les dates et un motif. Une delegation n'est jamais supprimee: elle est revoquee avec un auteur et un motif.
+4. Les groupes Django servent aux permissions techniques globales; ils ne remplacent ni une appartenance organisationnelle, ni une ligne hierarchique, ni une delegation metier datee.
+
+** Corriger ou retirer un rattachement
+
+- Pour changer l'unite ou le responsable courant, modifier la fiche utilisateur et choisir une nouvelle date d'effet. Ne pas modifier directement une ancienne ligne historique et ne pas supprimer une appartenance: la relation precedente doit etre cloturee.
+- Pour ajouter un responsable secondaire, utiliser =/admin/work/reportingline/add/=. L'unite est deduite automatiquement lorsqu'une seule appartenance convient; elle n'est demandee que si plusieurs appartenances rendent la ligne secondaire ambigue.
+- Pour retirer temporairement l'acces d'une personne sans perdre l'audit, decocher =is_active=. La suppression d'un compte depuis l'administration est interdite.
+- Pour retirer une unite du referentiel courant, la marquer inactive. Elle disparait des nouveaux selecteurs mais reste consultable avec le filtre =Archivees= et reste disponible dans les photographies historiques.
+
+** Unites inactives et nettoyage controle
+
+L'inventaire du 11/08/2026 trouvait sept unites inactives. =FIN=, =TSI= et =VAL= restent necessaires aux propositions et delegations historiques; elles sont conservees comme archives apres cloture de leurs relations courantes. =CSRS-DEMO=, =IT-DEMO=, =DRV= et =FOR= ne portent aucune donnee metier et peuvent etre retirees avec la commande protegee. L'unite active non canonique de code =24= et son appartenance du 11/08/2026 restent intactes et sont signalees comme hors referentiel a confirmer.
+
+La reconciliation se fait avec =python manage.py reconcile_organization --actor ALIAS_IT --effective-date AAAA-MM-JJ= et les options repetables =--primary-membership UTILISATEUR:UNITE=, =--close-membership UTILISATEUR:UNITE=, =--line COLLABORATEUR:RESPONSABLE=, =--replace-grant UTILISATEUR:ANCIENNE:NOUVELLE=, =--revoke-grant UTILISATEUR:UNITE=, =--remove-unit-link PARENT:ENFANT= et ~--position UTILISATEUR=FONCTION~. Executer d'abord avec =--dry-run=, verifier la sortie et la sauvegarde PostgreSQL, puis repeter exactement avec =--confirm=.
+
+Le retrait utilise =python manage.py retire_inactive_units --actor ALIAS_IT --protect-since 2026-08-10 --unit CODE=. La commande exige =--dry-run= avant =--confirm=, refuse une unite active, refuse toute reference metier et refuse toute modification protegee depuis la date indiquee. Les comptes de demonstration ne sont ni cibles ni supprimes par cette commande.
+
+** Verification
+
+- [X] Parent unique, absence de cycle, deduction de l'unite et cloture datee imposees dans les services et le modele.
+- [X] Fiche utilisateur avec selecteur double, unite principale, responsable, date d'effet et protection contre les ecritures concurrentes.
+- [X] Fiche d'unite avec parent, enfants multiples, affichage actif par defaut et archives consultables.
+- [X] Filtre d'unite de l'administration des appartenances et lignes remplace par une saisie avec autocomplete.
+- [X] Audit des utilisateurs, groupes, permissions, unites et liens avec etat initial reproductible.
+- [X] Commandes de reconciliation et de retrait transactionnelles, simulables et attribuees a un acteur IT.
+
+** Mise en service du 11/08/2026
+
+La sauvegarde verifiee =backups/csrs_20260811T142256Z.dump= et son archive de documents ont ete creees avant les migrations. Les quatre migrations d'audit ont ete appliquees sur PostgreSQL, puis les services =web= et =notifier= ont ete reconstruits et controles sains. La validation locale couvre =141 passed, 2 skipped=, Ruff, Mypy, l'absence de migration manquante, une migration sur base vide et une migration sur base peuplee.
+
+La reconciliation a ete simulee puis appliquee avec la date d'effet du 11/08/2026. Florent =fbe= possede six collaborateurs directs: =idoukoure= et =kbole= dans =CFIN=, puis =ikoanda=, =adeada=, =rakre= et =hkabore= dans =CCOMPTA=. Les taches actives 34 et 125 ont ete transferees a Florent. Les anciennes appartenances =FIN=, =TSI= et =VAL= ont ete cloturees, les delegations ont ete remplacees ou revoquees sans suppression et les 9, 6 et 1 propositions historiques de ces unites restent presentes.
+
+Les unites inactives sans reference metier =CSRS-DEMO=, =IT-DEMO=, =DRV= et =FOR= ont ete retirees apres simulation avec une protection au 10/08/2026. =FIN=, =TSI= et =VAL= restent archivees; les 29 comptes =@demo.invalid= et l'unite active =24= avec son appartenance recente restent inchanges. Les quatre ecrans d'administration modifies repondent avec succes pour =dev= et l'adresse publique redirige HTTP vers HTTPS.
+
 * <2026-08-07 ven.> Format francais uniforme des dates React
 ** Diagnostic confirme
 

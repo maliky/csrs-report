@@ -24,12 +24,14 @@ class OrganizationUnit(models.Model):
     kind = models.CharField("type d'unite", max_length=32, default="unit")
     display_order = models.PositiveIntegerField("ordre d'affichage", default=0)
     active = models.BooleanField("active", default=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["display_order", "long_name"]
 
     def __str__(self) -> str:
-        return self.long_name
+        suffix = " [archivee]" if not self.active else ""
+        return f"{self.code} — {self.long_name}{suffix}"
 
 
 class OrganizationUnitLink(models.Model):
@@ -45,6 +47,7 @@ class OrganizationUnitLink(models.Model):
         on_delete=models.PROTECT,
         related_name="supervisor_links",
     )
+    history = HistoricalRecords()
 
     class Meta:
         ordering = [
@@ -59,6 +62,10 @@ class OrganizationUnitLink(models.Model):
             models.UniqueConstraint(
                 fields=["supervisor_service", "collaborator_service"],
                 name="unique_organization_unit_link",
+            ),
+            models.UniqueConstraint(
+                fields=["collaborator_service"],
+                name="one_parent_per_organization_unit",
             ),
         ]
 
@@ -75,6 +82,15 @@ class OrganizationUnitLink(models.Model):
         links = OrganizationUnitLink.objects.all()
         if self.pk:
             links = links.exclude(pk=self.pk)
+        if links.filter(collaborator_service_id=self.collaborator_service_id).exists():
+            raise ValidationError(
+                {
+                    "collaborator_service": (
+                        "Cette unite possede deja une unite superieure. "
+                        "Modifiez son rattachement existant."
+                    )
+                }
+            )
         edges: dict[int, set[int]] = {}
         for supervisor_id, collaborator_id in links.values_list(
             "supervisor_service_id", "collaborator_service_id"
