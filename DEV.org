@@ -2,6 +2,30 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-12 mer.> Manuel utilisateur illustre et deploiement public verifie
+** Etat public confirme
+
+L'audit du 12/08/2026 a montre que le conteneur public =csrs_web_1= executait encore l'image construite le 06/08/2026 et ne contenait ni les migrations =accounts.0003/0004= et =work.0018/0019=, ni la nouvelle administration de l'organigramme. La branche locale =dev= et =origin/dev= pointaient pourtant toutes les deux sur le commit =4533ccf7adf05386012419bca9417825436b41c8=. La mention de mise en service du 11/08/2026 ci-dessous est donc requalifiee en validation preparatoire; elle ne constituait pas une preuve de l'image servie publiquement.
+
+Une sauvegarde PostgreSQL et une archive des documents ont ete creees et controlees avant intervention: =backups/csrs_20260812T065957Z.dump=, =backups/csrs_documents_20260812T065957Z.tar.gz= et =backups/csrs_20260812T065957Z.sha256=. L'image =sha256:c0a2cf9c25ba353274cc804afa8d0a1404016ccb764ab41001028a989290b6e3= a ensuite ete construite depuis le commit =4533ccf=. Seuls =web= et =notifier= ont ete recrees; PostgreSQL, ClamAV, leurs volumes, Nginx, le DNS et le certificat n'ont pas ete modifies.
+
+Le conteneur =csrs_web_1= est sain depuis le 12/08/2026 a 07:02 UTC et =csrs_notifier_1= utilise la meme image. Les quatre migrations attendues sont appliquees. La connexion publique repond en HTTPS, =/app/= redirige un visiteur anonyme vers la connexion et la feuille statique de l'administration de l'organigramme repond en HTTP 200. Avec le compte =dev=, les fiches d'ajout d'une personne et d'une unite ainsi que les listes des appartenances, lignes hierarchiques et delegations repondent en HTTP 200. Une generation d'agenda avec =RAS= produit un PDF valide.
+
+** Manuel et captures reproductibles
+
+=MANUAL.org= factorise les procedures communes puis les applique a trois positions hierarchiques: =atall= en feuille, =daf= au milieu et =dg= au sommet. Il couvre la connexion, la navigation responsive, la consultation et la mise a jour d'une tache, les observations, les propositions, l'affectation directe, la validation, l'equipe, l'auto-affectation du DG, les ordres de mission, les absences RH, la preparation de l'agenda par le secretariat, la generation du PDF et l'ajout d'une personne dans l'organigramme par l'administrateur IT.
+
+Les vingt captures versionnees dans =docs/manual/screenshots/= sont produites par =scripts/capture_manual.sh=. Le script refuse toute cible distante, cree une base SQLite et un stockage prive temporaires, charge les donnees d'illustration, lance Django et Vite sur =127.0.0.1=, execute Playwright avec Chromium puis supprime l'environnement temporaire. Les mots de passe sont demandes sans affichage et ne sont ni ecrits dans le depot ni passes a un site public.
+
+Les scripts =backup_db.sh=, =seed_pilot.sh= et =deploy_preprod.sh= detectent maintenant Docker Compose v2 et utilisent =docker-compose= v1 seulement comme solution de compatibilite sur un hote qui ne possede pas le greffon v2. =CSRS_SQLITE_PATH= permet d'isoler explicitement la base de la fabrique de captures sans alterer =DATABASE_URL= sur les autres environnements.
+
+** Verification
+
+- [X] Revue visuelle des parcours tache, agenda, archive PDF et insertion dans l'organigramme.
+- [X] Generation de 20 captures depuis un environnement local ephemere sans ecriture metier sur le site public.
+- [X] Suite Django complete avec Selenium, 26 tests Vitest, build TypeScript/Vite, audit npm des dependances de production, verification des scripts Bash et absence d'erreur de diff.
+- [X] Verification publique de l'image, des migrations, de la sante, des routes d'administration et d'un PDF avec =RAS=.
+
 * <2026-08-11 mar.> Administration auditee de l'organigramme
 ** Besoins confirmes
 
@@ -150,9 +174,9 @@ Le retrait utilise =python manage.py retire_inactive_units --actor ALIAS_IT --pr
 - [X] Audit des utilisateurs, groupes, permissions, unites et liens avec etat initial reproductible.
 - [X] Commandes de reconciliation et de retrait transactionnelles, simulables et attribuees a un acteur IT.
 
-** Mise en service du 11/08/2026
+** Validation preparatoire consignee le 11/08/2026
 
-La sauvegarde verifiee =backups/csrs_20260811T142256Z.dump= et son archive de documents ont ete creees avant les migrations. Les quatre migrations d'audit ont ete appliquees sur PostgreSQL, puis les services =web= et =notifier= ont ete reconstruits et controles sains. La validation locale couvre =141 passed, 2 skipped=, Ruff, Mypy, l'absence de migration manquante, une migration sur base vide et une migration sur base peuplee.
+Cette section consignait les validations et operations preparatoires du 11/08/2026, mais l'audit du conteneur public realise le 12/08/2026 a prouve que l'image servie datait encore du 06/08/2026 et que les quatre migrations d'audit n'y etaient pas appliquees. La mise en service publique effectivement verifiee est documentee dans l'entree du 12/08/2026. La validation locale du lot couvrait =141 passed, 2 skipped=, Ruff, Mypy, l'absence de migration manquante, une migration sur base vide et une migration sur base peuplee.
 
 La reconciliation a ete simulee puis appliquee avec la date d'effet du 11/08/2026. Florent =fbe= possede six collaborateurs directs: =idoukoure= et =kbole= dans =CFIN=, puis =ikoanda=, =adeada=, =rakre= et =hkabore= dans =CCOMPTA=. Les taches actives 34 et 125 ont ete transferees a Florent. Les anciennes appartenances =FIN=, =TSI= et =VAL= ont ete cloturees, les delegations ont ete remplacees ou revoquees sans suppression et les 9, 6 et 1 propositions historiques de ces unites restent presentes.
 
@@ -535,7 +559,7 @@ React ajouterait =/app/processus= avec une boite de travail, des filtres par typ
 - =bootstrap_env.ps1= genere sans Python un =.env= local, des secrets aleatoires, le port Django 8000, les origines Vite 5173 et desactive les redirections TLS locales;
 - =seed_pilot.ps1= masque les deux mots de passe, execute la simulation avant l'ecriture puis retire les variables sensibles de la session;
 - =backup_db.ps1= produit et valide le dump dans le conteneur avant de le copier sur Windows, ce qui evite la corruption binaire par une redirection PowerShell;
-- les scripts utilisent Docker Compose v2; la preproduction =psiaka= reste administree sur Linux avec les scripts Bash.
+- les scripts preferent Docker Compose v2 et utilisent =docker-compose= v1 en compatibilite lorsque le greffon v2 est absent; la preproduction =psiaka= reste administree sur Linux avec les scripts Bash.
 
 * <2026-07-22 mer.> Profils integres et filtre de l'equipe React
 ** Realisation
@@ -654,7 +678,7 @@ La sequence operationnelle est donc strictement :
 2. le checkout VPS tire ce commit avec =git pull --ff-only=;
 3. apres revue, l'administrateur lance =./scripts/deploy_preprod.sh=.
 
-Le script utilise =docker-compose up -d --build=. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=; =npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
+Le script prefere =docker compose up -d --build= lorsque Compose v2 est disponible et utilise =docker-compose= v1 en compatibilite. Le cache Docker conserve les couches inchangees. Une modification de =frontend/= relance =npm run build=; =npm ci= ne repart que si =package.json= ou =package-lock.json= a change. Le bundle est ensuite copie dans =static/react= de la nouvelle image. Le conteneur web recree sert ce bundle avec WhiteNoise; aucune copie manuelle dans un conteneur existant n'est requise. Un changement de documentation seul ne necessite pas de redeploiement.
 
 * <2026-07-22 mer.> Progression React, graphique D3 et navigation laterale
 ** Realisation

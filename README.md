@@ -4,6 +4,8 @@ Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse
 
 Le cycle métier est documenté dans [`docs/task-lifecycle.org`](docs/task-lifecycle.org) et son rendu [`docs/task-lifecycle.png`](docs/task-lifecycle.png).
 
+Le [manuel utilisateur illustré](MANUAL.org) factorise les procédures communes et décrit les parcours d'un collaborateur, d'un responsable intermédiaire, de la Direction générale, du secrétariat, des RH et de l'administrateur de l'organigramme.
+
 ## Développement local
 
 Créer d'abord un environnement Python isolé. Python 3.13 est la version de référence :
@@ -197,7 +199,7 @@ cd /srv/apps/psiaka/app
 ./scripts/deploy_preprod.sh
 ```
 
-Le script exécute `docker-compose up -d --build`. Docker réutilise ses couches en cache. Si le frontend a changé, l'étape Node relance `npm run build`; elle ne relance `npm ci` que si `package.json` ou `package-lock.json` a changé. Le bundle produit est copié dans `static/react` de la nouvelle image, puis servi par le conteneur web avec WhiteNoise. Aucune copie manuelle dans un conteneur en cours n'est nécessaire.
+Le script préfère `docker compose up -d --build` lorsque le greffon Compose v2 est disponible et utilise `docker-compose` v1 comme solution de compatibilité. Docker réutilise ses couches en cache. Si le frontend a changé, l'étape Node relance `npm run build`; elle ne relance `npm ci` que si `package.json` ou `package-lock.json` a changé. Le bundle produit est copié dans `static/react` de la nouvelle image, puis servi par le conteneur web avec WhiteNoise. Aucune copie manuelle dans un conteneur en cours n'est nécessaire.
 
 Le site est publié sur `https://psiaka.koba.sarl/`. Le code Python et les assets React sont intégrés dans l'image. Le compte `psiaka` n'est volontairement pas membre du groupe `docker` : lui-même pousse et tire les commits, puis un administrateur contrôle et exécute le déploiement.
 

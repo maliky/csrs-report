@@ -14,6 +14,7 @@ Ces directives s'appliquent a tout le depot `csrs_report` et restent volontairem
 - Commencer par les cas d'usage minimaux, les roles, les regles d'autorisation et les contraintes d'interface.
 - Ajouter ou adapter les tests avec chaque comportement fonctionnel.
 - Preferer de petits changements verificables a des refontes larges.
+- Rester sobre dans les explications et la documentation : conserver le texte existant et ne pas le remplacer par une version plus longue sans justification fonctionnelle, factuelle ou technique explicite.
 - Documenter les decisions d'architecture qui engagent durablement le projet.
 - Dans les fichiers `.org` et `.md`, ne pas envelopper manuellement le texte : conserver chaque paragraphe et chaque element de liste sur une seule ligne logique, sans modifier les blocs de code, tableaux, titres ou autres structures.
 - Conserver des migrations de base de donnees reproductibles et versionnees.
