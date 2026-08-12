@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo"
+# shellcheck source=scripts/lib/compose.sh
+source scripts/lib/compose.sh
+csrs_compose_command
+
 dry_run_only=0
 clean_accounts=0
 for argument in "$@"; do
@@ -28,7 +34,7 @@ trap 'unset CSRS_DEMO_PASSWORD CSRS_ADMIN_PASSWORD' EXIT
 
 project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -n 1)"
 project="${project:-csrs}"
-base=(docker compose -p "$project" -f compose.yml run --rm -T)
+base=("${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml run --rm -T)
 environment=(-e CSRS_DEMO_PASSWORD -e CSRS_ADMIN_PASSWORD)
 command=(web python manage.py seed_pilot_users --replace-legacy --reset-password)
 if [[ "$clean_accounts" == "1" ]]; then

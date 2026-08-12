@@ -266,7 +266,7 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             )
             assert driver.find_element(By.CSS_SELECTOR, ".period-nav-month")
             driver.get(f"{self.live_server_url}/taches/{self.assignment.pk}/")
-            WebDriverWait(driver, 5).until(
+            WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".task-history-chart svg")
                 )

@@ -76,6 +76,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 def database_config() -> dict[str, object]:
     """Build a Django database configuration from DATABASE_URL."""
+    sqlite_path = os.environ.get("CSRS_SQLITE_PATH")
+    if sqlite_path:
+        return {"ENGINE": "django.db.backends.sqlite3", "NAME": sqlite_path}
     raw_url = os.environ.get("DATABASE_URL")
     if not raw_url:
         return {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}

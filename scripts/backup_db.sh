@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo"
+# shellcheck source=scripts/lib/compose.sh
+source scripts/lib/compose.sh
+csrs_compose_command
+
 if [[ ! -f .env ]]; then
     echo ".env est requis pour identifier la base CSRS." >&2
     exit 1
@@ -21,7 +27,7 @@ timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 database_output="backups/csrs_${timestamp}.dump"
 documents_output="backups/csrs_documents_${timestamp}.tar.gz"
 manifest_output="backups/csrs_${timestamp}.sha256"
-compose=(docker compose -p "$project" -f compose.yml)
+compose=("${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml)
 
 "${compose[@]}" exec -T db \
     pg_dump --format=custom --no-owner --username "$postgres_user" "$postgres_db" > "$database_output"

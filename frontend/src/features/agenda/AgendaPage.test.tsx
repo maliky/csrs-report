@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { afterEach, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "../../lib/router";
 import { server } from "../../mocks/server";
 import { AgendaPage } from "./AgendaPage";
@@ -16,6 +17,15 @@ const emptySnapshot = {
   availability: [],
   units: [],
 };
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-08-05T12:00:00Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 test("enregistre une arrivée puis l’affiche parmi les visites en cours", async () => {
   let visits: object[] = [];
@@ -51,7 +61,7 @@ test("enregistre une arrivée puis l’affiche parmi les visites en cours", asyn
       HttpResponse.json({ versions: [] }),
     ),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   render(
     <MemoryRouter>
       <AgendaPage />
@@ -113,7 +123,7 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
     }),
     http.get("/api/v1/agenda/versions/", () => HttpResponse.json({ versions })),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   render(
     <MemoryRouter>
       <AgendaPage />
@@ -176,7 +186,7 @@ test("permet aux RH d’ajouter un congé à la semaine", async () => {
       return HttpResponse.json(items[0], { status: 201 });
     }),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   render(
     <MemoryRouter>
       <AvailabilityPage />

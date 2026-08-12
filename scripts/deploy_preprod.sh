@@ -3,6 +3,9 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo"
+# shellcheck source=scripts/lib/compose.sh
+source scripts/lib/compose.sh
+csrs_compose_command
 
 if [[ ! -f .env ]]; then
     echo ".env est requis; executer d'abord scripts/bootstrap_env.sh." >&2
@@ -19,19 +22,14 @@ if [[ "$start_notifier" != "0" && "$start_notifier" != "1" ]]; then
     exit 1
 fi
 
-if ! command -v docker-compose >/dev/null 2>&1; then
-    echo "docker-compose est requis sur l'hote de deploiement." >&2
-    exit 1
-fi
-
 services=(db clamav web)
 if [[ "$start_notifier" == "1" ]]; then
     services+=(notifier)
 fi
 
-docker-compose -p "$project" -f compose.yml up -d --build "${services[@]}"
+"${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml up -d --build "${services[@]}"
 if [[ "$start_notifier" == "0" ]]; then
-    docker-compose -p "$project" -f compose.yml stop notifier >/dev/null 2>&1 || true
+    "${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml stop notifier >/dev/null 2>&1 || true
 fi
-docker-compose -p "$project" -f compose.yml exec -T web python manage.py check --deploy
-docker-compose -p "$project" -f compose.yml ps
+"${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml exec -T web python manage.py check --deploy
+"${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml ps
