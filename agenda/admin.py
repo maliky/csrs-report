@@ -1,10 +1,10 @@
 from django.contrib import admin
 
 from agenda.models import (
+    AgendaDraft,
+    AgendaVersion,
     StaffAvailability,
     VisitorVisit,
-    WeeklyAgendaDraft,
-    WeeklyAgendaVersion,
 )
 
 
@@ -21,18 +21,34 @@ class StaffAvailabilityAdmin(admin.ModelAdmin):
     readonly_fields = ("revision", "created_at", "updated_at")
 
 
-@admin.register(WeeklyAgendaDraft)
-class WeeklyAgendaDraftAdmin(admin.ModelAdmin):
-    list_display = ("week_start", "revision", "updated_by", "updated_at")
+@admin.register(AgendaDraft)
+class AgendaDraftAdmin(admin.ModelAdmin):
+    list_display = (
+        "period_start",
+        "period_end",
+        "revision",
+        "updated_by",
+        "updated_at",
+    )
     readonly_fields = ("revision", "created_at", "updated_at")
 
 
-@admin.register(WeeklyAgendaVersion)
-class WeeklyAgendaVersionAdmin(admin.ModelAdmin):
-    list_display = ("week_start", "version", "generated_by", "generated_at")
+@admin.register(AgendaVersion)
+class AgendaVersionAdmin(admin.ModelAdmin):
+    list_display = (
+        "period_start",
+        "period_end",
+        "agenda_direction",
+        "version",
+        "generated_by",
+        "generated_at",
+    )
+    list_filter = ("agenda_direction",)
     readonly_fields = (
         "draft",
-        "week_start",
+        "period_start",
+        "period_end",
+        "agenda_direction",
         "version",
         "snapshot",
         "snapshot_sha256",

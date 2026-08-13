@@ -3,7 +3,6 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from api import views
 from agenda import api as agenda_api
-from processes import api as process_api
 
 app_name = "api"
 
@@ -50,42 +49,6 @@ urlpatterns = [
         "agenda/versions/<int:pk>/pdf/",
         agenda_api.AgendaVersionPdfView.as_view(),
         name="agenda-version-pdf",
-    ),
-    path("processes/", process_api.ProcessListView.as_view(), name="process-list"),
-    path(
-        "processes/mission-orders/",
-        process_api.MissionCreateView.as_view(),
-        name="mission-create",
-    ),
-    path(
-        "processes/mission-orders/options/",
-        process_api.MissionOptionsView.as_view(),
-        name="mission-options",
-    ),
-    path(
-        "processes/<int:pk>/",
-        process_api.ProcessDetailView.as_view(),
-        name="process-detail",
-    ),
-    path(
-        "processes/<int:pk>/actions/",
-        process_api.ProcessActionView.as_view(),
-        name="process-action",
-    ),
-    path(
-        "processes/<int:pk>/documents/",
-        process_api.ProcessDocumentUploadView.as_view(),
-        name="process-document-upload",
-    ),
-    path(
-        "processes/<int:pk>/documents/<int:document_pk>/content/",
-        process_api.ProcessDocumentContentView.as_view(),
-        name="process-document-content",
-    ),
-    path(
-        "processes/<int:pk>/export/",
-        process_api.ProcessExportView.as_view(),
-        name="process-export",
     ),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path(

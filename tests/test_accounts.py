@@ -7,7 +7,7 @@ from django.utils.crypto import get_random_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from accounts.models import User
+from accounts.models import AgendaDirection, User
 
 
 @pytest.mark.django_db
@@ -73,3 +73,17 @@ def test_login_redirects_to_the_react_interface_by_default(client) -> None:
 
     assert response.status_code == 302
     assert response.url == reverse("react-app")
+
+
+@pytest.mark.django_db
+def test_agenda_direction_is_single_choice_and_audited() -> None:
+    user = User.objects.create_user("agenda-choice@example.test")
+    assert user.agenda_direction == ""
+    user.agenda_direction = AgendaDirection.PROGRAMS
+    user.full_clean()
+    user.save()
+    assert user.history.latest().agenda_direction == AgendaDirection.PROGRAMS
+
+    user.agenda_direction = "programs,administration"
+    with pytest.raises(ValidationError):
+        user.full_clean()

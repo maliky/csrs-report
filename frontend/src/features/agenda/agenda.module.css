@@ -8,6 +8,35 @@
 .weekPicker input {
   min-height: 2.75rem;
 }
+.periodPicker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(9rem, 1fr));
+  gap: 0.65rem;
+}
+.periodPicker label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.periodPicker span {
+  grid-column: 1 / -1;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+.directionPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.warning {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-left: 0.35rem solid #a65b00;
+  background: #fff3df;
+  color: #5e3600;
+}
 .twoColumns,
 .unitGrid,
 .summaryGrid {
@@ -128,6 +157,9 @@
   }
 }
 @media (max-width: 520px) {
+  .periodPicker {
+    grid-template-columns: 1fr;
+  }
   .visitForm {
     grid-template-columns: 1fr;
   }

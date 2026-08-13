@@ -13,9 +13,10 @@ import pytest
 from accounts.models import User
 from access.models import GrantScope, RoleGrant, ScopedRole
 from agenda.models import (
+    AgendaDirection,
+    AgendaDraft,
+    AgendaVersion,
     VisitorVisit,
-    WeeklyAgendaDraft,
-    WeeklyAgendaVersion,
 )
 from processes.models import (
     ProcessCase,
@@ -132,6 +133,18 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
         ).count()
         == len(PILOT_USERS) - 1
     )
+    assert User.objects.filter(agenda_direction=AgendaDirection.PROGRAMS).count() == 22
+    assert (
+        User.objects.filter(agenda_direction=AgendaDirection.ADMINISTRATION).count() == 14
+    )
+    assert set(
+        User.objects.filter(agenda_direction="").values_list("login_alias", flat=True)
+    ) == {"dev", "dg", "secretariat_dg", "coordination", "pilotage", "expertise"}
+    assert set(
+        User.objects.filter(
+            login_alias__in=("controle", "controle_interne", "communication", "genre")
+        ).values_list("agenda_direction", flat=True)
+    ) == {AgendaDirection.ADMINISTRATION}
     assignments = TaskAssignment.objects.filter(task__code__startswith="PIL-")
     assert assignments.count() == 73
     assert not assignments.filter(organization_unit__isnull=True).exists()
@@ -370,13 +383,19 @@ def test_clean_accounts_prunes_every_noncanonical_user_and_related_data(
         recorded_by=obsolete,
         updated_by=obsolete,
     )
-    obsolete_draft = WeeklyAgendaDraft.objects.create(
-        week_start=timezone.localdate() - timedelta(days=timezone.localdate().weekday()),
+    obsolete_period_start = timezone.localdate() - timedelta(
+        days=timezone.localdate().weekday()
+    )
+    obsolete_draft = AgendaDraft.objects.create(
+        period_start=obsolete_period_start,
+        period_end=obsolete_period_start + timedelta(days=6),
         updated_by=obsolete,
     )
-    obsolete_version = WeeklyAgendaVersion.objects.create(
+    obsolete_version = AgendaVersion.objects.create(
         draft=obsolete_draft,
-        week_start=obsolete_draft.week_start,
+        period_start=obsolete_draft.period_start,
+        period_end=obsolete_draft.period_end,
+        agenda_direction=AgendaDirection.PROGRAMS,
         version=1,
         snapshot={},
         snapshot_sha256="0" * 64,
@@ -448,7 +467,7 @@ def test_clean_accounts_prunes_every_noncanonical_user_and_related_data(
     assert User.objects.filter(pk__in=(duplicate.pk, obsolete.pk)).count() == 2
     assert Task.objects.filter(pk=obsolete_task.pk).exists()
     assert VisitorVisit.objects.filter(pk=obsolete_visit.pk).exists()
-    assert WeeklyAgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
+    assert AgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
     assert ProcessCase.objects.filter(pk=obsolete_process.pk).exists()
     assert RoleGrant._base_manager.filter(pk=obsolete_grant.pk).exists()
     assert User.objects.get(pk=dg_id).email == "ancienne-dg@demo.invalid"
@@ -467,7 +486,7 @@ def test_clean_accounts_prunes_every_noncanonical_user_and_related_data(
     assert User.objects.get(login_alias="dg").pk == dg_id
     assert not Task.objects.filter(pk=obsolete_task.pk).exists()
     assert not VisitorVisit.objects.filter(pk=obsolete_visit.pk).exists()
-    assert not WeeklyAgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
+    assert not AgendaVersion._base_manager.filter(pk=obsolete_version.pk).exists()
     assert not ProcessCase.objects.filter(pk=obsolete_process.pk).exists()
     assert not RoleGrant._base_manager.filter(pk=obsolete_grant.pk).exists()
 

@@ -25,8 +25,10 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
         "last_name",
         "first_name",
         "position",
+        "agenda_direction",
         "is_active",
     )
+    list_filter = ("agenda_direction", "is_active", "is_staff")
     search_fields = ("login_alias", "email", "first_name", "last_name", "position")
     actions = ("send_activation_links",)
     fieldsets = (
@@ -40,6 +42,7 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
                     "position",
                     "phone",
                     "phone_verified_at",
+                    "agenda_direction",
                 )
             },
         ),
@@ -86,6 +89,7 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
                     "last_name",
                     "position",
                     "phone",
+                    "agenda_direction",
                     "organization_units",
                     "primary_unit",
                     "primary_supervisor",

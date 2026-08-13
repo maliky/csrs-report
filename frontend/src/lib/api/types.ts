@@ -93,8 +93,6 @@ export type Session = {
     view_team: boolean;
     self_assign: boolean;
     admin: boolean;
-    view_processes: boolean;
-    create_mission_order: boolean;
     manage_visits: boolean;
     manage_availability: boolean;
     prepare_weekly_agenda: boolean;
@@ -114,7 +112,11 @@ export type VisitorVisit = {
   cancelled_at: string | null;
 };
 
-export type VisitList = { week_start: string; visits: VisitorVisit[] };
+export type VisitList = {
+  period_start: string;
+  period_end: string;
+  visits: VisitorVisit[];
+};
 
 export type StaffAvailability = {
   id: number;
@@ -147,9 +149,12 @@ export type AgendaTask = {
 
 export type AgendaSnapshot = {
   schema_version: number;
-  week_start: string;
-  week_end: string;
+  period_start: string;
+  period_end: string;
+  agenda_direction: AgendaDirection;
+  agenda_direction_label: string;
   major_events: string;
+  unclassified_users: AgendaPerson[];
   arrivals: VisitorVisit[];
   departures: VisitorVisit[];
   availability: Array<
@@ -164,6 +169,7 @@ export type AgendaSnapshot = {
     display_order: number;
     employees: Array<{
       person: AgendaPerson;
+      unclassified: boolean;
       completion_rate: number;
       tasks: AgendaTask[];
     }>;
@@ -171,13 +177,23 @@ export type AgendaSnapshot = {
 };
 
 export type AgendaPreview = {
-  draft: { week_start: string; major_events: string; revision: number };
+  draft: {
+    period_start: string;
+    period_end: string;
+    major_events: string;
+    revision: number;
+  };
   snapshot: AgendaSnapshot;
 };
 
+export type AgendaDirection = "programs" | "administration";
+
 export type AgendaVersion = {
   id: number;
-  week_start: string;
+  period_start: string;
+  period_end: string;
+  agenda_direction: AgendaDirection | "legacy";
+  agenda_direction_label: string;
   version: number;
   snapshot_sha256: string;
   pdf_sha256: string;

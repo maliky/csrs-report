@@ -5,6 +5,7 @@ from io import BytesIO
 from zipfile import ZipFile
 
 import pytest
+from django.contrib import admin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import Client, override_settings
 from django.utils import timezone
@@ -59,6 +60,11 @@ class MemoryStorage:
 
     def delete(self, key: str) -> None:
         self.items.pop(key, None)
+
+
+def test_process_models_are_not_exposed_in_django_admin() -> None:
+    assert ProcessCase not in admin.site._registry
+    assert ProcessQueue not in admin.site._registry
 
 
 @pytest.fixture
@@ -464,7 +470,7 @@ def test_process_event_and_signature_evidence_are_immutable(
 
 
 @pytest.mark.django_db
-def test_api_rejects_a_stale_case_revision(
+def test_process_api_is_disabled_even_for_an_involved_user(
     mission_context: dict[str, object],
 ) -> None:
     users = mission_context["users"]
@@ -477,8 +483,7 @@ def test_api_rejects_a_stale_case_revision(
         data={"revision": 99, "action": "abandon"},
         content_type="application/json",
     )
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "stale_revision"
+    assert response.status_code == 404
 
 
 @pytest.mark.django_db

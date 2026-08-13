@@ -1,9 +1,6 @@
 import { BrowserRouter, Route, Routes } from "../lib/router";
 import { ErrorState } from "../components/ui";
 import { EmployeePage } from "../features/team/EmployeePage";
-import { MissionFormPage } from "../features/processes/MissionFormPage";
-import { ProcessDetailPage } from "../features/processes/ProcessDetailPage";
-import { ProcessesPage } from "../features/processes/ProcessesPage";
 import { ProposalDetailPage } from "../features/proposals/ProposalDetailPage";
 import { ProposalFormPage } from "../features/proposals/ProposalFormPage";
 import { ProposalsPage } from "../features/proposals/ProposalsPage";
@@ -45,16 +42,6 @@ export function AppRouter() {
           />
           <Route path="equipe" element={<TeamPage />} />
           <Route path="equipe/:employeeId" element={<EmployeePage />} />
-          <Route path="processus" element={<ProcessesPage />} />
-          <Route
-            path="processus/nouveau/ordre-mission"
-            element={<MissionFormPage mode="create" />}
-          />
-          <Route
-            path="processus/:processId/modifier"
-            element={<MissionFormPage mode="edit" />}
-          />
-          <Route path="processus/:processId" element={<ProcessDetailPage />} />
           <Route path="agenda" element={<AgendaPage />} />
           <Route path="absences" element={<AvailabilityPage />} />
         </Route>

@@ -8,10 +8,13 @@ import { AgendaPage } from "./AgendaPage";
 import { AvailabilityPage } from "./AvailabilityPage";
 
 const emptySnapshot = {
-  schema_version: 1,
-  week_start: "2026-08-03",
-  week_end: "2026-08-09",
+  schema_version: 2,
+  period_start: "2026-08-10",
+  period_end: "2026-08-16",
+  agenda_direction: "programs",
+  agenda_direction_label: "Direction des programmes",
   major_events: "",
+  unclassified_users: [],
   arrivals: [],
   departures: [],
   availability: [],
@@ -32,12 +35,21 @@ test("enregistre une arrivée puis l’affiche parmi les visites en cours", asyn
   server.use(
     http.get("/api/v1/agenda/preview/", () =>
       HttpResponse.json({
-        draft: { week_start: "2026-08-03", major_events: "", revision: 0 },
+        draft: {
+          period_start: "2026-08-10",
+          period_end: "2026-08-16",
+          major_events: "",
+          revision: 0,
+        },
         snapshot: emptySnapshot,
       }),
     ),
     http.get("/api/v1/visits/", () =>
-      HttpResponse.json({ week_start: "2026-08-03", visits }),
+      HttpResponse.json({
+        period_start: "2026-08-10",
+        period_end: "2026-08-16",
+        visits,
+      }),
     ),
     http.post("/api/v1/visits/", async ({ request }) => {
       const body = (await request.json()) as {
@@ -68,7 +80,7 @@ test("enregistre une arrivée puis l’affiche parmi les visites en cours", asyn
     </MemoryRouter>,
   );
 
-  await screen.findByRole("heading", { name: "Agenda hebdomadaire" });
+  await screen.findByRole("heading", { name: "Agendas de direction" });
   await user.clear(screen.getByLabelText("Nombre arrivé"));
   await user.type(screen.getByLabelText("Nombre arrivé"), "2");
   await user.type(screen.getByLabelText(/Noms/), "Awa Test");
@@ -86,18 +98,28 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
   server.use(
     http.get("/api/v1/agenda/preview/", () =>
       HttpResponse.json({
-        draft: { week_start: "2026-08-03", major_events: "", revision: 0 },
+        draft: {
+          period_start: "2026-08-10",
+          period_end: "2026-08-16",
+          major_events: "",
+          revision: 0,
+        },
         snapshot: emptySnapshot,
       }),
     ),
     http.get("/api/v1/visits/", () =>
-      HttpResponse.json({ week_start: "2026-08-03", visits: [] }),
+      HttpResponse.json({
+        period_start: "2026-08-10",
+        period_end: "2026-08-16",
+        visits: [],
+      }),
     ),
     http.put("/api/v1/agenda/draft/", async ({ request }) => {
       const body = (await request.json()) as { revision: number };
       draftRevision = body.revision;
       return HttpResponse.json({
-        week_start: "2026-08-03",
+        period_start: "2026-08-10",
+        period_end: "2026-08-16",
         major_events: "",
         revision: 1,
       });
@@ -105,7 +127,10 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
     http.post("/api/v1/agenda/versions/", () => {
       const version = {
         id: 31,
-        week_start: "2026-08-03",
+        period_start: "2026-08-10",
+        period_end: "2026-08-16",
+        agenda_direction: "programs",
+        agenda_direction_label: "Direction des programmes",
         version: 1,
         snapshot_sha256: "a".repeat(64),
         pdf_sha256: "b".repeat(64),
@@ -130,23 +155,30 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
     </MemoryRouter>,
   );
 
-  await screen.findByRole("heading", { name: "Agenda hebdomadaire" });
-  expect(screen.getByLabelText("Semaine")).toHaveValue("03/08/2026");
+  await screen.findByRole("heading", { name: "Agendas de direction" });
+  expect(screen.getByLabelText("Début")).toHaveValue("10/08/2026");
+  expect(screen.getByLabelText("Fin")).toHaveValue("16/08/2026");
   expect(
     screen.getByRole("heading", {
-      name: "Semaine du 03/08/2026 au 09/08/2026",
+      name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
     }),
   ).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: /Générer le PDF/ }));
+  await user.click(
+    screen.getByRole("button", {
+      name: /Générer — Direction des programmes/,
+    }),
+  );
 
   expect(
     await screen.findByText(
-      "La nouvelle version PDF est archivée et prête à imprimer.",
+      "La nouvelle version PDF « Direction des programmes » est archivée et prête à imprimer.",
     ),
   ).toBeInTheDocument();
   expect(draftRevision).toBe(0);
   expect(
-    await screen.findByText("Semaine du 03/08/2026 — version 1"),
+    await screen.findByText(
+      "Direction des programmes · du 10/08/2026 au 16/08/2026 — version 1",
+    ),
   ).toBeInTheDocument();
 });
 

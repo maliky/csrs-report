@@ -17,6 +17,7 @@ import {
 } from "../../components/ui";
 import { apiFetch, ApiError } from "../../lib/api/client";
 import type {
+  AgendaDirection,
   AgendaPreview,
   AgendaVersions,
   Session,
@@ -27,14 +28,33 @@ import { useApi } from "../../lib/useApi";
 import { formatDate, formatDateTime } from "../../lib/format";
 import styles from "./agenda.module.css";
 
-function isoWeekStart(value = new Date()): string {
-  const day = (value.getDay() + 6) % 7;
-  const monday = new Date(
+function localIsoDate(value: Date): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(value: Date, days: number): Date {
+  return new Date(
     value.getFullYear(),
     value.getMonth(),
-    value.getDate() - day,
+    value.getDate() + days,
   );
-  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+}
+
+function defaultAgendaPeriod(value = new Date()): [string, string] {
+  const dayFromMonday = (value.getDay() + 6) % 7;
+  const nextMonday = addDays(value, 7 - dayFromMonday);
+  return [localIsoDate(nextMonday), localIsoDate(addDays(nextMonday, 6))];
+}
+
+function periodValidation(start: string, end: string): string {
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  const dayCount =
+    Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+  if (dayCount < 1) return "La date de fin doit suivre la date de début.";
+  if (dayCount > 31)
+    return "La période ne peut pas dépasser 31 jours inclusifs.";
+  return "";
 }
 
 export function AgendaPage() {
@@ -61,26 +81,36 @@ export function AgendaPage() {
 }
 
 function SecretaryAgenda() {
-  const [week, setWeek] = useState(isoWeekStart);
-  const preview = useApi<AgendaPreview>(`/api/v1/agenda/preview/?week=${week}`);
-  const visits = useApi<VisitList>(`/api/v1/visits/?week=${week}`);
+  const initialPeriod = defaultAgendaPeriod();
+  const [periodStart, setPeriodStart] = useState(initialPeriod[0]);
+  const [periodEnd, setPeriodEnd] = useState(initialPeriod[1]);
+  const [agendaDirection, setAgendaDirection] =
+    useState<AgendaDirection>("programs");
+  const periodQuery = `period_start=${periodStart}&period_end=${periodEnd}`;
+  const preview = useApi<AgendaPreview>(
+    `/api/v1/agenda/preview/?${periodQuery}&agenda_direction=${agendaDirection}`,
+  );
+  const visits = useApi<VisitList>(`/api/v1/visits/?${periodQuery}`);
   const versions = useApi<AgendaVersions>(
-    `/api/v1/agenda/versions/?week=${week}`,
+    `/api/v1/agenda/versions/?${periodQuery}`,
   );
   const [majorEvents, setMajorEvents] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
+  const invalidPeriod = periodValidation(periodStart, periodEnd);
 
   useEffect(() => {
     setMajorEvents(preview.data?.draft.major_events ?? "");
-  }, [preview.data?.draft.major_events, week]);
+  }, [preview.data?.draft.major_events, periodStart, periodEnd]);
 
   async function saveDraft(): Promise<void> {
+    if (invalidPeriod) throw new Error(invalidPeriod);
     await apiFetch("/api/v1/agenda/draft/", {
       method: "PUT",
       body: JSON.stringify({
-        week_start: week,
+        period_start: periodStart,
+        period_end: periodEnd,
         major_events: majorEvents,
         revision: preview.data?.draft.revision ?? 0,
       }),
@@ -88,7 +118,31 @@ function SecretaryAgenda() {
     await preview.reload();
   }
 
-  async function generate() {
+  async function saveOnly() {
+    setSaving(true);
+    setError(null);
+    setMessage("");
+    try {
+      await saveDraft();
+      setMessage("Le brouillon partagé par les deux agendas est enregistré.");
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught
+          : new ApiError(
+              caught instanceof Error
+                ? caught.message
+                : "Enregistrement impossible",
+              0,
+              "unknown",
+            ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function generate(direction: AgendaDirection) {
     setSaving(true);
     setError(null);
     setMessage("");
@@ -96,10 +150,20 @@ function SecretaryAgenda() {
       await saveDraft();
       await apiFetch("/api/v1/agenda/versions/", {
         method: "POST",
-        body: JSON.stringify({ week_start: week }),
+        body: JSON.stringify({
+          period_start: periodStart,
+          period_end: periodEnd,
+          agenda_direction: direction,
+        }),
       });
       await versions.reload();
-      setMessage("La nouvelle version PDF est archivée et prête à imprimer.");
+      const label =
+        direction === "programs"
+          ? "Direction des programmes"
+          : "Direction administrative";
+      setMessage(
+        `La nouvelle version PDF « ${label} » est archivée et prête à imprimer.`,
+      );
     } catch (caught) {
       setError(
         caught instanceof ApiError
@@ -127,22 +191,31 @@ function SecretaryAgenda() {
       <header className="page-heading">
         <div>
           <p className="eyebrow">Rapport de direction</p>
-          <h1>Agenda hebdomadaire</h1>
+          <h1>Agendas de direction</h1>
           <p>
-            Enregistrez les visiteurs, contrôlez la synthèse puis figez une
-            version PDF imprimable.
+            Choisissez une période, contrôlez chaque synthèse puis générez les
+            deux PDF indépendamment.
           </p>
         </div>
-        <label className={styles.weekPicker}>
-          Semaine
-          <FrenchDateInput
-            required
-            value={week}
-            onValueChange={(isoDate) =>
-              setWeek(isoWeekStart(new Date(`${isoDate}T12:00:00`)))
-            }
-          />
-        </label>
+        <div className={styles.periodPicker}>
+          <label>
+            Début
+            <FrenchDateInput
+              required
+              value={periodStart}
+              onValueChange={setPeriodStart}
+            />
+          </label>
+          <label>
+            Fin
+            <FrenchDateInput
+              required
+              value={periodEnd}
+              onValueChange={setPeriodEnd}
+            />
+          </label>
+          {invalidPeriod && <span role="alert">{invalidPeriod}</span>}
+        </div>
       </header>
       {error && (
         <div className="error-banner" role="alert">
@@ -177,12 +250,26 @@ function SecretaryAgenda() {
             />
           </div>
           <div className={styles.actions}>
-            <Button variant="secondary" onClick={() => void saveDraft()}>
+            <Button
+              variant="secondary"
+              onClick={() => void saveOnly()}
+              disabled={saving || Boolean(invalidPeriod)}
+            >
               <Save size={18} aria-hidden="true" /> Enregistrer le brouillon
             </Button>
-            <Button onClick={() => void generate()} disabled={saving}>
+            <Button
+              onClick={() => void generate("programs")}
+              disabled={saving || Boolean(invalidPeriod)}
+            >
               <FileText size={18} aria-hidden="true" />{" "}
-              {saving ? "Génération…" : "Générer le PDF"}
+              {saving ? "Génération…" : "Générer — Direction des programmes"}
+            </Button>
+            <Button
+              onClick={() => void generate("administration")}
+              disabled={saving || Boolean(invalidPeriod)}
+            >
+              <FileText size={18} aria-hidden="true" />{" "}
+              {saving ? "Génération…" : "Générer — Direction administrative"}
             </Button>
           </div>
         </Card>
@@ -193,11 +280,41 @@ function SecretaryAgenda() {
           <div>
             <p className="eyebrow">Aperçu des données</p>
             <h2 id="preview-title">
-              Semaine du {formatDate(snapshot.week_start)} au{" "}
-              {formatDate(snapshot.week_end)}
+              {snapshot.agenda_direction_label} · du{" "}
+              {formatDate(snapshot.period_start)} au{" "}
+              {formatDate(snapshot.period_end)}
             </h2>
           </div>
+          <div
+            className={styles.directionPicker}
+            role="group"
+            aria-label="Agenda affiché"
+          >
+            <Button
+              variant={agendaDirection === "programs" ? "primary" : "secondary"}
+              onClick={() => setAgendaDirection("programs")}
+            >
+              Direction des programmes
+            </Button>
+            <Button
+              variant={
+                agendaDirection === "administration" ? "primary" : "secondary"
+              }
+              onClick={() => setAgendaDirection("administration")}
+            >
+              Direction administrative
+            </Button>
+          </div>
         </div>
+        {snapshot.unclassified_users.length > 0 && (
+          <div className={styles.warning} role="status">
+            <strong>Personnes non classées :</strong>{" "}
+            {snapshot.unclassified_users
+              .map((person) => person.name)
+              .join(", ")}
+            . Leurs tâches sont incluses dans les deux agendas.
+          </div>
+        )}
         <div className={styles.summaryGrid}>
           <Summary
             title="Arrivées"
@@ -223,7 +340,7 @@ function SecretaryAgenda() {
           />
         </div>
         {snapshot.units.length === 0 ? (
-          <EmptyState title="Aucune activité pour cette semaine">
+          <EmptyState title="Aucune tâche sur cette période">
             Les rubriques de contexte seront tout de même présentes dans le PDF.
           </EmptyState>
         ) : (
@@ -233,7 +350,10 @@ function SecretaryAgenda() {
                 <h3>{unit.name}</h3>
                 {unit.employees.map((employee) => (
                   <div className={styles.employee} key={employee.person.id}>
-                    <strong>{employee.person.name}</strong>
+                    <strong>
+                      {employee.person.name}
+                      {employee.unclassified && " — non classé"}
+                    </strong>
                     <span>{employee.completion_rate}% en moyenne</span>
                     <ul>
                       {employee.tasks.map((task) => (
@@ -392,8 +512,9 @@ function VersionList({ versions }: { versions: AgendaVersions["versions"] }) {
             <Card className={styles.version} key={version.id}>
               <div>
                 <strong>
-                  Semaine du {formatDate(version.week_start)} — version{" "}
-                  {version.version}
+                  {version.agenda_direction_label} · du{" "}
+                  {formatDate(version.period_start)} au{" "}
+                  {formatDate(version.period_end)} — version {version.version}
                 </strong>
                 <small>
                   Générée par {version.generated_by.name} le{" "}
@@ -433,7 +554,10 @@ function AgendaArchives() {
         <div>
           <p className="eyebrow">Rapport de direction</p>
           <h1>Agendas archivés</h1>
-          <p>Consultez et réimprimez les versions hebdomadaires figées.</p>
+          <p>
+            Consultez et réimprimez les versions figées par période et par
+            direction.
+          </p>
         </div>
       </header>
       <VersionList versions={versions.data.versions} />

@@ -6,13 +6,14 @@ from pathlib import Path
 import pytest
 from django.utils import timezone
 
-from accounts.models import User
+from accounts.models import AgendaDirection as UserAgendaDirection, User
 from access.models import GrantScope, RoleGrant, ScopedRole
-from agenda.models import StaffAvailability, VisitorVisit, WeeklyAgendaDraft
+from agenda.models import AgendaDirection, AgendaDraft, StaffAvailability, VisitorVisit
 from agenda.services import (
     agenda_pdf_bytes,
-    build_week_snapshot,
+    build_agenda_snapshot,
     generate_agenda,
+    next_week_period,
 )
 from work.models import ProgressEntry, TaskActivity
 from work.organogram import load_organogram
@@ -123,12 +124,14 @@ def test_secretary_saves_draft_and_generates_pdf_through_api(
     )
     client.force_login(secretary)
     monday = week_start_for(timezone.localdate())
+    sunday = monday + timedelta(days=6)
     draft_url = "/api/v1/agenda/draft/"
 
     response = client.put(
         draft_url,
         {
-            "week_start": monday.isoformat(),
+            "period_start": monday.isoformat(),
+            "period_end": sunday.isoformat(),
             "major_events": "Comité hebdomadaire",
             "revision": 0,
         },
@@ -140,7 +143,8 @@ def test_secretary_saves_draft_and_generates_pdf_through_api(
     stale = client.put(
         draft_url,
         {
-            "week_start": monday.isoformat(),
+            "period_start": monday.isoformat(),
+            "period_end": sunday.isoformat(),
             "major_events": "Version périmée",
             "revision": 0,
         },
@@ -152,7 +156,8 @@ def test_secretary_saves_draft_and_generates_pdf_through_api(
     response = client.put(
         draft_url,
         {
-            "week_start": monday.isoformat(),
+            "period_start": monday.isoformat(),
+            "period_end": sunday.isoformat(),
             "major_events": "Comité hebdomadaire confirmé",
             "revision": 1,
         },
@@ -163,7 +168,11 @@ def test_secretary_saves_draft_and_generates_pdf_through_api(
 
     generated = client.post(
         "/api/v1/agenda/versions/",
-        {"week_start": monday.isoformat()},
+        {
+            "period_start": monday.isoformat(),
+            "period_end": sunday.isoformat(),
+            "agenda_direction": AgendaDirection.PROGRAMS,
+        },
         content_type="application/json",
     )
     assert generated.status_code == 201
@@ -176,7 +185,7 @@ def test_secretary_saves_draft_and_generates_pdf_through_api(
 
 
 @pytest.mark.django_db
-def test_week_snapshot_groups_tasks_and_uses_end_of_week_progress(
+def test_agenda_snapshot_groups_overlapping_tasks_and_marks_unclassified_users(
     assignment, people, unit
 ) -> None:
     monday = week_start_for(timezone.localdate())
@@ -205,7 +214,12 @@ def test_week_snapshot_groups_tasks_and_uses_end_of_week_progress(
         progress_entry=entry,
     )
 
-    snapshot = build_week_snapshot(week_start=monday, major_events="Réunion du CA")
+    snapshot = build_agenda_snapshot(
+        period_start=monday,
+        period_end=monday + timedelta(days=6),
+        agenda_direction=AgendaDirection.PROGRAMS,
+        major_events="Réunion du CA",
+    )
     assert snapshot["major_events"] == "Réunion du CA"
     assert len(snapshot["units"]) == 1
     employee = snapshot["units"][0]["employees"][0]
@@ -213,6 +227,8 @@ def test_week_snapshot_groups_tasks_and_uses_end_of_week_progress(
     assert employee["tasks"][0]["percentage"] == 65
     assert employee["tasks"][0]["progress_delta"] == 40
     assert employee["tasks"][0]["observation"] == "Livrable transmis"
+    assert employee["unclassified"] is True
+    assert snapshot["unclassified_users"][0]["id"] == people["employee"].pk
 
 
 @pytest.mark.django_db
@@ -230,27 +246,86 @@ def test_generated_agenda_version_is_private_frozen_and_reprintable(
         granted_by=admin,
     )
     monday = week_start_for(timezone.localdate())
-    WeeklyAgendaDraft.objects.create(
-        week_start=monday,
+    sunday = monday + timedelta(days=6)
+    AgendaDraft.objects.create(
+        period_start=monday,
+        period_end=sunday,
         major_events="Comité hebdomadaire",
         updated_by=secretary,
     )
 
-    first = generate_agenda(actor=secretary, week_start=monday)
+    first = generate_agenda(
+        actor=secretary,
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.PROGRAMS,
+    )
     first_bytes = agenda_pdf_bytes(first)
     assert first.version == 1
     assert first_bytes.startswith(b"%PDF")
     assert first.pdf_size == len(first_bytes)
     frozen_digest = first.snapshot_sha256
 
-    draft = WeeklyAgendaDraft.objects.get(week_start=monday)
+    draft = AgendaDraft.objects.get(period_start=monday, period_end=sunday)
     draft.major_events = "Événement corrigé"
     draft.revision += 1
     draft.updated_by = secretary
     draft.save()
-    second = generate_agenda(actor=secretary, week_start=monday)
+    second = generate_agenda(
+        actor=secretary,
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.PROGRAMS,
+    )
     first.refresh_from_db()
     assert second.version == 2
     assert second.snapshot_sha256 != frozen_digest
     assert first.snapshot_sha256 == frozen_digest
     assert agenda_pdf_bytes(first) == first_bytes
+
+    administration = generate_agenda(
+        actor=secretary,
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.ADMINISTRATION,
+    )
+    assert administration.version == 1
+
+
+@pytest.mark.django_db
+def test_user_direction_is_exclusive_and_unclassified_work_appears_in_both(
+    assignment, people
+) -> None:
+    monday = week_start_for(timezone.localdate())
+    sunday = monday + timedelta(days=6)
+    employee = people["employee"]
+    employee.agenda_direction = UserAgendaDirection.PROGRAMS
+    employee.save(update_fields=["agenda_direction"])
+
+    programs = build_agenda_snapshot(
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.PROGRAMS,
+    )
+    administration = build_agenda_snapshot(
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.ADMINISTRATION,
+    )
+    assert len(programs["units"]) == 1
+    assert administration["units"] == []
+
+    employee.agenda_direction = ""
+    employee.save(update_fields=["agenda_direction"])
+    administration = build_agenda_snapshot(
+        period_start=monday,
+        period_end=sunday,
+        agenda_direction=AgendaDirection.ADMINISTRATION,
+    )
+    assert len(administration["units"]) == 1
+
+
+def test_next_week_period_is_monday_through_sunday() -> None:
+    start, end = next_week_period(timezone.datetime(2026, 8, 5).date())
+    assert start.isoformat() == "2026-08-10"
+    assert end.isoformat() == "2026-08-16"

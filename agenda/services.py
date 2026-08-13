@@ -22,11 +22,12 @@ from access.services import (
     has_active_permission,
 )
 from agenda.models import (
+    AgendaDirection,
+    AgendaDraft,
+    AgendaVersion,
     AvailabilityKind,
     StaffAvailability,
     VisitorVisit,
-    WeeklyAgendaDraft,
-    WeeklyAgendaVersion,
 )
 from processes.storage import configured_storage
 from work.models import OrganizationMembership, TaskAssignment
@@ -41,6 +42,22 @@ from work.services import (
 
 def normalize_week(value: date) -> date:
     return week_start_for(value)
+
+
+def validate_agenda_period(period_start: date, period_end: date) -> None:
+    """Validate the inclusive custom period accepted by agenda generation."""
+    if period_end < period_start:
+        raise ValidationError({"period_end": "La fin doit suivre le début."})
+    if period_end - period_start > timedelta(days=30):
+        raise ValidationError(
+            {"period_end": "La période ne peut pas dépasser 31 jours inclusifs."}
+        )
+
+
+def next_week_period(today: date) -> tuple[date, date]:
+    """Return next Monday through Sunday, never the current week."""
+    next_monday = today + timedelta(days=7 - today.weekday())
+    return next_monday, next_monday + timedelta(days=6)
 
 
 def can_manage_visits(user: User) -> bool:
@@ -179,18 +196,26 @@ def cancel_availability(
 
 @transaction.atomic
 def save_draft(
-    *, actor: User, week_start: date, major_events: str, expected_revision: int | None
-) -> WeeklyAgendaDraft:
+    *,
+    actor: User,
+    period_start: date,
+    period_end: date,
+    major_events: str,
+    expected_revision: int | None,
+) -> AgendaDraft:
     _ensure(can_prepare_agenda(actor), "Vous ne pouvez pas préparer cet agenda.")
-    monday = normalize_week(week_start)
+    validate_agenda_period(period_start, period_end)
     draft = (
-        WeeklyAgendaDraft.objects.select_for_update().filter(week_start=monday).first()
+        AgendaDraft.objects.select_for_update()
+        .filter(period_start=period_start, period_end=period_end)
+        .first()
     )
     if draft is None:
         if expected_revision not in (None, 0):
             raise StaleRevisionError(0)
-        return WeeklyAgendaDraft.objects.create(
-            week_start=monday,
+        return AgendaDraft.objects.create(
+            period_start=period_start,
+            period_end=period_end,
             major_events=major_events.strip(),
             updated_by=actor,
         )
@@ -202,11 +227,11 @@ def save_draft(
     return draft
 
 
-def _local_bounds(monday: date) -> tuple[datetime, datetime]:
+def _local_bounds(period_start: date, period_end: date) -> tuple[datetime, datetime]:
     zone = timezone.get_current_timezone()
     return (
-        timezone.make_aware(datetime.combine(monday, time.min), zone),
-        timezone.make_aware(datetime.combine(monday + timedelta(days=6), time.max), zone),
+        timezone.make_aware(datetime.combine(period_start, time.min), zone),
+        timezone.make_aware(datetime.combine(period_end, time.max), zone),
     )
 
 
@@ -214,11 +239,21 @@ def _person(user: User) -> dict[str, object]:
     return {"id": user.pk, "name": str(user), "position": user.position}
 
 
-def build_week_snapshot(*, week_start: date, major_events: str = "") -> dict[str, object]:
-    """Aggregate only active work and explicitly entered weekly context."""
-    monday = normalize_week(week_start)
-    sunday = monday + timedelta(days=6)
-    start_at, end_at = _local_bounds(monday)
+def build_agenda_snapshot(
+    *,
+    period_start: date,
+    period_end: date,
+    agenda_direction: str,
+    major_events: str = "",
+) -> dict[str, object]:
+    """Aggregate assignments overlapping a period for one agenda direction."""
+    validate_agenda_period(period_start, period_end)
+    if agenda_direction not in (
+        AgendaDirection.PROGRAMS,
+        AgendaDirection.ADMINISTRATION,
+    ):
+        raise ValidationError({"agenda_direction": "Direction d’agenda inconnue."})
+    start_at, end_at = _local_bounds(period_start, period_end)
     visits = VisitorVisit.objects.filter(cancelled_at__isnull=True).filter(
         Q(arrived_at__range=(start_at, end_at)) | Q(departed_at__range=(start_at, end_at))
     )
@@ -228,20 +263,21 @@ def build_week_snapshot(*, week_start: date, major_events: str = "") -> dict[str
     availability = (
         StaffAvailability.objects.filter(
             cancelled_at__isnull=True,
-            start_date__lte=sunday,
-            end_date__gte=monday,
+            start_date__lte=period_end,
+            end_date__gte=period_start,
         )
         .select_related("employee")
         .order_by("kind", "start_date", "employee__last_name", "employee__first_name")
     )
 
     assignments = list(
-        TaskAssignment.objects.filter(employee__is_active=True)
+        TaskAssignment.objects.filter(
+            Q(employee__agenda_direction=agenda_direction)
+            | Q(employee__agenda_direction="")
+        )
         .filter(
-            Q(start_date__lte=sunday)
-            & (Q(completed_at__isnull=True) | Q(completed_at__date__gte=monday))
-            | Q(progress_entries__entry_date__range=(monday, sunday))
-            | Q(activities__occurred_at__date__range=(monday, sunday))
+            Q(start_date__lte=period_end)
+            & (Q(completed_at__isnull=True) | Q(completed_at__date__gte=period_start))
         )
         .select_related("task", "employee", "manager", "organization_unit", "calendar")
         .prefetch_related("progress_entries", "activities__actor")
@@ -253,15 +289,15 @@ def build_week_snapshot(*, week_start: date, major_events: str = "") -> dict[str
         OrganizationMembership.objects.filter(
             user_id__in=employee_ids,
             is_primary=True,
-            start_date__lte=sunday,
+            start_date__lte=period_end,
         )
-        .filter(Q(end_date__isnull=True) | Q(end_date__gte=sunday))
+        .filter(Q(end_date__isnull=True) | Q(end_date__gte=period_end))
         .select_related("unit")
         .order_by("user_id", "-start_date", "-pk")
     ):
         memberships.setdefault(membership.user_id, membership)
 
-    period = ReportingPeriod("week", monday, sunday)
+    period = ReportingPeriod("agenda", period_start, period_end)
     grouped: dict[int, dict[str, object]] = {}
     employee_rows: dict[tuple[int, int], dict[str, object]] = {}
     for assignment in assignments:
@@ -288,18 +324,19 @@ def build_week_snapshot(*, week_start: date, major_events: str = "") -> dict[str
         if employee_row is None:
             employee_row = {
                 "person": _person(assignment.employee),
+                "unclassified": not assignment.employee.agenda_direction,
                 "completion_rate": 0,
                 "tasks": [],
             }
             employee_rows[employee_key] = employee_row
             cast(list[dict[str, object]], unit_row["employees"]).append(employee_row)
         summary = assignment_snapshot(assignment, period)
-        weekly_comments = [
+        period_comments = [
             item
             for item in summary.comments
-            if monday <= timezone.localtime(item.occurred_at).date() <= sunday
+            if period_start <= timezone.localtime(item.occurred_at).date() <= period_end
         ]
-        observation = weekly_comments[0].message if weekly_comments else ""
+        observation = period_comments[0].message if period_comments else ""
         cast(list[dict[str, object]], employee_row["tasks"]).append(
             {
                 "id": assignment.pk,
@@ -342,10 +379,19 @@ def build_week_snapshot(*, week_start: date, major_events: str = "") -> dict[str
         ]
 
     return {
-        "schema_version": 1,
-        "week_start": monday.isoformat(),
-        "week_end": sunday.isoformat(),
+        "schema_version": 2,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "agenda_direction": agenda_direction,
+        "agenda_direction_label": AgendaDirection(agenda_direction).label,
         "major_events": major_events.strip(),
+        "unclassified_users": [
+            _person(user)
+            for user in User.objects.filter(
+                pk__in=employee_ids,
+                agenda_direction="",
+            ).order_by("last_name", "first_name", "email")
+        ],
         "arrivals": visit_rows(arrivals),
         "departures": visit_rows(departures),
         "availability": [
@@ -375,35 +421,61 @@ def snapshot_digest(snapshot: dict[str, object]) -> str:
 
 
 @transaction.atomic
-def generate_agenda(*, actor: User, week_start: date) -> WeeklyAgendaVersion:
+def generate_agenda(
+    *,
+    actor: User,
+    period_start: date,
+    period_end: date,
+    agenda_direction: str,
+) -> AgendaVersion:
     _ensure(can_prepare_agenda(actor), "Vous ne pouvez pas générer cet agenda.")
-    monday = normalize_week(week_start)
-    draft, _created = WeeklyAgendaDraft.objects.select_for_update().get_or_create(
-        week_start=monday, defaults={"updated_by": actor}
+    validate_agenda_period(period_start, period_end)
+    if agenda_direction not in (
+        AgendaDirection.PROGRAMS,
+        AgendaDirection.ADMINISTRATION,
+    ):
+        raise ValidationError({"agenda_direction": "Direction d’agenda inconnue."})
+    draft, _created = AgendaDraft.objects.select_for_update().get_or_create(
+        period_start=period_start,
+        period_end=period_end,
+        defaults={"updated_by": actor},
     )
-    snapshot = build_week_snapshot(week_start=monday, major_events=draft.major_events)
+    snapshot = build_agenda_snapshot(
+        period_start=period_start,
+        period_end=period_end,
+        agenda_direction=agenda_direction,
+        major_events=draft.major_events,
+    )
     generated_at = timezone.now()
     next_version = (
-        WeeklyAgendaVersion.objects.filter(week_start=monday).aggregate(Max("version"))[
-            "version__max"
-        ]
+        AgendaVersion.objects.filter(
+            period_start=period_start,
+            period_end=period_end,
+            agenda_direction=agenda_direction,
+        ).aggregate(Max("version"))["version__max"]
         or 0
     ) + 1
-    from agenda.pdf import render_weekly_agenda_pdf
+    from agenda.pdf import render_agenda_pdf
 
-    pdf = render_weekly_agenda_pdf(
-        snapshot, generated_at=generated_at, version=next_version
-    )
+    pdf = render_agenda_pdf(snapshot, generated_at=generated_at, version=next_version)
     storage = configured_storage()
+    direction_slug = str(agenda_direction)
     key = storage.save(
-        case_reference=f"agenda-{monday.isoformat()}",
-        name=f"agenda-{monday.isoformat()}-v{next_version}.pdf",
+        case_reference=(
+            f"agenda-{period_start.isoformat()}-{period_end.isoformat()}-{direction_slug}"
+        ),
+        name=(
+            f"agenda-{direction_slug}-{period_start.isoformat()}-"
+            f"{period_end.isoformat()}-v{next_version}.pdf"
+        ),
         content=pdf,
     )
     try:
-        return WeeklyAgendaVersion.objects.create(
+        return AgendaVersion.objects.create(
             draft=draft,
-            week_start=monday,
+            period_start=period_start,
+            period_end=period_end,
+            agenda_direction=agenda_direction,
             version=next_version,
             snapshot=snapshot,
             snapshot_sha256=snapshot_digest(snapshot),
@@ -419,7 +491,7 @@ def generate_agenda(*, actor: User, week_start: date) -> WeeklyAgendaVersion:
         raise
 
 
-def agenda_pdf_bytes(version: WeeklyAgendaVersion) -> bytes:
+def agenda_pdf_bytes(version: AgendaVersion) -> bytes:
     storage = configured_storage()
     if storage.provider != version.storage_provider:
         raise ValidationError(

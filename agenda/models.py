@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -161,46 +161,76 @@ class StaffAvailability(models.Model):
         super().save(*args, **kwargs)  # type: ignore[arg-type]
 
 
-class WeeklyAgendaDraft(models.Model):
-    """The editable secretary note for one Monday-based reporting week."""
+class AgendaDirection(models.TextChoices):
+    PROGRAMS = "programs", "Direction des programmes"
+    ADMINISTRATION = "administration", "Direction administrative"
+    LEGACY = "legacy", "Agenda global historique"
 
-    week_start = models.DateField(unique=True)
+
+class AgendaDraft(models.Model):
+    """The shared secretary note for an inclusive reporting period."""
+
+    period_start = models.DateField("début de période")
+    period_end = models.DateField("fin de période")
     major_events = models.TextField("événements majeurs", blank=True)
     revision = models.PositiveBigIntegerField(default=1)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="updated_weekly_agenda_drafts",
+        related_name="updated_agenda_drafts",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ["-week_start"]
+        ordering = ["-period_start", "-period_end"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(period_end__gte=models.F("period_start")),
+                name="agenda_draft_end_not_before_start",
+            ),
+            models.UniqueConstraint(
+                fields=["period_start", "period_end"],
+                name="unique_agenda_draft_period",
+            ),
+        ]
 
     def clean(self) -> None:
         super().clean()
-        if self.week_start and self.week_start.weekday() != 0:
-            raise ValidationError({"week_start": "La semaine doit commencer un lundi."})
+        if self.period_start and self.period_end:
+            if self.period_end < self.period_start:
+                raise ValidationError(
+                    {"period_end": "La fin doit suivre le début de la période."}
+                )
+            if self.period_end - self.period_start > timedelta(days=30):
+                raise ValidationError(
+                    {"period_end": "La période ne peut pas dépasser 31 jours inclusifs."}
+                )
 
     def save(self, *args: object, **kwargs: object) -> None:
         self.full_clean()
         super().save(*args, **kwargs)  # type: ignore[arg-type]
 
 
-class WeeklyAgendaVersionQuerySet(models.QuerySet["WeeklyAgendaVersion"]):
+class AgendaVersionQuerySet(models.QuerySet["AgendaVersion"]):
     def delete(self) -> tuple[int, dict[str, int]]:
         raise ValidationError("Une version d’agenda générée ne peut pas être supprimée.")
 
 
-class WeeklyAgendaVersion(models.Model):
+class AgendaVersion(models.Model):
     """An append-only snapshot and its privately stored printable PDF."""
 
     draft = models.ForeignKey(
-        WeeklyAgendaDraft, on_delete=models.PROTECT, related_name="versions"
+        AgendaDraft, on_delete=models.PROTECT, related_name="versions"
     )
-    week_start = models.DateField()
+    period_start = models.DateField("début de période")
+    period_end = models.DateField("fin de période")
+    agenda_direction = models.CharField(
+        "direction",
+        max_length=16,
+        choices=AgendaDirection.choices,
+    )
     version = models.PositiveIntegerField()
     snapshot = models.JSONField()
     snapshot_sha256 = models.CharField(max_length=64)
@@ -211,18 +241,28 @@ class WeeklyAgendaVersion(models.Model):
     generated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="generated_weekly_agendas",
+        related_name="generated_agendas",
     )
     generated_at = models.DateTimeField(default=timezone.now)
 
-    objects = WeeklyAgendaVersionQuerySet.as_manager()
+    objects = AgendaVersionQuerySet.as_manager()
 
     class Meta:
-        ordering = ["-week_start", "-version"]
+        ordering = ["-period_start", "agenda_direction", "-version"]
         constraints = [
+            models.CheckConstraint(
+                condition=Q(period_end__gte=models.F("period_start")),
+                name="agenda_version_end_not_before_start",
+            ),
             models.UniqueConstraint(
-                fields=["week_start", "version"], name="unique_weekly_agenda_version"
-            )
+                fields=[
+                    "period_start",
+                    "period_end",
+                    "agenda_direction",
+                    "version",
+                ],
+                name="unique_agenda_version",
+            ),
         ]
 
     def save(self, *args: object, **kwargs: object) -> None:
@@ -237,5 +277,5 @@ class WeeklyAgendaVersion(models.Model):
         raise ValidationError("Une version d’agenda générée ne peut pas être supprimée.")
 
 
-def week_end(week_start: date) -> date:
-    return date.fromordinal(week_start.toordinal() + 6)
+def period_days(period_start: date, period_end: date) -> int:
+    return (period_end - period_start).days + 1

@@ -10,6 +10,13 @@ from django.db.models.functions import Lower
 from simple_history.models import HistoricalRecords
 
 
+class AgendaDirection(models.TextChoices):
+    """The single agenda in which a user's work is normally published."""
+
+    PROGRAMS = "programs", "Direction des programmes"
+    ADMINISTRATION = "administration", "Direction administrative"
+
+
 class UserManager(BaseUserManager["User"]):
     """Create users identified by their email address."""
 
@@ -62,6 +69,17 @@ class User(AbstractUser):
         "telephone verifie le", null=True, blank=True
     )
     is_it_admin = models.BooleanField("administrateur IT", default=False)
+    agenda_direction = models.CharField(
+        "direction de l'agenda",
+        max_length=16,
+        choices=AgendaDirection.choices,
+        blank=True,
+        default="",
+        help_text=(
+            "Une personne non classée et toutes ses tâches figurent provisoirement "
+            "dans les deux agendas."
+        ),
+    )
     history = HistoricalRecords(
         excluded_fields=("password", "last_login"),
         m2m_fields=("groups", "user_permissions"),

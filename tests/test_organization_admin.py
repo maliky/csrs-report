@@ -4,16 +4,18 @@ from io import StringIO
 
 from django.apps import apps
 from django.contrib.admin.widgets import FilteredSelectMultiple
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 import pytest
 
+from accounts.agenda_directions import classify_agenda_direction
 from accounts.forms import InstitutionUserChangeForm
-from accounts.models import User
+from accounts.models import AgendaDirection, User
 from work.admin import OrganizationUnitAdminForm, ReportingLineAdminForm
 from work.models import (
     OrganizationMembership,
@@ -94,6 +96,165 @@ def test_populated_history_baseline_covers_users_units_links_and_m2m() -> None:
     assert link.history.filter(
         history_change_reason=work_migration.BASELINE_REASON
     ).exists()
+
+
+def test_agenda_direction_unit_rule_prioritizes_branches_then_unit_kind() -> None:
+    parents = {
+        "DP": "DG",
+        "DP-CELL": "DP",
+        "DAF": "DG",
+        "DAF-LAB": "DAF",
+        "FREE-LAB": "DG",
+        "FREE-CELL": "PSPI",
+        "PSPI": "DG",
+        "DG": None,
+    }
+
+    assert (
+        classify_agenda_direction(
+            unit_code="DP-CELL", unit_kind="cell", parent_by_code=parents
+        )
+        == AgendaDirection.PROGRAMS
+    )
+    assert (
+        classify_agenda_direction(
+            unit_code="DAF-LAB", unit_kind="laboratory", parent_by_code=parents
+        )
+        == AgendaDirection.ADMINISTRATION
+    )
+    assert (
+        classify_agenda_direction(
+            unit_code="FREE-LAB", unit_kind="laboratory", parent_by_code=parents
+        )
+        == AgendaDirection.PROGRAMS
+    )
+    assert (
+        classify_agenda_direction(
+            unit_code="FREE-CELL", unit_kind="cell", parent_by_code=parents
+        )
+        == AgendaDirection.ADMINISTRATION
+    )
+    assert (
+        classify_agenda_direction(
+            unit_code="PSPI", unit_kind="pole", parent_by_code=parents
+        )
+        == ""
+    )
+
+
+@pytest.mark.django_db
+def test_agenda_direction_migration_preserves_choices_and_audits_backfill() -> None:
+    root = OrganizationUnit.objects.create(
+        code="M-DG", short_name="Racine", long_name="Racine", kind="direction"
+    )
+    programs = OrganizationUnit.objects.create(
+        code="DP", short_name="Programmes", long_name="Programmes", kind="direction"
+    )
+    administration = OrganizationUnit.objects.create(
+        code="DAF",
+        short_name="Administration",
+        long_name="Administration",
+        kind="direction",
+    )
+    programs_cell = OrganizationUnit.objects.create(
+        code="M-DP-CELL",
+        short_name="Cellule DP",
+        long_name="Cellule DP",
+        kind="cell",
+    )
+    administration_lab = OrganizationUnit.objects.create(
+        code="M-DAF-LAB",
+        short_name="Laboratoire DAF",
+        long_name="Laboratoire DAF",
+        kind="laboratory",
+    )
+    strategic_pole = OrganizationUnit.objects.create(
+        code="M-PSPI",
+        short_name="PSPI",
+        long_name="PSPI",
+        kind="pole",
+    )
+    strategic_cell = OrganizationUnit.objects.create(
+        code="M-PSPI-CELL",
+        short_name="Cellule PSPI",
+        long_name="Cellule PSPI",
+        kind="cell",
+    )
+    for parent, child in (
+        (root, programs),
+        (root, administration),
+        (programs, programs_cell),
+        (administration, administration_lab),
+        (root, strategic_pole),
+        (strategic_pole, strategic_cell),
+    ):
+        OrganizationUnitLink.objects.create(
+            supervisor_service=parent, collaborator_service=child
+        )
+
+    dp_user = User.objects.create_user("migration-dp@example.test")
+    daf_user = User.objects.create_user("migration-daf@example.test")
+    pspi_cell_user = User.objects.create_user("migration-cell@example.test")
+    transversal_user = User.objects.create_user("migration-pole@example.test")
+    manual_user = User.objects.create_user(
+        "migration-manual@example.test",
+        agenda_direction=AgendaDirection.ADMINISTRATION,
+    )
+    for user, unit in (
+        (dp_user, programs_cell),
+        (daf_user, administration_lab),
+        (pspi_cell_user, strategic_cell),
+        (transversal_user, strategic_pole),
+        (manual_user, programs_cell),
+    ):
+        OrganizationMembership.objects.create(
+            user=user,
+            unit=unit,
+            is_primary=True,
+            start_date=timezone.localdate(),
+        )
+
+    group = Group.objects.create(name="Migration direction")
+    permission = Permission.objects.order_by("pk").first()
+    assert permission is not None
+    dp_user.groups.add(group)
+    dp_user.user_permissions.add(permission)
+
+    migration = import_module("accounts.migrations.0006_classify_agenda_directions")
+
+    class SchemaEditor:
+        connection = connection
+
+    migration.classify_agenda_directions(apps, SchemaEditor())
+
+    for user in (dp_user, daf_user, pspi_cell_user, transversal_user, manual_user):
+        user.refresh_from_db()
+    assert dp_user.agenda_direction == AgendaDirection.PROGRAMS
+    assert daf_user.agenda_direction == AgendaDirection.ADMINISTRATION
+    assert pspi_cell_user.agenda_direction == AgendaDirection.ADMINISTRATION
+    assert transversal_user.agenda_direction == ""
+    assert manual_user.agenda_direction == AgendaDirection.ADMINISTRATION
+
+    history = dp_user.history.filter(
+        history_change_reason=migration.CLASSIFICATION_REASON
+    ).latest()
+    assert history.agenda_direction == AgendaDirection.PROGRAMS
+    assert history.groups.filter(group=group).exists()
+    assert history.user_permissions.filter(permission=permission).exists()
+    assert not transversal_user.history.filter(
+        history_change_reason=migration.CLASSIFICATION_REASON
+    ).exists()
+    assert not manual_user.history.filter(
+        history_change_reason=migration.CLASSIFICATION_REASON
+    ).exists()
+
+    migration.classify_agenda_directions(apps, SchemaEditor())
+    assert (
+        dp_user.history.filter(
+            history_change_reason=migration.CLASSIFICATION_REASON
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
