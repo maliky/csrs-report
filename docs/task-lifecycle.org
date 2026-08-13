@@ -14,7 +14,7 @@ state "A valider" as awaiting
 state "Terminee" as completed
 state "Cloturee avant achevement" as early
 
-[*] --> submitted : proposition employe
+[*] --> submitted : proposition employee
 submitted --> accepted : responsable principal accepte
 submitted --> rejected : responsable principal refuse
 accepted --> planned : creation tache + affectation

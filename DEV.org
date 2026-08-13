@@ -1,7 +1,6 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
-
 * <2026-08-13 jeu.> Calendrier unique et chargement non bloquant des agendas
 ** Decision d'architecture
 
