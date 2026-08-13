@@ -2,6 +2,22 @@
 #+LANGUAGE: fr
 #+STARTUP: overview
 
+* <2026-08-13 jeu.> Calendrier unique et chargement non bloquant des agendas
+** Decision d'architecture
+
+Le choix de periode du secretariat utilise =@daypicker/react= en mode =range=, localise en francais et limite a 30 nuits, soit 31 jours inclusifs conformement a la validation serveur. Un panneau contextuel affiche deux mois sur ordinateur et un mois sur telephone. La selection se fait directement sur le calendrier: premier clic pour le debut, second clic pour la fin; une plage incomplete affiche une instruction sans etre traitee comme une erreur.
+
+La periode en cours de selection reste distincte de la periode appliquee. Seuls =Appliquer= et le raccourci =Semaine prochaine= declenchent le chargement; une plage incomplete, une saisie invalide ou =Annuler= n'envoie aucune requete. L'aperçu, les visites et les versions sont charges ensemble puis remplaces atomiquement afin de ne jamais melanger deux periodes. Une reponse devenue obsolete est ignoree.
+
+Le premier chargement conserve son squelette et son erreur de page. Pour toute mise a jour ulterieure, le dernier agenda valide reste visible avec un statut local; une erreur affiche =Reessayer= sans masquer ni bloquer la page.
+
+Un seul selecteur =Direction de l'agenda= pilote la requete d'apercu et la direction transmise a la generation. L'interface expose donc un seul bouton =Generer le PDF= et ne repete plus un second choix de direction dans la section d'apercu.
+
+* <2026-08-13 jeu.> Exclusion explicite du DG des agendas
+** Decision d'architecture
+
+=accounts.User.include_in_direction_agendas= est un booleen audite, actif par defaut et visible dans l'administration. Le DG existant et le compte fictif =dg= ont ce reglage desactive; leurs taches sont absentes des deux apercus et des prochains PDF sans supprimer les taches ni modifier les PDF archives. Une personne non classee ne figure dans les deux agendas que si ce reglage reste actif.
+
 * <2026-08-13 jeu. 07:51>
 Regle general pour attribuer les directions.
 - program, laboratoire, stations : direction des programmes DRD
@@ -22,7 +38,7 @@ Les autres services et cellules feront parties de l'agenda de la DAF
 
 ** Decision mise en oeuvre
 
-Le classement initial est une migration auditee et non une synchronisation permanente. Elle ne modifie que les utilisateurs dont =agenda_direction= est vide et possedant une appartenance principale ouverte. Une branche sous =DP= est toujours classee =programs= et une branche sous =DAF= toujours =administration=, avant le repli par type d'unite: =programme=, =laboratory= et =station= vers les programmes; =cell= et =service= vers l'administration. Les unites transversales ou sans appartenance principale restent non classees et figurent donc dans les deux agendas. Tout choix manuel deja effectue est conserve et les ajouts reels futurs restent classes explicitement dans la fiche utilisateur.
+Le classement initial est une migration auditee et non une synchronisation permanente. Elle ne modifie que les utilisateurs dont =agenda_direction= est vide et possedant une appartenance principale ouverte. Une branche sous =DP= est toujours classee =programs= et une branche sous =DAF= toujours =administration=, avant le repli par type d'unite: =programme=, =laboratory= et =station= vers les programmes; =cell= et =service= vers l'administration. Les unites transversales ou sans appartenance principale restent non classees et figurent donc dans les deux agendas sauf exclusion explicite. Tout choix manuel deja effectue est conserve et les ajouts reels futurs restent classes explicitement dans la fiche utilisateur.
 
 Le jeu de demonstration applique la meme regle seulement lorsqu'un compte est nouveau ou encore non classe. Il produit 22 comptes =programs=, 14 comptes =administration= et conserve sans classement =dev=, =dg=, =secretariat_dg=, =coordination=, =pilotage= et =expertise=. Les cellules =CG=, =CI=, =RSE= et =GEI= placees sous =PSPI= suivent le repli par type et appartiennent a l'agenda administratif.
 
@@ -30,62 +46,25 @@ Le jeu de demonstration applique la meme regle seulement lorsqu'un compte est no
 
 =UAR= existe deja dans l'organigramme canonique sous =DP=. Aucune unite distincte =HDSS=, =TAABO=, =Microbiologie=, =Chimie=, =Parasitologie=, =Programme Afrique One= ou =Botanique= n'est inventee dans ce lot: leurs rattachements et responsables devront etre confirmes avant creation.
 
-** Verification attendue
-
-- [X] Priorite des branches DP/DAF, repli par type, cellules de PSPI, transversaux non classes et conservation d'un choix manuel testes.
-- [X] Historique utilisateur de la migration, y compris groupes et permissions, et chargement sur base vide testes.
-- [X] Sauvegarde, migration publique, controle des compteurs, preservation des PDF historiques et verification HTTPS.
-
-** Mise en service et preuves
-
-La sauvegarde verifiee =backups/csrs_20260813T092402Z.dump=, l'archive =backups/csrs_documents_20260813T092402Z.tar.gz= et leur manifeste ont ete produits avant intervention. L'image =sha256:d70f33bfb3835dc0049b3b8a045d225e064b173eee6816b4c308cd9ffc9b5fe3= a recree uniquement =csrs-web-1=; PostgreSQL et ClamAV sont restes sains et le notifier est demeure arrete conformement a la configuration de l'hote.
-
-La migration =accounts.0006= a classe les 57 utilisateurs actifs en 22 =programs=, 23 =administration= et 12 non classes, avec 45 changements historiques audites. Les taches se repartissent en 35 pour les programmes, 38 pour l'administration et 3 portees par la Direction generale non classee, donc incluses dans les deux agendas. Pour la periode par defaut du 17 au 23/08/2026, les apercus publics en memoire contiennent respectivement 6 unites et 7 taches pour les programmes, puis 6 unites et 8 taches pour l'administration; leur unique avertissement commun est =Direction generale=. Les deux PDF historiques conservent exactement leurs empreintes =07c68d58ec76b4a74b6585300a5af3737e7f7738640f5b205c61a67d1c4a4d8e= et =fa425be8cc5908231500de8c1391782b501504bbe914d6795e470e13ee49e5f0=.
-
-=https://179.237.107.40/connexion/= et =https://csrs.koba.sarl/connexion/= repondent =200= avec verification TLS reussie; =/app/= redirige vers la connexion, l'API Processus desactivee repond =404= et HTTP redirige en =308=. Le futur nom =ent.csrs.ch= resolve encore vers =54.36.60.51= et n'a donc pas ete modifie dans ce lot.
-
-
 * <2026-08-13 jeu.> Deux agendas de direction sur une periode choisie
-** Besoins confirmes
-
-- Le secretariat de la Direction generale choisit une date de debut et une date de fin inclusives; la valeur par defaut est la semaine suivante du lundi au dimanche et la periode est limitee a 31 jours.
-- Une tache figure dans la periode lorsque son affectation a commence au plus tard a la fin demandee et qu'elle est encore ouverte ou a ete cloturee au plus tot au debut demande.
-- Deux PDF sont produits independamment: =Direction des programmes= et =Direction administrative=. Les evenements majeurs, visites et indisponibilites sont partages par les deux agendas.
-- Un utilisateur appartient au plus a une direction d'agenda et toutes ses taches suivent son classement courant au moment de la generation. Un utilisateur non classe et ses taches figurent dans les deux agendas avec un avertissement visible.
-- Lors de la premiere publication, la liste officielle n'etait pas disponible et les utilisateurs sont donc restes non classes; la decision de 07:51 ci-dessus a ensuite autorise un classement initial deduit de l'unite principale, sans synchronisation automatique future.
-- Les anciens agendas hebdomadaires restent conserves comme =Agenda global historique= avec leur PDF et leur empreinte d'origine.
-- Le module =Processus= est desactive completement dans l'interface React, l'API et l'administration sans supprimer son application Django, ses migrations, ses tables ni ses donnees. Le lien =Interface classique= disparait du menu, mais =/classique/= reste accessible directement.
-
 ** Decision d'architecture
 
-=accounts.User.agenda_direction= est un =CharField= audite par =django-simple-history= avec exactement deux valeurs non vides: =programs= et =administration=. Le vide represente explicitement l'attente du classement officiel; aucun champ de direction n'est ajoute aux taches afin d'eviter deux sources de verite et le snapshot PDF fige le classement utilise lors de chaque generation.
+Le secretariat choisit une periode inclusive de 31 jours maximum, proposee par defaut du lundi au dimanche de la semaine suivante. Une tache est retenue lorsque son affectation chevauche cette periode. Les evenements majeurs, visites et indisponibilites sont partages, puis deux PDF independants sont produits pour =programs= et =administration=.
+
+=accounts.User.agenda_direction= est un =CharField= audite par =django-simple-history= avec exactement deux valeurs non vides: =programs= et =administration=. Le vide represente explicitement l'attente du classement officiel; aucun champ de direction n'est ajoute aux taches afin d'eviter deux sources de verite et le snapshot PDF fige le classement utilise lors de chaque generation. Le booleen audite =include_in_direction_agendas= permet une exclusion explicite, notamment celle du DG, sans detruire les taches.
 
 =AgendaDraft= porte la periode et les evenements majeurs partages. =AgendaVersion= porte en plus la direction et un compteur de version independant par triplet =periode + direction=. La migration renomme les anciens modeles sans recreer leurs tables, transforme leur lundi en periode de sept jours et marque leurs versions =legacy=; les octets PDF, chemins de stockage et empreintes ne sont pas reecrits.
 
-Le snapshot =schema_version= 2 filtre les affectations par chevauchement de periode, conserve les commentaires de la periode, classe la personne dans son unite principale valide a la fin de periode avec repli sur l'unite historique de l'affectation et fournit la liste distincte des utilisateurs non classes. Le PDF et React affichent les dates en =jj/mm/aaaa= et signalent chaque personne non classee.
+Le snapshot =schema_version= 2 filtre les affectations par chevauchement de periode et par inclusion explicite, conserve les commentaires de la periode, classe la personne dans son unite principale valide a la fin de periode avec repli sur l'unite historique de l'affectation et fournit la liste distincte des utilisateurs non classes encore inclus. Le PDF et React affichent les dates en =jj/mm/aaaa= et signalent chaque personne non classee.
+
+Les anciens agendas hebdomadaires restent des =Agenda global historique= avec leurs PDF et empreintes d'origine. Le module =Processus= est desactive dans React, l'API et l'administration sans supprimer ses tables; =/classique/= reste accessible directement, mais son lien n'est plus affiche.
 
 ** Procedure d'administration du classement
 
 1. Ouvrir =Administration > Utilisateurs= puis la fiche de la personne.
 2. Dans =Identite=, choisir =Direction des programmes= ou =Direction administrative= dans =Direction de l'agenda=.
-3. Laisser le champ vide seulement tant que la liste officielle n'a pas tranche; verifier alors que l'avertissement de double inclusion apparait dans les deux apercus.
-4. Enregistrer. Le nouveau classement s'applique aux prochaines generations seulement et ne modifie jamais un PDF deja archive.
-
-** Verification attendue avant publication
-
-- [X] Migrations reproductibles sur base vide et conservation explicite des versions historiques.
-- [X] Tests de permission, chevauchement de periode, double inclusion des non classes, separation des compteurs de version et PDF prive.
-- [X] Retrait des routes et capacites Processus, du menu Processus et du lien Interface classique.
-- [X] Contrat OpenAPI, types TypeScript, tests React et manuel utilisateur adaptes.
-- [X] Sauvegarde publique, application des migrations, reconstruction du service applicatif et controle HTTPS effectues apres validation complete du lot.
-
-** Mise en service et preuves
-
-La sauvegarde verifiee precedant la migration est =backups/csrs_20260813T074138Z.dump= avec =backups/csrs_documents_20260813T074138Z.tar.gz= et leur manifeste =backups/csrs_20260813T074138Z.sha256=. L'image applicative =sha256:567adc855ccc9bd33d675d0cec4a2e6e92572310815e0f9f9c66e06d6031d38d= a recree uniquement =csrs-web-1=; PostgreSQL et ClamAV sont restes en place, et le notifier a ete arrete conformement a =CSRS_START_NOTIFIER=0=.
-
-Les migrations =accounts.0005= et =agenda.0002= sont appliquees. Les 57 utilisateurs actifs restent volontairement non classes jusqu'a reception de la liste officielle. Les deux anciennes versions d'agenda sont marquees =legacy= et leurs octets PDF ont ete relus avec succes contre les empreintes conservees. En public, =https://179.237.107.40/connexion/= repond =200= avec un certificat valide, =/app/= redirige vers la connexion, =/api/v1/processes/= repond =404=, =/classique/= reste joignable directement avec redirection de connexion et HTTP redirige vers HTTPS en =308=.
-
-La fabrique locale a regenere les 19 captures du manuel. Les bibliotheques systeme requises par Chromium headless ont ete installees sur le nouvel hote; le navigateur Playwright temporaire et la base temporaire ont ete supprimes apres la capture.
+3. Laisser le champ vide seulement tant que la liste officielle n'a pas tranche; verifier alors que l'avertissement de double inclusion apparait dans les deux apercus. Decochez =Inclure dans les agendas de direction= uniquement pour une exclusion explicite comme celle du DG.
+4. Enregistrer. Le nouveau classement et l'inclusion s'appliquent aux prochaines generations seulement et ne modifient jamais un PDF deja archive.
 
 
 * <2026-08-12 mer.> Manuel utilisateur illustre et deploiement public verifie

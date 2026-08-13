@@ -258,6 +258,36 @@ def test_agenda_direction_migration_preserves_choices_and_audits_backfill() -> N
 
 
 @pytest.mark.django_db
+def test_dg_exclusion_migration_is_audited_and_idempotent() -> None:
+    dg = User.objects.create_user("direction@example.test", login_alias="dg")
+    group = Group.objects.create(name="Lecture direction")
+    permission = Permission.objects.order_by("pk").first()
+    assert permission is not None
+    dg.groups.add(group)
+    dg.user_permissions.add(permission)
+    migration = import_module(
+        "accounts.migrations.0007_user_include_in_direction_agendas"
+    )
+
+    class SchemaEditor:
+        connection = connection
+
+    migration.exclude_dg_from_direction_agendas(apps, SchemaEditor())
+    dg.refresh_from_db()
+
+    assert dg.include_in_direction_agendas is False
+    history = dg.history.filter(history_change_reason=migration.EXCLUSION_REASON).latest()
+    assert history.include_in_direction_agendas is False
+    assert history.groups.filter(group=group).exists()
+    assert history.user_permissions.filter(permission=permission).exists()
+
+    migration.exclude_dg_from_direction_agendas(apps, SchemaEditor())
+    assert (
+        dg.history.filter(history_change_reason=migration.EXCLUSION_REASON).count() == 1
+    )
+
+
+@pytest.mark.django_db
 def test_unit_link_requires_one_parent_and_rejects_cycles() -> None:
     first = OrganizationUnit.objects.create(code="ONE", short_name="One", long_name="One")
     second = OrganizationUnit.objects.create(

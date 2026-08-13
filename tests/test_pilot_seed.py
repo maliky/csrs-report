@@ -140,6 +140,12 @@ def test_pilot_seed_is_dry_runnable_replacing_legacy_and_idempotent(
     assert set(
         User.objects.filter(agenda_direction="").values_list("login_alias", flat=True)
     ) == {"dev", "dg", "secretariat_dg", "coordination", "pilotage", "expertise"}
+    assert not User.objects.get(login_alias="dg").include_in_direction_agendas
+    assert (
+        not User.objects.exclude(login_alias="dg")
+        .filter(include_in_direction_agendas=False)
+        .exists()
+    )
     assert set(
         User.objects.filter(
             login_alias__in=("controle", "controle_interne", "communication", "genre")

@@ -325,6 +325,29 @@ def test_user_direction_is_exclusive_and_unclassified_work_appears_in_both(
     assert len(administration["units"]) == 1
 
 
+@pytest.mark.django_db
+def test_user_explicitly_excluded_from_direction_agendas_appears_in_neither(
+    assignment, people
+) -> None:
+    monday = week_start_for(timezone.localdate())
+    sunday = monday + timedelta(days=6)
+    employee = people["employee"]
+    employee.include_in_direction_agendas = False
+    employee.save(update_fields=["include_in_direction_agendas"])
+
+    for direction in (
+        AgendaDirection.PROGRAMS,
+        AgendaDirection.ADMINISTRATION,
+    ):
+        snapshot = build_agenda_snapshot(
+            period_start=monday,
+            period_end=sunday,
+            agenda_direction=direction,
+        )
+        assert snapshot["units"] == []
+        assert snapshot["unclassified_users"] == []
+
+
 def test_next_week_period_is_monday_through_sunday() -> None:
     start, end = next_week_period(timezone.datetime(2026, 8, 5).date())
     assert start.isoformat() == "2026-08-10"

@@ -80,6 +80,14 @@ class User(AbstractUser):
             "dans les deux agendas."
         ),
     )
+    include_in_direction_agendas = models.BooleanField(
+        "inclure dans les agendas de direction",
+        default=True,
+        help_text=(
+            "Désactivez ce réglage pour le DG ou une personne dont les tâches ne "
+            "doivent figurer dans aucun agenda de direction."
+        ),
+    )
     history = HistoricalRecords(
         excluded_fields=("password", "last_login"),
         m2m_fields=("groups", "user_permissions"),

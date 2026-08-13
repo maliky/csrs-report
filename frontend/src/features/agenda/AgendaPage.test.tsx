@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, vi } from "vitest";
@@ -156,18 +156,36 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
   );
 
   await screen.findByRole("heading", { name: "Agendas de direction" });
-  expect(screen.getByLabelText("Début")).toHaveValue("10/08/2026");
-  expect(screen.getByLabelText("Fin")).toHaveValue("16/08/2026");
+  expect(
+    screen.getByRole("button", {
+      name: "Du 10/08/2026 au 16/08/2026",
+    }),
+  ).toBeInTheDocument();
+  await user.click(
+    screen.getByRole("button", {
+      name: "Du 10/08/2026 au 16/08/2026",
+    }),
+  );
+  expect(
+    screen.getByRole("dialog", { name: "Choisir la période" }),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Cliquez sur la date de début, puis sur la date de fin."),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Annuler" }));
+  await user.click(screen.getByRole("button", { name: "Semaine prochaine" }));
   expect(
     screen.getByRole("heading", {
       name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
     }),
   ).toBeInTheDocument();
-  await user.click(
-    screen.getByRole("button", {
-      name: /Générer — Direction des programmes/,
-    }),
+  expect(screen.getByLabelText("Direction de l’agenda")).toHaveValue(
+    "programs",
   );
+  expect(
+    screen.getAllByRole("button", { name: "Générer le PDF" }),
+  ).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Générer le PDF" }));
 
   expect(
     await screen.findByText(
@@ -180,6 +198,184 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
       "Direction des programmes · du 10/08/2026 au 16/08/2026 — version 1",
     ),
   ).toBeInTheDocument();
+});
+
+test("applique une plage choisie sur un calendrier unique sans requête intermédiaire", async () => {
+  const requestedPeriods: string[] = [];
+  server.use(
+    http.get("/api/v1/agenda/preview/", ({ request }) => {
+      const url = new URL(request.url);
+      const periodStart = url.searchParams.get("period_start") ?? "";
+      const periodEnd = url.searchParams.get("period_end") ?? "";
+      requestedPeriods.push(`${periodStart}:${periodEnd}`);
+      return HttpResponse.json({
+        draft: {
+          period_start: periodStart,
+          period_end: periodEnd,
+          major_events: "",
+          revision: 0,
+        },
+        snapshot: {
+          ...emptySnapshot,
+          period_start: periodStart,
+          period_end: periodEnd,
+        },
+      });
+    }),
+    http.get("/api/v1/visits/", ({ request }) => {
+      const url = new URL(request.url);
+      return HttpResponse.json({
+        period_start: url.searchParams.get("period_start"),
+        period_end: url.searchParams.get("period_end"),
+        visits: [],
+      });
+    }),
+    http.get("/api/v1/agenda/versions/", () =>
+      HttpResponse.json({ versions: [] }),
+    ),
+  );
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  render(
+    <MemoryRouter>
+      <AgendaPage />
+    </MemoryRouter>,
+  );
+
+  await screen.findByRole("heading", {
+    name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
+  });
+  expect(requestedPeriods).toEqual(["2026-08-10:2026-08-16"]);
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Du 10/08/2026 au 16/08/2026",
+    }),
+  );
+  const dialog = screen.getByRole("dialog", { name: "Choisir la période" });
+  await user.click(
+    within(dialog).getByRole("button", { name: /20 août 2026/i }),
+  );
+  expect(
+    within(dialog).getByText(
+      "Début sélectionné : 20/08/2026. Choisissez maintenant la date de fin.",
+    ),
+  ).toBeInTheDocument();
+  expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+  expect(
+    within(dialog).getByRole("button", { name: "Appliquer" }),
+  ).toBeDisabled();
+  expect(requestedPeriods).toHaveLength(1);
+  expect(
+    screen.getByRole("heading", {
+      name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
+    }),
+  ).toBeInTheDocument();
+
+  await user.click(
+    within(dialog).getByRole("button", { name: /26 août 2026/i }),
+  );
+  await user.click(within(dialog).getByRole("button", { name: "Appliquer" }));
+
+  expect(
+    await screen.findByRole("heading", {
+      name: "Direction des programmes · du 20/08/2026 au 26/08/2026",
+    }),
+  ).toBeInTheDocument();
+  expect(requestedPeriods).toEqual([
+    "2026-08-10:2026-08-16",
+    "2026-08-20:2026-08-26",
+  ]);
+});
+
+test("conserve le dernier agenda visible si le changement de période échoue", async () => {
+  let failRefresh = false;
+  server.use(
+    http.get("/api/v1/agenda/preview/", ({ request }) => {
+      if (failRefresh)
+        return HttpResponse.json(
+          {
+            error: {
+              code: "temporary_failure",
+              message: "Service temporairement indisponible.",
+            },
+          },
+          { status: 503 },
+        );
+      const url = new URL(request.url);
+      const periodStart = url.searchParams.get("period_start") ?? "";
+      const periodEnd = url.searchParams.get("period_end") ?? "";
+      return HttpResponse.json({
+        draft: {
+          period_start: periodStart,
+          period_end: periodEnd,
+          major_events: "",
+          revision: 0,
+        },
+        snapshot: {
+          ...emptySnapshot,
+          period_start: periodStart,
+          period_end: periodEnd,
+        },
+      });
+    }),
+    http.get("/api/v1/visits/", ({ request }) => {
+      const url = new URL(request.url);
+      return HttpResponse.json({
+        period_start: url.searchParams.get("period_start"),
+        period_end: url.searchParams.get("period_end"),
+        visits: [],
+      });
+    }),
+    http.get("/api/v1/agenda/versions/", () =>
+      HttpResponse.json({ versions: [] }),
+    ),
+  );
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  render(
+    <MemoryRouter>
+      <AgendaPage />
+    </MemoryRouter>,
+  );
+
+  await screen.findByRole("heading", {
+    name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
+  });
+  await user.click(
+    screen.getByRole("button", {
+      name: "Du 10/08/2026 au 16/08/2026",
+    }),
+  );
+  const dialog = screen.getByRole("dialog", { name: "Choisir la période" });
+  await user.click(
+    within(dialog).getByRole("button", { name: /20 août 2026/i }),
+  );
+  await user.click(
+    within(dialog).getByRole("button", { name: /26 août 2026/i }),
+  );
+  failRefresh = true;
+  await user.click(within(dialog).getByRole("button", { name: "Appliquer" }));
+
+  expect(
+    await screen.findByText(/Mise à jour impossible.*Service temporairement/i),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", {
+      name: "Direction des programmes · du 10/08/2026 au 16/08/2026",
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "Impossible de charger cette page" }),
+  ).not.toBeInTheDocument();
+
+  failRefresh = false;
+  await user.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", {
+        name: "Direction des programmes · du 20/08/2026 au 26/08/2026",
+      }),
+    ).toBeInTheDocument(),
+  );
 });
 
 test("permet aux RH d’ajouter un congé à la semaine", async () => {

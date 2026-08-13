@@ -300,18 +300,18 @@ Le compte RH ouvre =Absences et missions=, choisit la semaine, l'agent, la natur
 Cette procédure est réalisée par le secrétariat de la Direction générale. Elle produit séparément un PDF pour la Direction des programmes et un PDF pour la Direction administrative.
 
 1. Ouvrir =Agenda=.
-2. Choisir les dates inclusives de début et de fin au format =jj/mm/aaaa=. Par défaut, l'application propose le lundi au dimanche de la semaine suivante. Une période ne peut pas dépasser 31 jours.
+2. Sélectionner le bouton qui affiche la période courante pour ouvrir un calendrier unique. Cliquer d'abord sur la date de début, puis sur la date de fin de la plage mise en évidence; le premier clic affiche une instruction et non une erreur. Sur ordinateur, deux mois sont visibles côte à côte et sur téléphone un seul mois est affiché. Sélectionner =Appliquer= seulement lorsque la période est correcte; =Annuler= ferme le panneau sans modifier l'agenda. =Semaine prochaine= applique directement le lundi au dimanche proposé par défaut. Une période ne peut pas dépasser 31 jours inclusifs.
 3. Dans =Visiteurs=, enregistrer chaque arrivée et marquer le départ lorsqu'il survient. Les noms sont facultatifs, mais le nombre déclaré doit être exact.
 4. Dans =Événements majeurs=, saisir les faits à placer en tête des deux rapports. S'il n'existe aucun événement particulier, saisir =RAS=.
-5. Choisir =Direction des programmes= ou =Direction administrative= dans l'aperçu et contrôler les arrivées, départs, congés, absences, missions, services avec activité, tâches, pourcentages et observations.
-6. Vérifier l'avertissement =Personnes non classées=. Les tâches de ces personnes apparaissent volontairement dans les deux agendas jusqu'à leur classement par l'administrateur IT.
+5. Dans =Direction de l'agenda=, choisir =Direction des programmes= ou =Direction administrative=. Ce sélecteur actualise l'aperçu affiché et détermine le PDF produit; contrôler ensuite les arrivées, départs, congés, absences, missions, services avec activité, tâches, pourcentages et observations. Pendant une mise à jour, le dernier agenda reste visible. Si le chargement échoue, sélectionner =Réessayer= dans l'avertissement local; aucune boîte de dialogue ne bloque le reste de la page.
+6. Vérifier l'avertissement =Personnes non classées=. Les tâches de ces personnes apparaissent volontairement dans les deux agendas jusqu'à leur classement par l'administrateur IT. Les tâches du DG sont explicitement exclues des deux agendas et ne déclenchent pas cet avertissement.
 7. Si le travail doit être repris plus tard, sélectionner =Enregistrer le brouillon=.
-8. Lorsque l'aperçu est correct, sélectionner =Générer — Direction des programmes= ou =Générer — Direction administrative=. Les deux générations sont indépendantes et peuvent avoir des numéros de version différents.
+8. Lorsque l'aperçu est correct, sélectionner l'unique bouton =Générer le PDF=. Changer ensuite la direction dans le sélecteur pour préparer l'autre agenda; les deux générations sont indépendantes et peuvent avoir des numéros de version différents.
 9. Attendre le message confirmant la direction archivée.
 10. Dans =Versions archivées=, contrôler la période, la direction et le numéro de version, puis sélectionner =Ouvrir le PDF= pour télécharger ou imprimer le fichier.
 
-#+CAPTION: Préparation par le secrétariat avec la période, la direction et les deux actions de génération.
-#+ATTR_HTML: :alt "Agendas de direction préparés par le secrétariat avec période et deux boutons de génération PDF" :width "100%"
+#+CAPTION: Préparation par le secrétariat avec le calendrier unique de sélection de période.
+#+ATTR_HTML: :alt "Calendrier unique ouvert pour choisir le début et la fin de la période d'un agenda" :width "100%"
 #+ATTR_ORG: :width 1000
 [[file:docs/manual/screenshots/14-agenda-secretariat-preparation.png]]
 
@@ -349,13 +349,14 @@ Cette annexe concerne uniquement l'administrateur IT =dev=. Les autorisations re
 1. Ouvrir =Administration= puis =Utilisateurs= et sélectionner =Ajouter utilisateur=.
 2. Saisir l'email institutionnel, l'identifiant court facultatif, le prénom, le nom, la fonction et le téléphone facultatif.
 3. Choisir une seule =Direction de l'agenda= : =Direction des programmes= ou =Direction administrative=. Laisser vide uniquement si le classement officiel n'est pas encore connu; les tâches de la personne apparaîtront alors dans les deux agendas avec un avertissement.
-4. Dans =Unités actuelles=, déplacer l'unité d'accueil et les éventuelles unités secondaires vers les unités choisies.
-5. Choisir une seule =Unité principale=.
-6. Choisir le =Responsable principal=; le laisser vide uniquement pour une véritable racine de l'organigramme.
-7. Saisir la =Date d'effet= au format =jj/mm/aaaa=.
-8. Enregistrer puis rouvrir la fiche afin de contrôler les valeurs.
-9. Depuis la liste des utilisateurs, lancer =Envoyer un lien d'activation= après vérification de l'adresse.
-10. Se connecter comme responsable et contrôler la présence de la personne dans =Mon équipe= à la date d'effet.
+4. Conserver =Inclure dans les agendas de direction= coché. Le décocher uniquement pour une exclusion explicite validée, comme celle du DG; la personne et ses tâches seront alors absentes des deux agendas.
+5. Dans =Unités actuelles=, déplacer l'unité d'accueil et les éventuelles unités secondaires vers les unités choisies.
+6. Choisir une seule =Unité principale=.
+7. Choisir le =Responsable principal=; le laisser vide uniquement pour une véritable racine de l'organigramme.
+8. Saisir la =Date d'effet= au format =jj/mm/aaaa=.
+9. Enregistrer puis rouvrir la fiche afin de contrôler les valeurs.
+10. Depuis la liste des utilisateurs, lancer =Envoyer un lien d'activation= après vérification de l'adresse.
+11. Se connecter comme responsable et contrôler la présence de la personne dans =Mon équipe= à la date d'effet.
 
 Le compte est créé sans mot de passe partagé. Les anciennes appartenances et lignes hiérarchiques sont clôturées et conservées dans l'historique au lieu d'être supprimées.
 

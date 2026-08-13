@@ -275,6 +275,7 @@ def build_agenda_snapshot(
             Q(employee__agenda_direction=agenda_direction)
             | Q(employee__agenda_direction="")
         )
+        .filter(employee__include_in_direction_agendas=True)
         .filter(
             Q(start_date__lte=period_end)
             & (Q(completed_at__isnull=True) | Q(completed_at__date__gte=period_start))

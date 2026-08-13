@@ -574,6 +574,7 @@ class Command(BaseCommand):
             user.is_staff = is_admin
             user.is_superuser = is_admin
             user.is_it_admin = is_admin
+            user.include_in_direction_agendas = spec.alias != "dg"
             if not user.agenda_direction and spec.unit_code:
                 user.agenda_direction = classify_agenda_direction(
                     unit_code=spec.unit_code,

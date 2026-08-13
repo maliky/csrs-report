@@ -79,10 +79,13 @@ def test_login_redirects_to_the_react_interface_by_default(client) -> None:
 def test_agenda_direction_is_single_choice_and_audited() -> None:
     user = User.objects.create_user("agenda-choice@example.test")
     assert user.agenda_direction == ""
+    assert user.include_in_direction_agendas is True
     user.agenda_direction = AgendaDirection.PROGRAMS
+    user.include_in_direction_agendas = False
     user.full_clean()
     user.save()
     assert user.history.latest().agenda_direction == AgendaDirection.PROGRAMS
+    assert user.history.latest().include_in_direction_agendas is False
 
     user.agenda_direction = "programs,administration"
     with pytest.raises(ValidationError):
