@@ -1,6 +1,23 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-14 ven.> Gestion React des utilisateurs et des equipes
+** Decision d'architecture
+
+La navigation React utilise =Cog= pour =Gestion des taches=, =UserCog= pour =Utilisateurs= et conserve =Administration avancee= comme acces a Django Admin. Le nouveau menu est reserve cote serveur aux comptes actifs =is_it_admin= ou =is_superuser=; le statut =is_staff= seul ne suffit pas.
+
+La fiche React modifie l'identite, le classement dans les agendas et les champs calcules de l'organisation sans dupliquer =OrganizationMembership= ni =ReportingLine=. Les unites et collaborateurs utilisent un selecteur double inspire de l'administration Django. Retirer un collaborateur principal exige son nouveau responsable; l'operation datee est transactionnelle, refuse les cycles et les unites incompatibles, conserve l'historique et transfere les taches actives. Les responsables secondaires restent dans l'administration avancee: ils peuvent suivre et commenter, mais ne remplacent pas le responsable principal pour affecter, modifier, valider ou clore une tache.
+
+Un compte n'est jamais supprime depuis cette interface. =Desactiver= bloque la connexion tout en conservant les taches, rattachements et historiques; =Reactiver= restaure l'acces. La creation conserve le lien d'activation existant. La reinitialisation genere un mot de passe temporaire aleatoire, affiche une seule fois sans stockage en clair, puis =password_change_required= bloque les fonctions metier jusqu'a son remplacement. L'administrateur ne peut ni se desactiver ni reinitialiser son propre mot de passe depuis cette fiche; un administrateur IT non superutilisateur ne peut pas modifier un superutilisateur.
+
+Les ecritures transmettent un jeton d'etat et repondent en conflit lorsque le compte ou l'equipe a change. Les droits techniques globaux, groupes, permissions, delegations et responsables secondaires restent geres dans =Administration avancee=.
+
+** Verification
+
+- [X] Permissions serveur, creation, modification, activation, desactivation reversible et conflits concurrents couverts par pytest.
+- [X] Mot de passe temporaire, blocage global, remplacement obligatoire et conservation de la session couverts par pytest et Vitest.
+- [X] Selecteurs accessibles, reaffectation obligatoire, navigation responsive, OpenAPI, typage et build React verifies.
+
 * <2026-08-14 ven.> Suppression groupee et reinitialisation du reporting
 ** Decision d'architecture
 

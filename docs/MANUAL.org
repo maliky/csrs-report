@@ -52,6 +52,18 @@ Les parcours par profil renvoient à ces procédures afin de ne pas répéter le
 #+ATTR_ORG: :width 1000
 [[file:docs/manual/screenshots/01-connexion.png]]
 
+** Remplacer un mot de passe temporaire
+:PROPERTIES:
+:CUSTOM_ID: proc-mot-de-passe-temporaire
+:END:
+
+1. Se connecter avec le mot de passe temporaire transmis par l'administrateur IT.
+2. Dans l'écran obligatoire =Choisir un nouveau mot de passe=, saisir de nouveau ce mot de passe temporaire.
+3. Saisir puis confirmer un nouveau mot de passe personnel.
+4. Sélectionner =Enregistrer=. Les autres fonctions deviennent accessibles uniquement après cette opération.
+
+Le mot de passe temporaire ne doit pas être conservé après son remplacement ni transmis dans une observation, un email collectif ou un document partagé.
+
 ** Utiliser le menu sur ordinateur et téléphone
 :PROPERTIES:
 :CUSTOM_ID: proc-navigation
@@ -346,7 +358,7 @@ Cette annexe concerne uniquement l'administrateur IT =dev=. Les autorisations re
 :CUSTOM_ID: proc-ajouter-personne
 :END:
 
-1. Ouvrir =Administration= puis =Utilisateurs= et sélectionner =Ajouter utilisateur=.
+1. Dans l'interface React, ouvrir =Utilisateurs= puis sélectionner =Ajouter une personne=.
 2. Saisir l'email institutionnel, l'identifiant court facultatif, le prénom, le nom, la fonction et le téléphone facultatif.
 3. Choisir une seule =Direction de l'agenda= : =Direction des programmes= ou =Direction administrative=. Laisser vide uniquement si le classement officiel n'est pas encore connu; les tâches de la personne apparaîtront alors dans les deux agendas avec un avertissement.
 4. Conserver =Inclure dans les agendas de direction= coché. Le décocher uniquement pour une exclusion explicite validée, comme celle du DG; la personne et ses tâches seront alors absentes des deux agendas.
@@ -355,15 +367,39 @@ Cette annexe concerne uniquement l'administrateur IT =dev=. Les autorisations re
 7. Choisir le =Responsable principal=; le laisser vide uniquement pour une véritable racine de l'organigramme.
 8. Saisir la =Date d'effet= au format =jj/mm/aaaa=.
 9. Enregistrer puis rouvrir la fiche afin de contrôler les valeurs.
-10. Depuis la liste des utilisateurs, lancer =Envoyer un lien d'activation= après vérification de l'adresse.
+10. Dans =Accès au compte=, sélectionner =Envoyer l'activation= après vérification de l'adresse.
 11. Se connecter comme responsable et contrôler la présence de la personne dans =Mon équipe= à la date d'effet.
 
 Le compte est créé sans mot de passe partagé. Les anciennes appartenances et lignes hiérarchiques sont clôturées et conservées dans l'historique au lieu d'être supprimées.
 
-#+CAPTION: Nouvelle fiche utilisateur avec insertion dans l'organigramme.
-#+ATTR_HTML: :alt "Administration utilisateur avec unités actuelles, unité principale, responsable et date d'effet" :width "100%"
+#+CAPTION: Fiche historique de l'administration avancée, conservée comme recours pour les droits techniques.
+#+ATTR_HTML: :alt "Administration avancée d'un utilisateur avec unités, unité principale, responsable et date d'effet" :width "100%"
 #+ATTR_ORG: :width 1000
 [[file:docs/manual/screenshots/18-administration-personne-organigramme.png]]
+
+** Définir les collaborateurs directs
+:PROPERTIES:
+:CUSTOM_ID: proc-collaborateurs-directs
+:END:
+
+1. Ouvrir =Utilisateurs= puis la fiche du responsable.
+2. Dans =Collaborateurs directs=, filtrer les personnes disponibles et déplacer les personnes concernées vers =Sélectionnés=.
+3. Pour retirer une personne, sélectionner =Retirer= puis choisir son nouveau responsable principal. L'application refuse de laisser un collaborateur sans responsable.
+4. Vérifier la date d'effet et sélectionner =Enregistrer l'équipe=.
+5. Contrôler le résultat dans =Mon équipe=. Les tâches actives suivent automatiquement le nouveau responsable.
+
+Cette section gère uniquement les responsables principaux. Utiliser =Administration avancée= pour un responsable secondaire; celui-ci peut suivre et commenter, mais ne peut pas affecter, modifier, valider ou clore les tâches à la place du responsable principal.
+
+** Réinitialiser ou désactiver un compte
+:PROPERTIES:
+:CUSTOM_ID: proc-acces-compte
+:END:
+
+1. Ouvrir =Utilisateurs= puis la fiche de la personne.
+2. Pour réinitialiser l'accès, sélectionner =Réinitialiser le mot de passe=, confirmer puis copier immédiatement le mot de passe temporaire affiché une seule fois.
+3. Transmettre ce mot de passe par un canal sûr. À sa prochaine connexion, la personne suit [[#proc-mot-de-passe-temporaire][Remplacer un mot de passe temporaire]].
+4. Pour retirer l'accès, sélectionner =Désactiver=. Le compte, les tâches et l'historique sont conservés.
+5. Utiliser =Réactiver= pour restaurer ultérieurement l'accès.
 
 ** Créer ou rattacher une unité
 :PROPERTIES:
