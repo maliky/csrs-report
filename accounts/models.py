@@ -69,6 +69,14 @@ class User(AbstractUser):
         "telephone verifie le", null=True, blank=True
     )
     is_it_admin = models.BooleanField("administrateur IT", default=False)
+    password_change_required = models.BooleanField(
+        "changement de mot de passe obligatoire",
+        default=False,
+        help_text=(
+            "Impose le remplacement du mot de passe temporaire lors de la "
+            "prochaine connexion."
+        ),
+    )
     agenda_direction = models.CharField(
         "direction de l'agenda",
         max_length=16,

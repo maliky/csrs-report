@@ -4,9 +4,10 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, cast
 
-from django.contrib.auth import logout
+from django.contrib.auth import logout, update_session_auth_hash
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Prefetch, Q, QuerySet
 from django.http import Http404
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
@@ -18,7 +19,19 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import User
+from accounts.models import AgendaDirection, User
+from accounts.services import (
+    StaleUserStateError,
+    can_manage_users,
+    complete_temporary_password_change,
+    create_managed_user,
+    ensure_can_manage_users,
+    reset_managed_user_password,
+    send_activation,
+    set_managed_user_active,
+    update_managed_user,
+    user_management_state_token,
+)
 from agenda.services import (
     can_manage_availability,
     can_manage_visits,
@@ -29,13 +42,18 @@ from api.presenters import (
     assignment_detail_payload,
     assignment_summary_payload,
     decimal_text,
+    collaborator_management_payload,
+    organization_unit_payload,
     period_payload,
     person_payload,
     proposal_payload,
     task_management_payload,
+    user_management_detail_payload,
+    user_management_summary_payload,
 )
 from api.serializers import (
     ObservationSerializer,
+    CollaboratorUpdateSerializer,
     PlanningPreviewSerializer,
     ProgressSerializer,
     ProposalCreateSerializer,
@@ -46,10 +64,17 @@ from api.serializers import (
     TaskBulkDeleteSerializer,
     TaskManagementQuerySerializer,
     TaskUpdateSerializer,
+    StateTokenSerializer,
+    TemporaryPasswordChangeSerializer,
     TransitionSerializer,
+    UserManagementQuerySerializer,
+    UserUpdateSerializer,
+    UserWriteSerializer,
 )
 from work.models import (
     InstitutionalAction,
+    OrganizationMembership,
+    OrganizationUnit,
     TaskAssignment,
     TaskProposal,
     WorkCalendar,
@@ -80,6 +105,7 @@ from work.services import (
     update_proposal,
     validate_completion,
     delete_task_assignments,
+    update_primary_collaborators,
     visible_team_proposals,
     visible_employee_ids,
     workload_for,
@@ -94,6 +120,20 @@ PERIOD_PARAMETERS = [
 def request_user(request: Request) -> User:
     """Return the authenticated custom user after DRF permission checks."""
     return cast(User, request.user)
+
+
+def managed_user_queryset() -> QuerySet[User]:
+    """Load routine user administration rows with their current memberships."""
+    memberships = OrganizationMembership.objects.filter(
+        end_date__isnull=True
+    ).select_related("unit")
+    return User.objects.prefetch_related(
+        Prefetch(
+            "organization_memberships",
+            queryset=memberships,
+            to_attr="current_organization_memberships",
+        )
+    )
 
 
 def selected_period(request: Request) -> ReportingPeriod:
@@ -160,6 +200,8 @@ class SessionView(APIView):
                     "prepare_weekly_agenda": can_prepare_agenda(user),
                     "view_weekly_agenda": can_view_agenda(user),
                     "delete_tasks": can_delete_reporting_data(user),
+                    "manage_users": can_manage_users(user),
+                    "password_change_required": user.password_change_required,
                 },
             }
         )
@@ -170,6 +212,289 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         logout(request._request)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SessionPasswordView(APIView):
+    """Complete the mandatory replacement of a temporary password."""
+
+    @extend_schema(request=TemporaryPasswordChangeSerializer, responses={204: None})
+    def post(self, request: Request) -> Response:
+        serializer = TemporaryPasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = complete_temporary_password_change(
+            user=request_user(request),
+            current_password=str(data["current_password"]),
+            new_password=str(data["new_password"]),
+        )
+        update_session_auth_hash(request._request, user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserListCreateView(APIView):
+    """List and create institution-managed accounts."""
+
+    @extend_schema(
+        operation_id="user_list",
+        parameters=[
+            OpenApiParameter("q", OpenApiTypes.STR, required=False),
+            OpenApiParameter("state", OpenApiTypes.STR, required=False),
+            OpenApiParameter("unit_id", OpenApiTypes.INT, required=False),
+            OpenApiParameter("page", OpenApiTypes.INT, required=False),
+            OpenApiParameter("page_size", OpenApiTypes.INT, required=False),
+        ],
+        responses=OpenApiTypes.OBJECT,
+    )
+    def get(self, request: Request) -> Response:
+        actor = request_user(request)
+        ensure_can_manage_users(actor)
+        serializer = UserManagementQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        queryset = managed_user_queryset()
+        query = str(data["q"]).strip()
+        if query:
+            queryset = queryset.filter(
+                Q(email__icontains=query)
+                | Q(login_alias__icontains=query)
+                | Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(position__icontains=query)
+            )
+        if data["state"] == "active":
+            queryset = queryset.filter(is_active=True)
+        elif data["state"] == "inactive":
+            queryset = queryset.filter(is_active=False)
+        if data.get("unit_id"):
+            queryset = queryset.filter(
+                organization_memberships__unit_id=data["unit_id"],
+                organization_memberships__end_date__isnull=True,
+            )
+        queryset = queryset.distinct().order_by("last_name", "first_name", "email")
+        paginator = Paginator(queryset, int(data["page_size"]))
+        page = paginator.get_page(int(data["page"]))
+        return Response(
+            {
+                "items": [
+                    user_management_summary_payload(user) for user in page.object_list
+                ],
+                "total": paginator.count,
+                "page": page.number,
+                "pages": paginator.num_pages,
+                "page_size": int(data["page_size"]),
+            }
+        )
+
+    @extend_schema(
+        operation_id="user_create",
+        request=UserWriteSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def post(self, request: Request) -> Response:
+        serializer = UserWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        actor = request_user(request)
+        user = create_managed_user(
+            actor=actor,
+            email=str(data["email"]),
+            login_alias=str(data.get("login_alias") or "") or None,
+            first_name=str(data.get("first_name", "")),
+            last_name=str(data.get("last_name", "")),
+            position=str(data.get("position", "")),
+            phone=str(data.get("phone", "")),
+            agenda_direction=str(data.get("agenda_direction", "")),
+            include_in_direction_agendas=bool(
+                data.get("include_in_direction_agendas", True)
+            ),
+            unit_ids=set(data.get("unit_ids", [])),
+            primary_unit_id=cast(int | None, data.get("primary_unit_id")),
+            primary_supervisor_id=cast(int | None, data.get("primary_supervisor_id")),
+            organization_effective_date=cast(date, data["organization_effective_date"]),
+        )
+        user = managed_user_queryset().get(pk=user.pk)
+        return Response(
+            user_management_detail_payload(user, actor),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class UserOptionsView(APIView):
+    """Expose active organization choices for the user editor."""
+
+    @extend_schema(operation_id="user_options", responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request) -> Response:
+        ensure_can_manage_users(request_user(request))
+        return Response(
+            {
+                "today": timezone.localdate().isoformat(),
+                "units": [
+                    organization_unit_payload(unit)
+                    for unit in OrganizationUnit.objects.filter(active=True)
+                ],
+                "users": [
+                    person_payload(user)
+                    for user in User.objects.filter(is_active=True).order_by(
+                        "last_name", "first_name", "email"
+                    )
+                ],
+                "agenda_directions": [
+                    {"value": value, "label": label}
+                    for value, label in AgendaDirection.choices
+                ],
+            }
+        )
+
+
+class UserDetailView(APIView):
+    """Read and update one account and its calculated organization fields."""
+
+    @extend_schema(operation_id="user_retrieve", responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request, pk: int) -> Response:
+        actor = request_user(request)
+        ensure_can_manage_users(actor)
+        user = get_object_or_404(managed_user_queryset(), pk=pk)
+        return Response(user_management_detail_payload(user, actor))
+
+    @extend_schema(
+        operation_id="user_update",
+        request=UserUpdateSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def patch(self, request: Request, pk: int) -> Response:
+        serializer = UserUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        actor = request_user(request)
+        target = get_object_or_404(User, pk=pk)
+        user = update_managed_user(
+            actor=actor,
+            user=target,
+            expected_token=str(data["state_token"]),
+            email=str(data["email"]),
+            login_alias=str(data.get("login_alias") or "") or None,
+            first_name=str(data.get("first_name", "")),
+            last_name=str(data.get("last_name", "")),
+            position=str(data.get("position", "")),
+            phone=str(data.get("phone", "")),
+            agenda_direction=str(data.get("agenda_direction", "")),
+            include_in_direction_agendas=bool(
+                data.get("include_in_direction_agendas", True)
+            ),
+            unit_ids=set(data.get("unit_ids", [])),
+            primary_unit_id=cast(int | None, data.get("primary_unit_id")),
+            primary_supervisor_id=cast(int | None, data.get("primary_supervisor_id")),
+            organization_effective_date=cast(date, data["organization_effective_date"]),
+        )
+        user = managed_user_queryset().get(pk=user.pk)
+        return Response(user_management_detail_payload(user, actor))
+
+
+class UserActivationView(APIView):
+    """Send the existing one-time activation link for a new account."""
+
+    @extend_schema(request=StateTokenSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request, pk: int) -> Response:
+        serializer = StateTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = request_user(request)
+        user = get_object_or_404(User, pk=pk)
+        ensure_can_manage_users(actor, user)
+        if user_management_state_token(user) != serializer.validated_data["state_token"]:
+            raise StaleUserStateError(
+                "Ce compte a change depuis l'ouverture de la fiche. Rechargez la page."
+            )
+        if not user.is_active:
+            raise ValidationError("Reactivez ce compte avant d'envoyer son activation.")
+        if user.has_usable_password():
+            raise ValidationError(
+                "Ce compte possede deja un mot de passe. Utilisez la reinitialisation."
+            )
+        sent = send_activation(request._request, user)
+        return Response({"sent": sent})
+
+
+class UserActiveView(APIView):
+    """Deactivate or reactivate a retained account."""
+
+    active: bool
+
+    @extend_schema(request=StateTokenSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request, pk: int) -> Response:
+        serializer = StateTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = request_user(request)
+        user = set_managed_user_active(
+            actor=actor,
+            user=get_object_or_404(User, pk=pk),
+            active=self.active,
+            expected_token=str(serializer.validated_data["state_token"]),
+        )
+        user = managed_user_queryset().get(pk=user.pk)
+        return Response(user_management_detail_payload(user, actor))
+
+
+class UserDeactivateView(UserActiveView):
+    active = False
+
+
+class UserReactivateView(UserActiveView):
+    active = True
+
+
+class UserTemporaryPasswordView(APIView):
+    """Generate and disclose one temporary password once."""
+
+    @extend_schema(request=StateTokenSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request, pk: int) -> Response:
+        serializer = StateTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = request_user(request)
+        user, temporary_password = reset_managed_user_password(
+            actor=actor,
+            user=get_object_or_404(User, pk=pk),
+            expected_token=str(serializer.validated_data["state_token"]),
+        )
+        response = Response(
+            {
+                "temporary_password": temporary_password,
+                "state_token": user_management_state_token(user),
+            }
+        )
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class UserCollaboratorsView(APIView):
+    """Read or replace one user's direct primary collaborators."""
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request, pk: int) -> Response:
+        actor = request_user(request)
+        supervisor = get_object_or_404(User, pk=pk)
+        ensure_can_manage_users(actor)
+        return Response(collaborator_management_payload(supervisor))
+
+    @extend_schema(request=CollaboratorUpdateSerializer, responses=OpenApiTypes.OBJECT)
+    def put(self, request: Request, pk: int) -> Response:
+        serializer = CollaboratorUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        actor = request_user(request)
+        supervisor = get_object_or_404(User, pk=pk)
+        ensure_can_manage_users(actor, supervisor)
+        update_primary_collaborators(
+            actor=actor,
+            supervisor=supervisor,
+            collaborator_ids=set(data["collaborator_ids"]),
+            replacements={
+                item["employee_id"]: item["supervisor_id"]
+                for item in data.get("replacements", [])
+            },
+            effective_date=cast(date, data["effective_date"]),
+            expected_token=str(data["state_token"]),
+        )
+        return Response(collaborator_management_payload(supervisor))
 
 
 class DashboardView(APIView):

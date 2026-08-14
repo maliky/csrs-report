@@ -15,6 +15,39 @@ urlpatterns = [
     ),
     path("session/", views.SessionView.as_view(), name="session"),
     path("session/logout/", views.LogoutView.as_view(), name="logout"),
+    path(
+        "session/password/",
+        views.SessionPasswordView.as_view(),
+        name="session-password",
+    ),
+    path("users/", views.UserListCreateView.as_view(), name="user-list"),
+    path("users/options/", views.UserOptionsView.as_view(), name="user-options"),
+    path("users/<int:pk>/", views.UserDetailView.as_view(), name="user-detail"),
+    path(
+        "users/<int:pk>/activation-link/",
+        views.UserActivationView.as_view(),
+        name="user-activation",
+    ),
+    path(
+        "users/<int:pk>/deactivate/",
+        views.UserDeactivateView.as_view(),
+        name="user-deactivate",
+    ),
+    path(
+        "users/<int:pk>/reactivate/",
+        views.UserReactivateView.as_view(),
+        name="user-reactivate",
+    ),
+    path(
+        "users/<int:pk>/temporary-password/",
+        views.UserTemporaryPasswordView.as_view(),
+        name="user-temporary-password",
+    ),
+    path(
+        "users/<int:pk>/collaborators/",
+        views.UserCollaboratorsView.as_view(),
+        name="user-collaborators",
+    ),
     path("visits/", agenda_api.VisitListCreateView.as_view(), name="visit-list"),
     path(
         "visits/<int:pk>/departure/",

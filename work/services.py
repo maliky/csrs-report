@@ -29,6 +29,7 @@ from access.services import (
     scoped_unit_ids,
 )
 from accounts.models import User
+from accounts.services import can_manage_users
 from work.models import (
     AssignmentStatus,
     ActivityKind,
@@ -73,6 +74,15 @@ class StaleSelectionError(Exception):
         self.assignment_ids = tuple(sorted(set(assignment_ids)))
         super().__init__(
             "La selection de taches a change. Rechargez la liste avant de recommencer."
+        )
+
+
+class StaleCollaboratorStateError(Exception):
+    """Signal that direct reporting lines changed while an editor was open."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "L'equipe a change depuis l'ouverture de la fiche. Rechargez la page."
         )
 
 
@@ -1182,6 +1192,220 @@ def organization_state_token(user: User) -> str:
         ),
     ]
     return sha256("|".join(payload).encode()).hexdigest()
+
+
+def collaborator_state_token(supervisor: User) -> str:
+    """Hash the open hierarchy used by the primary collaborator selector."""
+    memberships = OrganizationMembership.objects.filter(
+        is_primary=True, end_date__isnull=True
+    ).order_by("pk")
+    lines = ReportingLine.objects.filter(end_date__isnull=True).order_by("pk")
+    payload = [
+        f"supervisor:{supervisor.pk}:{organization_state_token(supervisor)}",
+        *(
+            f"m:{row.pk}:{row.user_id}:{row.unit_id}:{row.start_date}"
+            for row in memberships
+        ),
+        *(
+            f"r:{row.pk}:{row.employee_id}:{row.supervisor_id}:{row.unit_id}:{row.start_date}"
+            for row in lines
+        ),
+    ]
+    return sha256("|".join(payload).encode()).hexdigest()
+
+
+def eligible_primary_collaborator_ids(
+    supervisor: User, on_day: date | None = None
+) -> frozenset[int]:
+    """Return active people whose primary unit can report to one supervisor."""
+    target = on_day or timezone.localdate()
+    membership = primary_membership(supervisor, target)
+    if membership is None or not supervisor.is_active:
+        return frozenset()
+    unit_queue: deque[int] = deque([membership.unit_id])
+    unit_ids: set[int] = set()
+    while unit_queue:
+        unit_id = unit_queue.popleft()
+        if unit_id in unit_ids:
+            continue
+        unit_ids.add(unit_id)
+        unit_queue.extend(
+            OrganizationUnitLink.objects.filter(
+                supervisor_service_id=unit_id,
+                collaborator_service__active=True,
+            ).values_list("collaborator_service_id", flat=True)
+        )
+
+    reverse_edges: dict[int, set[int]] = {}
+    for manager_id, employee_id in active_lines(target).values_list(
+        "supervisor_id", "employee_id"
+    ):
+        reverse_edges.setdefault(employee_id, set()).add(manager_id)
+    ancestor_queue: deque[int] = deque([supervisor.pk])
+    ancestors: set[int] = set()
+    while ancestor_queue:
+        person_id = ancestor_queue.popleft()
+        for manager_id in reverse_edges.get(person_id, set()):
+            if manager_id not in ancestors:
+                ancestors.add(manager_id)
+                ancestor_queue.append(manager_id)
+
+    candidates = (
+        OrganizationMembership.objects.filter(
+            user__is_active=True,
+            is_primary=True,
+            unit_id__in=unit_ids,
+            start_date__lte=target,
+        )
+        .filter(Q(end_date__isnull=True) | Q(end_date__gte=target))
+        .exclude(user_id__in=ancestors | {supervisor.pk})
+        .values_list("user_id", flat=True)
+    )
+    return frozenset(candidates)
+
+
+def eligible_primary_supervisor_ids(
+    employee: User, on_day: date | None = None
+) -> frozenset[int]:
+    """Return active managers whose units may supervise one employee."""
+    target = on_day or timezone.localdate()
+    membership = primary_membership(employee, target)
+    if membership is None:
+        return frozenset()
+    descendants = hierarchy_employee_ids(employee)
+    candidates = User.objects.filter(
+        is_active=True,
+        organization_memberships__is_primary=True,
+        organization_memberships__start_date__lte=target,
+    ).filter(
+        Q(organization_memberships__end_date__isnull=True)
+        | Q(organization_memberships__end_date__gte=target)
+    )
+    eligible: set[int] = set()
+    for candidate in candidates.exclude(pk__in=descendants).distinct():
+        try:
+            validate_supervisor_unit(
+                supervisor=candidate,
+                employee_unit_id=membership.unit_id,
+                on_day=target,
+                require_membership=True,
+            )
+        except ValidationError:
+            continue
+        eligible.add(candidate.pk)
+    return frozenset(eligible)
+
+
+def _move_primary_collaborator(
+    *,
+    actor: User,
+    employee_id: int,
+    supervisor: User,
+    effective_date: date,
+    error_field: str,
+) -> None:
+    """Move one active employee through the canonical dated service."""
+    employee = User.objects.get(pk=employee_id, is_active=True)
+    membership = primary_membership(employee, effective_date)
+    if membership is None:
+        raise ValidationError(
+            {error_field: f"{employee} n'a pas d'unite principale a cette date."}
+        )
+    set_primary_supervisor(
+        employee=employee,
+        supervisor=supervisor,
+        unit_id=membership.unit_id,
+        start_date=effective_date,
+        actor=actor,
+        reason="Reaffectation depuis la fiche du responsable",
+        require_supervisor_membership=True,
+    )
+
+
+@transaction.atomic
+def update_primary_collaborators(
+    *,
+    actor: User,
+    supervisor: User,
+    collaborator_ids: set[int],
+    replacements: dict[int, int],
+    effective_date: date,
+    expected_token: str,
+) -> None:
+    """Replace direct primary collaborators without leaving an orphaned user."""
+    if not can_manage_users(actor):
+        raise PermissionDenied("Seul un administrateur IT peut modifier les equipes.")
+    locked_supervisor = User.objects.select_for_update().get(pk=supervisor.pk)
+    if not locked_supervisor.is_active:
+        raise ValidationError("Un compte inactif ne peut pas recevoir de collaborateurs.")
+    list(
+        OrganizationMembership.objects.select_for_update().filter(
+            is_primary=True, end_date__isnull=True
+        )
+    )
+    list(ReportingLine.objects.select_for_update().filter(end_date__isnull=True))
+    if collaborator_state_token(locked_supervisor) != expected_token:
+        raise StaleCollaboratorStateError
+
+    current_ids = set(
+        ReportingLine.objects.filter(
+            supervisor=locked_supervisor,
+            employee__is_active=True,
+            is_primary=True,
+            end_date__isnull=True,
+        ).values_list("employee_id", flat=True)
+    )
+    removed_ids = current_ids - collaborator_ids
+    added_ids = collaborator_ids - current_ids
+    if set(replacements) != removed_ids:
+        raise ValidationError(
+            {
+                "replacements": (
+                    "Choisissez un nouveau responsable pour chaque collaborateur retire."
+                )
+            }
+        )
+    if locked_supervisor.pk in collaborator_ids:
+        raise ValidationError("Une personne ne peut pas etre son propre responsable.")
+    active_ids = set(
+        User.objects.filter(pk__in=collaborator_ids, is_active=True).values_list(
+            "pk", flat=True
+        )
+    )
+    if active_ids != collaborator_ids:
+        raise ValidationError("Seuls les comptes actifs peuvent etre collaborateurs.")
+
+    for employee_id in sorted(added_ids):
+        _move_primary_collaborator(
+            actor=actor,
+            employee_id=employee_id,
+            supervisor=locked_supervisor,
+            effective_date=effective_date,
+            error_field="collaborators",
+        )
+
+    replacement_ids = set(replacements.values())
+    replacement_users = {
+        user.pk: user
+        for user in User.objects.filter(pk__in=replacement_ids, is_active=True)
+    }
+    if set(replacement_users) != replacement_ids:
+        raise ValidationError(
+            {"replacements": "Tous les nouveaux responsables doivent etre actifs."}
+        )
+    for employee_id in sorted(removed_ids):
+        replacement = replacement_users[replacements[employee_id]]
+        if replacement.pk == locked_supervisor.pk:
+            raise ValidationError(
+                {"replacements": "Le nouveau responsable doit etre different."}
+            )
+        _move_primary_collaborator(
+            actor=actor,
+            employee_id=employee_id,
+            supervisor=replacement,
+            effective_date=effective_date,
+            error_field="replacements",
+        )
 
 
 @transaction.atomic

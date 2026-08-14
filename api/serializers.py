@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import cast
 
 from rest_framework import serializers
+
+from accounts.models import AgendaDirection
 
 
 class ScheduleSerializer(serializers.Serializer):
@@ -130,3 +133,113 @@ class JsonEnvelopeSerializer(serializers.Serializer):
     """OpenAPI description for rich, presenter-built JSON resources."""
 
     data = serializers.JSONField()
+
+
+class UserManagementQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(required=False, allow_blank=True, default="")
+    state = serializers.ChoiceField(
+        choices=("active", "inactive"), required=False, allow_blank=True, default=""
+    )
+    unit_id = serializers.IntegerField(min_value=1, required=False)
+    page = serializers.IntegerField(min_value=1, required=False, default=1)
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=50
+    )
+
+
+class UserWriteSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+    login_alias = serializers.RegexField(
+        r"^[a-z][a-z0-9_-]*$",
+        max_length=32,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    position = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    agenda_direction = serializers.ChoiceField(
+        choices=("", *AgendaDirection.values), required=False, allow_blank=True
+    )
+    include_in_direction_agendas = serializers.BooleanField(required=False, default=True)
+    unit_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, default=list
+    )
+    primary_unit_id = serializers.IntegerField(
+        min_value=1, required=False, allow_null=True, default=None
+    )
+    primary_supervisor_id = serializers.IntegerField(
+        min_value=1, required=False, allow_null=True, default=None
+    )
+    organization_effective_date = serializers.DateField()
+    state_token = serializers.CharField(required=False, allow_blank=False)
+
+    def validate_unit_ids(self, value: list[int]) -> list[int]:
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError("Une unite ne peut apparaitre qu'une fois.")
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        unit_ids = set(cast(list[int], attrs.get("unit_ids", [])))
+        primary_unit_id = attrs.get("primary_unit_id")
+        if primary_unit_id is not None and primary_unit_id not in unit_ids:
+            raise serializers.ValidationError(
+                {"primary_unit_id": "L'unite principale doit etre selectionnee."}
+            )
+        if attrs.get("primary_supervisor_id") is not None and primary_unit_id is None:
+            raise serializers.ValidationError(
+                {"primary_supervisor_id": "Choisissez d'abord une unite principale."}
+            )
+        return attrs
+
+
+class UserUpdateSerializer(UserWriteSerializer):
+    state_token = serializers.CharField(allow_blank=False)
+
+
+class StateTokenSerializer(serializers.Serializer):
+    state_token = serializers.CharField(allow_blank=False)
+
+
+class TemporaryPasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(trim_whitespace=False)
+    new_password = serializers.CharField(trim_whitespace=False)
+    new_password_confirmation = serializers.CharField(trim_whitespace=False)
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        if attrs["new_password"] != attrs["new_password_confirmation"]:
+            raise serializers.ValidationError(
+                {"new_password_confirmation": "Les deux mots de passe sont differents."}
+            )
+        return attrs
+
+
+class CollaboratorReplacementSerializer(serializers.Serializer):
+    employee_id = serializers.IntegerField(min_value=1)
+    supervisor_id = serializers.IntegerField(min_value=1)
+
+
+class CollaboratorUpdateSerializer(serializers.Serializer):
+    collaborator_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), allow_empty=True
+    )
+    replacements = CollaboratorReplacementSerializer(many=True, required=False)
+    effective_date = serializers.DateField()
+    state_token = serializers.CharField(allow_blank=False)
+
+    def validate_collaborator_ids(self, value: list[int]) -> list[int]:
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError(
+                "Un collaborateur ne peut apparaitre qu'une fois."
+            )
+        return value
+
+    def validate_replacements(self, value: list[dict[str, int]]) -> list[dict[str, int]]:
+        employee_ids = [item["employee_id"] for item in value]
+        if len(employee_ids) != len(set(employee_ids)):
+            raise serializers.ValidationError(
+                "Un collaborateur ne peut avoir qu'un nouveau responsable."
+            )
+        return value
