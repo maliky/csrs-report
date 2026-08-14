@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   ClipboardList,
+  Cog,
   Lightbulb,
   ListPlus,
   LogOut,
@@ -8,7 +9,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  Trash2,
   Users,
   UserRoundCheck,
   X,
@@ -201,7 +201,7 @@ export function AppShell() {
               className={navClass}
               title="Gestion des tâches"
             >
-              <Trash2 size={iconSize} aria-hidden="true" />
+              <Cog size={iconSize} aria-hidden="true" />
               <span className={styles.navLabel}>Gestion des tâches</span>
             </NavLink>
           )}
