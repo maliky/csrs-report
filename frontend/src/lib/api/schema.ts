@@ -261,6 +261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/session/password/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Complete the mandatory replacement of a temporary password. */
+        post: operations["session_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/task-management/": {
         parameters: {
             query?: never;
@@ -405,6 +422,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List and create institution-managed accounts. */
+        get: operations["user_list"];
+        put?: never;
+        /** @description List and create institution-managed accounts. */
+        post: operations["user_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read and update one account and its calculated organization fields. */
+        get: operations["user_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Read and update one account and its calculated organization fields. */
+        patch: operations["user_update"];
+        trace?: never;
+    };
+    "/api/v1/users/{id}/activation-link/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send the existing one-time activation link for a new account. */
+        post: operations["users_activation_link_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/collaborators/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read or replace one user's direct primary collaborators. */
+        get: operations["users_collaborators_retrieve"];
+        /** @description Read or replace one user's direct primary collaborators. */
+        put: operations["users_collaborators_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/deactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Deactivate or reactivate a retained account. */
+        post: operations["users_deactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/reactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Deactivate or reactivate a retained account. */
+        post: operations["users_reactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/temporary-password/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Generate and disclose one temporary password once. */
+        post: operations["users_temporary_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Expose active organization choices for the user editor. */
+        get: operations["user_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/visits/": {
         parameters: {
             query?: never;
@@ -464,9 +620,22 @@ export interface components {
          * @enum {string}
          */
         AvailabilityKindEnum: "leave" | "absence" | "mission";
+        /** @enum {unknown} */
+        BlankEnum: "";
         Cancel: {
             revision: number;
             reason: string;
+        };
+        CollaboratorReplacement: {
+            employee_id: number;
+            supervisor_id: number;
+        };
+        CollaboratorUpdate: {
+            collaborator_ids: number[];
+            replacements?: components["schemas"]["CollaboratorReplacement"][];
+            /** Format: date */
+            effective_date: string;
+            state_token: string;
         };
         /**
          * @description * `SUPPRIMER` - SUPPRIMER
@@ -537,6 +706,24 @@ export interface components {
             description?: string;
             action_id?: number | null;
         };
+        PatchedUserUpdate: {
+            /** Format: email */
+            email?: string;
+            login_alias?: (string) | null;
+            first_name?: string;
+            last_name?: string;
+            position?: string;
+            phone?: string;
+            agenda_direction?: components["schemas"]["AgendaDirectionEnum"] | components["schemas"]["BlankEnum"];
+            /** @default true */
+            include_in_direction_agendas: boolean;
+            unit_ids?: number[];
+            primary_unit_id?: number | null;
+            primary_supervisor_id?: number | null;
+            /** Format: date */
+            organization_effective_date?: string;
+            state_token?: string;
+        };
         PlanningPreview: {
             calendar_id: number;
             /** Format: date */
@@ -588,6 +775,9 @@ export interface components {
          * @enum {string}
          */
         SourceEnum: "workload" | "due";
+        StateToken: {
+            state_token: string;
+        };
         TaskBulkDelete: {
             assignments: components["schemas"]["TaskSelection"][];
             reason: string;
@@ -611,6 +801,11 @@ export interface components {
             id: number;
             revision: number;
         };
+        TemporaryPasswordChange: {
+            current_password: string;
+            new_password: string;
+            new_password_confirmation: string;
+        };
         Transition: {
             revision: number;
             transition: components["schemas"]["TransitionEnum"];
@@ -624,6 +819,24 @@ export interface components {
          * @enum {string}
          */
         TransitionEnum: "validate" | "reject" | "close_early";
+        UserWrite: {
+            /** Format: email */
+            email: string;
+            login_alias?: (string) | null;
+            first_name?: string;
+            last_name?: string;
+            position?: string;
+            phone?: string;
+            agenda_direction?: components["schemas"]["AgendaDirectionEnum"] | components["schemas"]["BlankEnum"];
+            /** @default true */
+            include_in_direction_agendas: boolean;
+            unit_ids?: number[];
+            primary_unit_id?: number | null;
+            primary_supervisor_id?: number | null;
+            /** Format: date */
+            organization_effective_date: string;
+            state_token?: string;
+        };
         VisitCreate: {
             party_size: number;
             visitor_names?: string[];
@@ -1139,6 +1352,30 @@ export interface operations {
             };
         };
     };
+    session_password_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemporaryPasswordChange"];
+                "application/x-www-form-urlencoded": components["schemas"]["TemporaryPasswordChange"];
+                "multipart/form-data": components["schemas"]["TemporaryPasswordChange"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     task_management_retrieve: {
         parameters: {
             query?: {
@@ -1393,6 +1630,301 @@ export interface operations {
             path: {
                 id: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    user_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                q?: string;
+                state?: string;
+                unit_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    user_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["UserWrite"];
+                "multipart/form-data": components["schemas"]["UserWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    user_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    user_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUserUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUserUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedUserUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_activation_link_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StateToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["StateToken"];
+                "multipart/form-data": components["schemas"]["StateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_collaborators_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_collaborators_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollaboratorUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["CollaboratorUpdate"];
+                "multipart/form-data": components["schemas"]["CollaboratorUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StateToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["StateToken"];
+                "multipart/form-data": components["schemas"]["StateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_reactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StateToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["StateToken"];
+                "multipart/form-data": components["schemas"]["StateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_temporary_password_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StateToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["StateToken"];
+                "multipart/form-data": components["schemas"]["StateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    user_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

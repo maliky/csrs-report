@@ -5,7 +5,14 @@ from decimal import Decimal
 from django.utils import timezone
 
 from accounts.models import User
-from work.models import TaskAssignment, TaskProposal
+from accounts.services import user_management_state_token
+from work.models import (
+    OrganizationMembership,
+    OrganizationUnit,
+    ReportingLine,
+    TaskAssignment,
+    TaskProposal,
+)
 from work.progress_cache import cached_daily_progress_rows
 from work.services import (
     ReportingPeriod,
@@ -19,6 +26,9 @@ from work.services import (
     is_self_managed_assignment,
     workload_breakdown,
     assignment_status_label,
+    collaborator_state_token,
+    eligible_primary_collaborator_ids,
+    eligible_primary_supervisor_ids,
 )
 
 
@@ -33,6 +43,123 @@ def person_payload(user: User) -> dict[str, object]:
         "name": str(user),
         "position": user.position,
         "login_alias": user.login_alias,
+    }
+
+
+def organization_unit_payload(unit: OrganizationUnit) -> dict[str, object]:
+    """Return the stable labels used in organization selectors."""
+    return {
+        "id": unit.pk,
+        "code": unit.code,
+        "short_name": unit.short_name,
+        "long_name": unit.long_name,
+        "label": str(unit),
+    }
+
+
+def user_management_summary_payload(user: User) -> dict[str, object]:
+    """Return one compact user row for routine IT administration."""
+    prefetched = getattr(user, "current_organization_memberships", None)
+    if prefetched is None:
+        prefetched = list(
+            OrganizationMembership.objects.filter(user=user, end_date__isnull=True)
+            .select_related("unit")
+            .order_by("-is_primary", "pk")
+        )
+    membership = next((item for item in prefetched if item.is_primary), None)
+    return {
+        **person_payload(user),
+        "email": user.email,
+        "is_active": user.is_active,
+        "is_superuser": user.is_superuser,
+        "password_change_required": user.password_change_required,
+        "has_usable_password": user.has_usable_password(),
+        "primary_unit": (
+            organization_unit_payload(membership.unit) if membership else None
+        ),
+    }
+
+
+def user_management_detail_payload(user: User, viewer: User) -> dict[str, object]:
+    """Return identity and calculated current organization fields."""
+    prefetched = getattr(user, "current_organization_memberships", None)
+    memberships = (
+        list(prefetched)
+        if prefetched is not None
+        else list(
+            OrganizationMembership.objects.filter(user=user, end_date__isnull=True)
+            .select_related("unit")
+            .order_by("-is_primary", "unit__display_order", "unit__long_name")
+        )
+    )
+    primary_line = (
+        ReportingLine.objects.filter(
+            employee=user, is_primary=True, end_date__isnull=True
+        )
+        .select_related("supervisor")
+        .first()
+    )
+    protected = user.is_superuser and not viewer.is_superuser
+    return {
+        **user_management_summary_payload(user),
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "agenda_direction": user.agenda_direction,
+        "include_in_direction_agendas": user.include_in_direction_agendas,
+        "unit_ids": [membership.unit_id for membership in memberships],
+        "primary_unit_id": next(
+            (membership.unit_id for membership in memberships if membership.is_primary),
+            None,
+        ),
+        "primary_supervisor": (
+            person_payload(primary_line.supervisor) if primary_line else None
+        ),
+        "state_token": user_management_state_token(user),
+        "capabilities": {
+            "deactivate": user.is_active and user.pk != viewer.pk and not protected,
+            "reactivate": not user.is_active and not protected,
+            "reset_password": (user.is_active and user.pk != viewer.pk and not protected),
+            "send_activation": (
+                user.is_active and not user.has_usable_password() and not protected
+            ),
+            "edit": not protected,
+        },
+    }
+
+
+def collaborator_management_payload(supervisor: User) -> dict[str, object]:
+    """Return direct collaborators, candidates and safe replacement choices."""
+    current_users = list(
+        User.objects.filter(
+            reporting_lines__supervisor=supervisor,
+            reporting_lines__is_primary=True,
+            reporting_lines__end_date__isnull=True,
+            is_active=True,
+        )
+        .distinct()
+        .order_by("last_name", "first_name", "email")
+    )
+    eligible_ids = eligible_primary_collaborator_ids(supervisor)
+    available_users = list(
+        User.objects.filter(pk__in=eligible_ids, is_active=True)
+        .exclude(pk__in={user.pk for user in current_users})
+        .order_by("last_name", "first_name", "email")
+    )
+    replacement_options: dict[str, list[dict[str, object]]] = {}
+    for employee in current_users:
+        replacements = User.objects.filter(
+            pk__in=eligible_primary_supervisor_ids(employee), is_active=True
+        ).order_by("last_name", "first_name", "email")
+        replacement_options[str(employee.pk)] = [
+            person_payload(candidate) for candidate in replacements
+        ]
+    return {
+        "supervisor": person_payload(supervisor),
+        "state_token": collaborator_state_token(supervisor),
+        "current": [person_payload(user) for user in current_users],
+        "available": [person_payload(user) for user in available_users],
+        "replacement_options": replacement_options,
     }
 
 

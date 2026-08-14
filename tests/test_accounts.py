@@ -12,7 +12,9 @@ from accounts.models import AgendaDirection, User
 
 @pytest.mark.django_db
 def test_activation_link_sets_initial_password(client) -> None:
-    user = User.objects.create_user("new.user@example.test")
+    user = User.objects.create_user(
+        "new.user@example.test", password_change_required=True
+    )
     assert not user.has_usable_password()
     url = reverse(
         "activate",
@@ -30,6 +32,7 @@ def test_activation_link_sets_initial_password(client) -> None:
     assert response.url == reverse("react-app")
     user.refresh_from_db()
     assert user.check_password(password)
+    assert not user.password_change_required
 
 
 @pytest.mark.django_db

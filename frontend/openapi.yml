@@ -503,6 +503,29 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/session/password/:
+    post:
+      operationId: session_password_create
+      description: Complete the mandatory replacement of a temporary password.
+      tags:
+      - session
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemporaryPasswordChange'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TemporaryPasswordChange'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TemporaryPasswordChange'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/task-management/:
     get:
       operationId: task_management_retrieve
@@ -799,6 +822,331 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/users/:
+    get:
+      operationId: user_list
+      description: List and create institution-managed accounts.
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: state
+        schema:
+          type: string
+      - in: query
+        name: unit_id
+        schema:
+          type: integer
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    post:
+      operationId: user_create
+      description: List and create institution-managed accounts.
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/:
+    get:
+      operationId: user_retrieve
+      description: Read and update one account and its calculated organization fields.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    patch:
+      operationId: user_update
+      description: Read and update one account and its calculated organization fields.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/activation-link/:
+    post:
+      operationId: users_activation_link_create
+      description: Send the existing one-time activation link for a new account.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/collaborators/:
+    get:
+      operationId: users_collaborators_retrieve
+      description: Read or replace one user's direct primary collaborators.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    put:
+      operationId: users_collaborators_update
+      description: Read or replace one user's direct primary collaborators.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollaboratorUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CollaboratorUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CollaboratorUpdate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/deactivate/:
+    post:
+      operationId: users_deactivate_create
+      description: Deactivate or reactivate a retained account.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/reactivate/:
+    post:
+      operationId: users_reactivate_create
+      description: Deactivate or reactivate a retained account.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/{id}/temporary-password/:
+    post:
+      operationId: users_temporary_password_create
+      description: Generate and disclose one temporary password once.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StateToken'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/options/:
+    get:
+      operationId: user_options
+      description: Expose active organization choices for the user editor.
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/visits/:
     get:
       operationId: visits_retrieve
@@ -926,6 +1274,9 @@ components:
         * `leave` - Congé
         * `absence` - Absence
         * `mission` - Mission
+    BlankEnum:
+      enum:
+      - ''
     Cancel:
       type: object
       properties:
@@ -937,6 +1288,39 @@ components:
       required:
       - reason
       - revision
+    CollaboratorReplacement:
+      type: object
+      properties:
+        employee_id:
+          type: integer
+          minimum: 1
+        supervisor_id:
+          type: integer
+          minimum: 1
+      required:
+      - employee_id
+      - supervisor_id
+    CollaboratorUpdate:
+      type: object
+      properties:
+        collaborator_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        replacements:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollaboratorReplacement'
+        effective_date:
+          type: string
+          format: date
+        state_token:
+          type: string
+      required:
+      - collaborator_ids
+      - effective_date
+      - state_token
     ConfirmationEnum:
       enum:
       - SUPPRIMER
@@ -1070,6 +1454,58 @@ components:
           type: integer
           minimum: 1
           nullable: true
+    PatchedUserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        login_alias:
+          nullable: true
+          oneOf:
+          - type: string
+            maxLength: 32
+            pattern: ^[a-z][a-z0-9_-]*$
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        position:
+          type: string
+          maxLength: 160
+        phone:
+          type: string
+          maxLength: 32
+        agenda_direction:
+          oneOf:
+          - $ref: '#/components/schemas/AgendaDirectionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        include_in_direction_agendas:
+          type: boolean
+          default: true
+        unit_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        primary_unit_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        primary_supervisor_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        organization_effective_date:
+          type: string
+          format: date
+        state_token:
+          type: string
     PlanningPreview:
       type: object
       properties:
@@ -1185,6 +1621,13 @@ components:
       description: |-
         * `workload` - workload
         * `due` - due
+    StateToken:
+      type: object
+      properties:
+        state_token:
+          type: string
+      required:
+      - state_token
     TaskBulkDelete:
       type: object
       properties:
@@ -1250,6 +1693,19 @@ components:
       required:
       - id
       - revision
+    TemporaryPasswordChange:
+      type: object
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+        new_password_confirmation:
+          type: string
+      required:
+      - current_password
+      - new_password
+      - new_password_confirmation
     Transition:
       type: object
       properties:
@@ -1274,6 +1730,61 @@ components:
         * `validate` - validate
         * `reject` - reject
         * `close_early` - close_early
+    UserWrite:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        login_alias:
+          nullable: true
+          oneOf:
+          - type: string
+            maxLength: 32
+            pattern: ^[a-z][a-z0-9_-]*$
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        position:
+          type: string
+          maxLength: 160
+        phone:
+          type: string
+          maxLength: 32
+        agenda_direction:
+          oneOf:
+          - $ref: '#/components/schemas/AgendaDirectionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        include_in_direction_agendas:
+          type: boolean
+          default: true
+        unit_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        primary_unit_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        primary_supervisor_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        organization_effective_date:
+          type: string
+          format: date
+        state_token:
+          type: string
+      required:
+      - email
+      - organization_effective_date
     VisitCreate:
       type: object
       properties:

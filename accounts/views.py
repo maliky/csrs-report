@@ -23,7 +23,12 @@ def activate(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
         raise Http404("Lien d'activation invalide ou expire.")
     form = ActivationForm(user, request.POST or None)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        user = form.save()
+        if user.password_change_required:
+            user.password_change_required = False
+            user._history_user = user  # type: ignore[attr-defined]
+            user._change_reason = "Activation du compte"  # type: ignore[attr-defined]
+            user.save(update_fields=["password_change_required"])
         login(request, user)
         messages.success(request, "Votre compte est active.")
         return redirect("react-app")

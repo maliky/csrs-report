@@ -10,6 +10,8 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 from work.services import StaleRevisionError, StaleSelectionError
+from accounts.services import StaleUserStateError
+from work.services import StaleCollaboratorStateError
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,17 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
                             ",".join(str(item) for item in exc.assignment_ids)
                         ]
                     },
+                }
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    if isinstance(exc, (StaleUserStateError, StaleCollaboratorStateError)):
+        return Response(
+            {
+                "error": {
+                    "code": "stale_state",
+                    "message": str(exc),
+                    "fields": {"state_token": [str(exc)]},
                 }
             },
             status=status.HTTP_409_CONFLICT,

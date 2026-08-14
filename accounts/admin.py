@@ -37,6 +37,7 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
     )
     search_fields = ("login_alias", "email", "first_name", "last_name", "position")
     actions = ("send_activation_links",)
+    readonly_fields = ("password_change_required",)
     fieldsets = (
         (None, {"fields": ("email", "login_alias", "password")}),
         (
@@ -74,6 +75,7 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
             {
                 "fields": (
                     "is_active",
+                    "password_change_required",
                     "is_staff",
                     "is_it_admin",
                     "is_superuser",
