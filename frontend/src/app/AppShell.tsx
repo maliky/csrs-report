@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  UserCog,
   Users,
   UserRoundCheck,
   X,
@@ -20,6 +21,7 @@ import type { Session } from "../lib/api/types";
 import { ErrorState, Skeleton } from "../components/ui";
 import { useApi } from "../lib/useApi";
 import styles from "./shell.module.css";
+import { PasswordChangePage } from "../features/users/PasswordChangePage";
 
 const SIDEBAR_STORAGE_KEY = "csrs.sidebar.collapsed";
 
@@ -73,6 +75,9 @@ export function AppShell() {
     await apiFetch<void>("/api/v1/session/logout/", { method: "POST" });
     window.location.assign("/connexion/");
   }
+
+  if (session.capabilities.password_change_required)
+    return <PasswordChangePage onComplete={reload} onLogout={signOut} />;
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -205,10 +210,24 @@ export function AppShell() {
               <span className={styles.navLabel}>Gestion des tâches</span>
             </NavLink>
           )}
+          {session.capabilities.manage_users && (
+            <NavLink
+              to="/administration/utilisateurs"
+              className={navClass}
+              title="Utilisateurs"
+            >
+              <UserCog size={iconSize} aria-hidden="true" />
+              <span className={styles.navLabel}>Utilisateurs</span>
+            </NavLink>
+          )}
           {session.capabilities.admin && (
-            <a href="/admin/" className={styles.navItem} title="Administration">
+            <a
+              href="/admin/"
+              className={styles.navItem}
+              title="Administration avancée"
+            >
               <Settings size={iconSize} aria-hidden="true" />
-              <span className={styles.navLabel}>Administration</span>
+              <span className={styles.navLabel}>Administration avancée</span>
             </a>
           )}
           <button

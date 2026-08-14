@@ -1,0 +1,287 @@
+.filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.filterActions,
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.resultCount {
+  color: var(--color-muted);
+  font-weight: 750;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--color-surface-alt);
+  font-size: 0.8rem;
+}
+
+.table td span {
+  display: block;
+}
+
+.pagination {
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+
+.fieldset,
+.transferFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldset > legend,
+.transferFieldset > legend {
+  margin-bottom: var(--space-4);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.8rem;
+  padding-top: 1.8rem;
+  font-weight: 750;
+}
+
+.checkboxField input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-primary);
+}
+
+.organizationFields {
+  margin-top: var(--space-5);
+}
+
+.transferGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.transferPanel {
+  display: grid;
+  grid-template-rows: auto auto minmax(12rem, 1fr) auto;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.transferPanel label {
+  font-weight: 800;
+}
+
+.transferPanel input,
+.transferPanel select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #aeb9b4;
+  border-radius: var(--radius-sm);
+  background: white;
+}
+
+.transferPanel select {
+  min-height: 12rem;
+}
+
+.transferPanel option {
+  padding: 0.45rem;
+}
+
+.transferPanel small {
+  color: var(--color-muted);
+}
+
+.transferActions {
+  display: grid;
+  align-content: center;
+  gap: var(--space-3);
+}
+
+.teamCard,
+.accessCard {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.sectionHeading,
+.accessCard {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.sectionHeading {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.sectionHeading h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionHeading p,
+.accessCard p {
+  max-width: 52rem;
+  color: var(--color-muted);
+}
+
+.advancedLink {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0.62rem 1rem;
+  font-weight: 750;
+}
+
+.modalBackdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(14 35 30 / 62%);
+}
+
+.modal {
+  width: min(100%, 40rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+.temporaryPassword {
+  display: block;
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  text-align: center;
+}
+
+.passwordPage {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+.passwordCard {
+  width: min(100%, 34rem);
+}
+
+@media (max-width: 960px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .transferGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .transferActions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sectionHeading,
+  .accessCard {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .table td {
+    display: grid;
+    grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr);
+    gap: 0.5rem;
+    border: 0;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+
+  .checkboxField {
+    padding-top: 0;
+  }
+}

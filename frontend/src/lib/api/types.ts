@@ -98,7 +98,73 @@ export type Session = {
     prepare_weekly_agenda: boolean;
     view_weekly_agenda: boolean;
     delete_tasks: boolean;
+    manage_users: boolean;
+    password_change_required: boolean;
   };
+};
+
+export type OrganizationUnitOption = {
+  id: number;
+  code: string;
+  short_name: string;
+  long_name: string;
+  label: string;
+};
+
+export type ManagedUserSummary = Person & {
+  email: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  password_change_required: boolean;
+  has_usable_password: boolean;
+  primary_unit: OrganizationUnitOption | null;
+};
+
+export type ManagedUserDetail = ManagedUserSummary & {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  agenda_direction: string;
+  include_in_direction_agendas: boolean;
+  unit_ids: number[];
+  primary_unit_id: number | null;
+  primary_supervisor: Person | null;
+  state_token: string;
+  capabilities: {
+    deactivate: boolean;
+    reactivate: boolean;
+    reset_password: boolean;
+    send_activation: boolean;
+    edit: boolean;
+  };
+};
+
+export type UserManagementPage = {
+  items: ManagedUserSummary[];
+  total: number;
+  page: number;
+  pages: number;
+  page_size: number;
+};
+
+export type UserManagementOptions = {
+  today: string;
+  units: OrganizationUnitOption[];
+  users: Person[];
+  agenda_directions: Array<{ value: string; label: string }>;
+};
+
+export type CollaboratorManagement = {
+  supervisor: Person;
+  state_token: string;
+  current: Person[];
+  available: Person[];
+  replacement_options: Record<string, Person[]>;
+};
+
+export type TemporaryPasswordResult = {
+  temporary_password: string;
+  state_token: string;
 };
 
 export type TaskManagementItem = {
