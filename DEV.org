@@ -1,6 +1,25 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-14 ven.> Suppression groupee et reinitialisation du reporting
+** Decision d'architecture
+
+La suppression groupee est reservee aux comptes actifs =is_it_admin= ou =is_superuser=. La page React =/app/administration/taches= expose une recherche, des filtres, une pagination et une selection limitee a 100 affectations. Chaque requete transmet les identifiants et revisions, exige un motif et la confirmation =SUPPRIMER=, puis echoue entierement si une tache a change ou disparu.
+
+Une suppression retire l'affectation, ses progressions, activites, caches et historiques detailles. La definition =Task= n'est retiree que lorsqu'elle ne porte plus aucune affectation. Une proposition validee reste comme decision historique avec un lien d'affectation vide. Le modele append-only =ReportingDeletionAudit= conserve uniquement l'acteur, la date, le motif et les identifiants necessaires a l'audit.
+
+** Reinitialisation controlee
+
+=scripts/reset_reporting_data.sh= simule l'operation, produit une sauvegarde verifiee de PostgreSQL et des documents, exige la confirmation =REINITIALISER=, arrete temporairement =web= et =notifier=, execute le nettoyage puis controle la sante du service relance. La commande interne =python manage.py reset_reporting_data --actor ALIAS --reason MOTIF --dry-run|--confirm= supprime les taches, propositions, notifications de taches, brouillons et versions d'agenda, PDF, visites et indisponibilites.
+
+Les comptes, droits, delegations, organigramme, calendriers et referentiels strategiques sont conserves. Aucun scenario n'est recharge. Pour une simple verification sans ecriture, utiliser =./scripts/reset_reporting_data.sh --actor dev --reason "Motif" --dry-run-only=.
+
+** Verification attendue
+
+- [X] Permissions serveur, revision optimiste, suppression partielle d'une tache partagee et journal immuable couverts par pytest.
+- [X] Simulation et remise a zero selective couvertes sans supprimer les comptes ni l'organigramme.
+- [X] Selection, confirmation et retour de succes de la page React couverts par Vitest.
+
 * <2026-08-13 jeu.> Calendrier unique et chargement non bloquant des agendas
 ** Decision d'architecture
 

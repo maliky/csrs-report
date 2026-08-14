@@ -40,6 +40,8 @@ from work.models import (
     ProgressEntry,
     ProposalStatus,
     ReportingLine,
+    ReportingDeletionAudit,
+    ReportingDeletionKind,
     Task,
     TaskActivity,
     TaskAssignment,
@@ -62,6 +64,120 @@ class StaleRevisionError(Exception):
     def __init__(self, current_revision: int) -> None:
         super().__init__("Cette ressource a été modifiée depuis son chargement.")
         self.current_revision = current_revision
+
+
+class StaleSelectionError(Exception):
+    """Signal that one member of a destructive batch changed or disappeared."""
+
+    def __init__(self, assignment_ids: Iterable[int]) -> None:
+        self.assignment_ids = tuple(sorted(set(assignment_ids)))
+        super().__init__(
+            "La selection de taches a change. Rechargez la liste avant de recommencer."
+        )
+
+
+@dataclass(frozen=True)
+class TaskDeletionResult:
+    audit_id: int
+    deleted_assignments: int
+    deleted_tasks: int
+
+
+def can_delete_reporting_data(user: User) -> bool:
+    """Restrict destructive reporting operations to active IT administrators."""
+    return bool(user.is_active and (user.is_it_admin or user.is_superuser))
+
+
+def _validated_deletion_reason(reason: str) -> str:
+    normalized = reason.strip()
+    if len(normalized) < 3:
+        raise ValidationError({"reason": "Le motif doit contenir au moins 3 caracteres."})
+    if len(normalized) > 500:
+        raise ValidationError({"reason": "Le motif ne peut pas depasser 500 caracteres."})
+    return normalized
+
+
+@transaction.atomic
+def delete_task_assignments(
+    *,
+    actor: User,
+    selections: Iterable[tuple[int, int]],
+    reason: str,
+) -> TaskDeletionResult:
+    """Delete one revision-checked batch while retaining a minimal audit witness."""
+    if not can_delete_reporting_data(actor):
+        raise PermissionDenied("Seul un administrateur IT peut supprimer des taches.")
+    normalized_reason = _validated_deletion_reason(reason)
+    expected = dict(selections)
+    if not expected:
+        raise ValidationError({"assignments": "Selectionnez au moins une tache."})
+    if len(expected) > 100:
+        raise ValidationError({"assignments": "Un lot ne peut pas depasser 100 taches."})
+
+    assignments = list(
+        TaskAssignment.objects.select_for_update()
+        .select_related("task", "employee", "manager")
+        .filter(pk__in=expected)
+        .order_by("pk")
+    )
+    found_ids = {assignment.pk for assignment in assignments}
+    stale_ids = set(expected) - found_ids
+    stale_ids.update(
+        assignment.pk
+        for assignment in assignments
+        if assignment.revision != expected[assignment.pk]
+    )
+    if stale_ids:
+        raise StaleSelectionError(stale_ids)
+
+    assignment_ids = [assignment.pk for assignment in assignments]
+    task_ids = {assignment.task_id for assignment in assignments}
+    progress_ids = list(
+        ProgressEntry.objects.filter(assignment_id__in=assignment_ids).values_list(
+            "pk", flat=True
+        )
+    )
+    items = [
+        {
+            "assignment_id": assignment.pk,
+            "revision": assignment.revision,
+            "task_id": assignment.task_id,
+            "code": assignment.task.code,
+            "title": assignment.task.title,
+            "employee_id": assignment.employee_id,
+            "employee_alias": assignment.employee.login_alias,
+            "manager_id": assignment.manager_id,
+            "manager_alias": assignment.manager.login_alias,
+        }
+        for assignment in assignments
+    ]
+    audit = ReportingDeletionAudit.objects.create(
+        actor=actor,
+        kind=ReportingDeletionKind.TASK_BATCH,
+        reason=normalized_reason,
+        snapshot={"assignments": items},
+    )
+
+    TaskActivity.objects.filter(
+        Q(assignment_id__in=assignment_ids)
+        | Q(supersedes__assignment_id__in=assignment_ids)
+    ).filter(supersedes__isnull=False).update(supersedes=None)
+    TaskAssignment.objects.filter(pk__in=assignment_ids).delete()
+    orphan_task_ids = list(
+        Task.objects.filter(pk__in=task_ids, assignments__isnull=True).values_list(
+            "pk", flat=True
+        )
+    )
+    Task.objects.filter(pk__in=orphan_task_ids).delete()
+
+    TaskAssignment.history.model._base_manager.filter(id__in=assignment_ids).delete()
+    ProgressEntry.history.model._base_manager.filter(id__in=progress_ids).delete()
+    Task.history.model._base_manager.filter(id__in=orphan_task_ids).delete()
+    return TaskDeletionResult(
+        audit_id=audit.pk,
+        deleted_assignments=len(assignment_ids),
+        deleted_tasks=len(orphan_task_ids),
+    )
 
 
 def ensure_revision(current_revision: int, expected_revision: int | None) -> None:

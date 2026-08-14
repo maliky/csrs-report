@@ -8,6 +8,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  Trash2,
   Users,
   UserRoundCheck,
   X,
@@ -194,6 +195,16 @@ export function AppShell() {
           )}
         </nav>
         <div className={styles.sidebarSecondary}>
+          {session.capabilities.delete_tasks && (
+            <NavLink
+              to="/administration/taches"
+              className={navClass}
+              title="Gestion des tâches"
+            >
+              <Trash2 size={iconSize} aria-hidden="true" />
+              <span className={styles.navLabel}>Gestion des tâches</span>
+            </NavLink>
+          )}
           {session.capabilities.admin && (
             <a href="/admin/" className={styles.navItem} title="Administration">
               <Settings size={iconSize} aria-hidden="true" />

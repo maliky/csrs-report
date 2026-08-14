@@ -20,6 +20,7 @@ from work.models import (
     OrganizationUnitLink,
     OrganizationMembership,
     ProgressEntry,
+    ReportingDeletionAudit,
     ReportingLine,
     StrategicPlan,
     Task,
@@ -485,6 +486,20 @@ class TaskActivityAdmin(admin.ModelAdmin):
     def has_change_permission(
         self, request: HttpRequest, obj: TaskActivity | None = None
     ) -> bool:
+        return False
+
+
+@admin.register(ReportingDeletionAudit)
+class ReportingDeletionAuditAdmin(ITOrganizationAdminMixin, admin.ModelAdmin):
+    list_display = ("kind", "actor", "created_at", "reason")
+    list_filter = ("kind", "created_at")
+    readonly_fields = ("kind", "actor", "created_at", "reason", "snapshot")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: object = None) -> bool:
+        del obj
         return False
 
 

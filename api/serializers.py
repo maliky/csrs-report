@@ -30,6 +30,44 @@ class TaskUpdateSerializer(ScheduleSerializer):
     action_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
 
+class TaskManagementQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(
+        choices=(
+            "planned",
+            "active",
+            "awaiting_validation",
+            "completed",
+            "closed_early",
+        ),
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    employee_id = serializers.IntegerField(min_value=1, required=False)
+    page = serializers.IntegerField(min_value=1, required=False, default=1)
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=50
+    )
+
+
+class TaskSelectionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1)
+    revision = serializers.IntegerField(min_value=1)
+
+
+class TaskBulkDeleteSerializer(serializers.Serializer):
+    assignments = TaskSelectionSerializer(many=True, allow_empty=False, max_length=100)
+    reason = serializers.CharField(min_length=3, max_length=500, trim_whitespace=True)
+    confirmation = serializers.ChoiceField(choices=("SUPPRIMER",))
+
+    def validate_assignments(self, value: list[dict[str, int]]) -> list[dict[str, int]]:
+        ids = [item["id"] for item in value]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError("Une tache ne peut apparaitre qu'une fois.")
+        return value
+
+
 class ProgressSerializer(serializers.Serializer):
     revision = serializers.IntegerField(min_value=1)
     entry_date = serializers.DateField()
