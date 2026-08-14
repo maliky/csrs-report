@@ -1,6 +1,11 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-14 ven.> Preproduction dediee
+** Decision d'exploitation
+
+Le checkout principal suit desormais =preprod= et =origin/preprod=. Le site =preprod.report.ent.koba.sarl= deploie cette branche depuis =/srv/apps/csrs-preprod/app= avec le projet Compose =csrs_preprod=, le port local =18008= et des volumes propres. Les branches, conteneurs, donnees et routes du site courant restent inchanges.
+
 * <2026-08-14 ven.> Gestion React des utilisateurs et des equipes
 ** Decision d'architecture
 
