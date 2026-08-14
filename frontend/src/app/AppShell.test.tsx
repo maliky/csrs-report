@@ -87,7 +87,9 @@ test("affiche la gestion des taches uniquement avec la capacite destructive", as
     </MemoryRouter>,
   );
 
-  expect(
-    await screen.findByRole("link", { name: "Gestion des tâches" }),
-  ).toBeInTheDocument();
+  const taskManagement = await screen.findByRole("link", {
+    name: "Gestion des tâches",
+  });
+  expect(taskManagement).toBeInTheDocument();
+  expect(taskManagement.querySelector(".lucide-cog")).toBeInTheDocument();
 });
