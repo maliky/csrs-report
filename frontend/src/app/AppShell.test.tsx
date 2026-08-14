@@ -93,3 +93,67 @@ test("affiche la gestion des taches uniquement avec la capacite destructive", as
   expect(taskManagement).toBeInTheDocument();
   expect(taskManagement.querySelector(".lucide-cog")).toBeInTheDocument();
 });
+
+test("affiche les utilisateurs et distingue l'administration avancee", async () => {
+  server.use(
+    http.get("/api/v1/session/", () =>
+      HttpResponse.json({
+        ...sessionFixture,
+        capabilities: {
+          ...sessionFixture.capabilities,
+          manage_users: true,
+          admin: true,
+        },
+      }),
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route path="/" element={<AppShell />}>
+          <Route index element={<h1>Administration</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByRole("link", { name: "Utilisateurs" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Administration avancée" }),
+  ).toHaveAttribute("href", "/admin/");
+});
+
+test("bloque la navigation tant que le mot de passe temporaire subsiste", async () => {
+  server.use(
+    http.get("/api/v1/session/", () =>
+      HttpResponse.json({
+        ...sessionFixture,
+        capabilities: {
+          ...sessionFixture.capabilities,
+          password_change_required: true,
+        },
+      }),
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route path="/" element={<AppShell />}>
+          <Route index element={<h1>Contenu protégé</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByRole("heading", {
+      name: "Choisir un nouveau mot de passe",
+    }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Contenu protégé")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: "Mon équipe" }),
+  ).not.toBeInTheDocument();
+});
