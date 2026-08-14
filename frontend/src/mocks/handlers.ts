@@ -11,15 +11,18 @@ import {
   proposalsFixture,
   sessionFixture,
   taskDetailFixture,
+  taskManagementFixture,
   teamFixture,
 } from "./fixtures";
 
 let taskState: TaskDetail;
 let proposalState: ProposalGroups;
+let taskManagementState = structuredClone(taskManagementFixture);
 
 export function resetMockState() {
   taskState = structuredClone(taskDetailFixture);
   proposalState = structuredClone(proposalsFixture);
+  taskManagementState = structuredClone(taskManagementFixture);
 }
 
 resetMockState();
@@ -88,6 +91,25 @@ export const handlers = [
     () => new HttpResponse(null, { status: 204 }),
   ),
   http.get("/api/v1/dashboard/", () => HttpResponse.json(taskGroups())),
+  http.get("/api/v1/task-management/", () =>
+    HttpResponse.json(taskManagementState),
+  ),
+  http.post("/api/v1/tasks/bulk-delete/", async ({ request }) => {
+    const body = (await request.json()) as {
+      assignments: Array<{ id: number; revision: number }>;
+    };
+    const ids = new Set(body.assignments.map((item) => item.id));
+    taskManagementState = {
+      ...taskManagementState,
+      items: taskManagementState.items.filter((item) => !ids.has(item.id)),
+      total: taskManagementState.total - ids.size,
+    };
+    return HttpResponse.json({
+      audit_id: 12,
+      deleted_assignments: ids.size,
+      deleted_tasks: ids.size,
+    });
+  }),
   http.get("/api/v1/tasks/:id/", () => HttpResponse.json(taskState)),
   http.get("/api/v1/planning/options/", () =>
     HttpResponse.json(planningFixture),

@@ -151,7 +151,7 @@ def _agenda_direction(request: Request) -> str:
         raise serializers.ValidationError(
             {"agenda_direction": "Direction d’agenda inconnue."}
         )
-    return value
+    return cast(str, value)
 
 
 def _person(user: User) -> dict[str, object]:

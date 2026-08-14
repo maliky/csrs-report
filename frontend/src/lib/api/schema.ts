@@ -261,6 +261,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/task-management/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["task_management_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/": {
         parameters: {
             query?: never;
@@ -335,6 +351,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["tasks_transition_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/bulk-delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["tasks_bulk_delete_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -436,6 +468,11 @@ export interface components {
             revision: number;
             reason: string;
         };
+        /**
+         * @description * `SUPPRIMER` - SUPPRIMER
+         * @enum {string}
+         */
+        ConfirmationEnum: "SUPPRIMER";
         /**
          * @description * `accept` - accept
          *     * `reject` - reject
@@ -551,6 +588,11 @@ export interface components {
          * @enum {string}
          */
         SourceEnum: "workload" | "due";
+        TaskBulkDelete: {
+            assignments: components["schemas"]["TaskSelection"][];
+            reason: string;
+            confirmation: components["schemas"]["ConfirmationEnum"];
+        };
         /** @description Shared, server-validated assignment schedule. */
         TaskCreate: {
             /** Format: date */
@@ -564,6 +606,10 @@ export interface components {
             employee_id: number;
             action_id?: number | null;
             calendar_id?: number;
+        };
+        TaskSelection: {
+            id: number;
+            revision: number;
         };
         Transition: {
             revision: number;
@@ -1093,6 +1139,33 @@ export interface operations {
             };
         };
     };
+    task_management_retrieve: {
+        parameters: {
+            query?: {
+                employee_id?: number;
+                page?: number;
+                page_size?: number;
+                q?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     tasks_create: {
         parameters: {
             query?: never;
@@ -1244,6 +1317,33 @@ export interface operations {
                 "application/json": components["schemas"]["Transition"];
                 "application/x-www-form-urlencoded": components["schemas"]["Transition"];
                 "multipart/form-data": components["schemas"]["Transition"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    tasks_bulk_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskBulkDelete"];
+                "application/x-www-form-urlencoded": components["schemas"]["TaskBulkDelete"];
+                "multipart/form-data": components["schemas"]["TaskBulkDelete"];
             };
         };
         responses: {

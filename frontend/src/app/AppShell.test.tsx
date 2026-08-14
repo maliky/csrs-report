@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "../lib/router";
 import { AppShell } from "./AppShell";
+import { http, HttpResponse } from "msw";
+import { server } from "../mocks/server";
+import { sessionFixture } from "../mocks/fixtures";
 
 test("réduit la barre latérale et mémorise le choix", async () => {
   window.localStorage.clear();
@@ -60,4 +63,31 @@ test("ouvre et ferme le tiroir mobile avec des contrôles accessibles", async ()
   });
   fireEvent.click(close);
   expect(open).toHaveAttribute("aria-expanded", "false");
+});
+
+test("affiche la gestion des taches uniquement avec la capacite destructive", async () => {
+  server.use(
+    http.get("/api/v1/session/", () =>
+      HttpResponse.json({
+        ...sessionFixture,
+        capabilities: {
+          ...sessionFixture.capabilities,
+          delete_tasks: true,
+        },
+      }),
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route path="/" element={<AppShell />}>
+          <Route index element={<h1>Administration</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByRole("link", { name: "Gestion des tâches" }),
+  ).toBeInTheDocument();
 });

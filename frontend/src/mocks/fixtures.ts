@@ -5,6 +5,7 @@ import type {
   ProposalGroups,
   Session,
   TaskDetail,
+  TaskManagementPage,
   Team,
 } from "../lib/api/types";
 
@@ -26,6 +27,7 @@ export const sessionFixture: Session = {
     manage_availability: true,
     prepare_weekly_agenda: true,
     view_weekly_agenda: true,
+    delete_tasks: false,
   },
 };
 
@@ -132,6 +134,28 @@ export const dashboardFixture: Dashboard = {
         "Deux confirmations sont encore attendues avant de stabiliser l'ordre du jour.",
     },
   ],
+};
+
+export const taskManagementFixture: TaskManagementPage = {
+  items: dashboardFixture.tasks.slice(0, 2).map((task) => ({
+    id: task.id,
+    revision: task.revision,
+    task_id: task.id + 1000,
+    code: task.code,
+    title: task.title,
+    status: task.status,
+    status_label: task.status_label,
+    percentage: task.percentage,
+    start_date: task.start_date,
+    due_date: task.due_date,
+    employee: task.employee,
+    manager: task.manager,
+  })),
+  total: 2,
+  page: 1,
+  pages: 1,
+  page_size: 50,
+  employees: [sessionFixture.user],
 };
 
 export const taskDetailFixture: TaskDetail = {

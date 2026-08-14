@@ -1,0 +1,113 @@
+.filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.filterActions,
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.resultCount {
+  color: var(--color-muted);
+  font-weight: 750;
+}
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.table th {
+  background: var(--color-surface-alt);
+  font-size: 0.8rem;
+}
+.table td span {
+  display: block;
+}
+.selectedRow {
+  background: #fff5e2;
+}
+.pagination {
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+.modalBackdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(14 35 30 / 62%);
+}
+.modal {
+  width: min(100%, 36rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+@media (max-width: 900px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .table td {
+    display: grid;
+    grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr);
+    gap: 0.5rem;
+    border: 0;
+  }
+  .table td::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+}

@@ -85,6 +85,26 @@ def assignment_summary_payload(
     }
 
 
+def task_management_payload(assignment: TaskAssignment) -> dict[str, object]:
+    """Return the compact, revision-aware row used by IT task management."""
+    progress = current_progress(assignment)
+    status = effective_assignment_status(assignment.status, progress)
+    return {
+        "id": assignment.pk,
+        "revision": assignment.revision,
+        "task_id": assignment.task_id,
+        "code": assignment.task.code,
+        "title": assignment.task.title,
+        "status": status,
+        "status_label": assignment_status_label(status),
+        "percentage": progress,
+        "start_date": assignment.start_date.isoformat(),
+        "due_date": assignment.due_date.isoformat(),
+        "employee": person_payload(assignment.employee),
+        "manager": person_payload(assignment.manager),
+    }
+
+
 def assignment_detail_payload(
     assignment: TaskAssignment, viewer: User
 ) -> dict[str, object]:

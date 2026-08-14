@@ -97,7 +97,38 @@ export type Session = {
     manage_availability: boolean;
     prepare_weekly_agenda: boolean;
     view_weekly_agenda: boolean;
+    delete_tasks: boolean;
   };
+};
+
+export type TaskManagementItem = {
+  id: number;
+  revision: number;
+  task_id: number;
+  code: string;
+  title: string;
+  status: string;
+  status_label: string;
+  percentage: number;
+  start_date: string;
+  due_date: string;
+  employee: Person;
+  manager: Person;
+};
+
+export type TaskManagementPage = {
+  items: TaskManagementItem[];
+  total: number;
+  page: number;
+  pages: number;
+  page_size: number;
+  employees: Person[];
+};
+
+export type TaskBulkDeleteResult = {
+  audit_id: number;
+  deleted_assignments: number;
+  deleted_tasks: number;
 };
 
 export type AgendaPerson = Pick<Person, "id" | "name" | "position">;

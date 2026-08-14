@@ -503,6 +503,42 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/task-management/:
+    get:
+      operationId: task_management_retrieve
+      parameters:
+      - in: query
+        name: employee_id
+        schema:
+          type: integer
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - task-management
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/tasks/:
     post:
       operationId: tasks_create
@@ -670,6 +706,33 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/Transition'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/tasks/bulk-delete/:
+    post:
+      operationId: tasks_bulk_delete_create
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskBulkDelete'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskBulkDelete'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskBulkDelete'
         required: true
       security:
       - cookieAuth: []
@@ -874,6 +937,11 @@ components:
       required:
       - reason
       - revision
+    ConfirmationEnum:
+      enum:
+      - SUPPRIMER
+      type: string
+      description: '* `SUPPRIMER` - SUPPRIMER'
     DecisionEnum:
       enum:
       - accept
@@ -1117,6 +1185,23 @@ components:
       description: |-
         * `workload` - workload
         * `due` - due
+    TaskBulkDelete:
+      type: object
+      properties:
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSelection'
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+        confirmation:
+          $ref: '#/components/schemas/ConfirmationEnum'
+      required:
+      - assignments
+      - confirmation
+      - reason
     TaskCreate:
       type: object
       description: Shared, server-validated assignment schedule.
@@ -1153,6 +1238,18 @@ components:
       - estimated_work_days
       - start_date
       - title
+    TaskSelection:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - revision
     Transition:
       type: object
       properties:

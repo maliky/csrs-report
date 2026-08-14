@@ -730,6 +730,44 @@ class TaskActivity(models.Model):
         super().save(*args, **kwargs)  # type: ignore[arg-type]
 
 
+class ReportingDeletionKind(models.TextChoices):
+    TASK_BATCH = "task_batch", "Suppression groupee de taches"
+    REPORTING_RESET = "reporting_reset", "Reinitialisation du reporting"
+
+
+class ReportingDeletionAuditQuerySet(models.QuerySet["ReportingDeletionAudit"]):
+    def delete(self) -> tuple[int, dict[str, int]]:
+        raise ValidationError("Un journal de suppression ne peut pas etre supprime.")
+
+
+class ReportingDeletionAudit(models.Model):
+    """Immutable minimal witness retained after destructive reporting cleanup."""
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reporting_deletion_audits",
+    )
+    kind = models.CharField(max_length=24, choices=ReportingDeletionKind.choices)
+    reason = models.TextField("motif")
+    snapshot = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ReportingDeletionAuditQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        if self.pk:
+            raise ValidationError("Un journal de suppression ne peut pas etre modifie.")
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
+
+    def delete(self, *args: object, **kwargs: object) -> tuple[int, dict[str, int]]:
+        del args, kwargs
+        raise ValidationError("Un journal de suppression ne peut pas etre supprime.")
+
+
 class Holiday(models.Model):
     """Institution-maintained non-working day for Côte d'Ivoire."""
 

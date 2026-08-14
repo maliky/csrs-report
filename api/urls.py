@@ -58,6 +58,16 @@ urlpatterns = [
         "planning/preview/", views.PlanningPreviewView.as_view(), name="planning-preview"
     ),
     path("tasks/", views.TaskCreateView.as_view(), name="task-create"),
+    path(
+        "task-management/",
+        views.TaskManagementView.as_view(),
+        name="task-management",
+    ),
+    path(
+        "tasks/bulk-delete/",
+        views.TaskBulkDeleteView.as_view(),
+        name="task-bulk-delete",
+    ),
     path("tasks/<int:pk>/", views.TaskDetailView.as_view(), name="task-detail"),
     path(
         "tasks/<int:pk>/progress/", views.TaskProgressView.as_view(), name="task-progress"

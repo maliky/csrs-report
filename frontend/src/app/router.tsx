@@ -7,6 +7,7 @@ import { ProposalsPage } from "../features/proposals/ProposalsPage";
 import { TaskDetailPage } from "../features/tasks/TaskDetailPage";
 import { TaskFormPage } from "../features/tasks/TaskFormPage";
 import { DashboardPage } from "../features/tasks/DashboardPage";
+import { TaskManagementPage } from "../features/tasks/TaskManagementPage";
 import { TeamPage } from "../features/team/TeamPage";
 import { AppShell } from "./AppShell";
 import { AgendaPage } from "../features/agenda/AgendaPage";
@@ -23,6 +24,10 @@ export function AppRouter() {
             element={<TaskFormPage mode="create" />}
           />
           <Route path="taches/:taskId" element={<TaskDetailPage />} />
+          <Route
+            path="administration/taches"
+            element={<TaskManagementPage />}
+          />
           <Route
             path="taches/:taskId/modifier"
             element={<TaskFormPage mode="edit" />}

@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from work.services import StaleRevisionError
+from work.services import StaleRevisionError, StaleSelectionError
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,21 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
                     "code": "stale_revision",
                     "message": str(exc),
                     "fields": {"revision": [str(exc.current_revision)]},
+                }
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    if isinstance(exc, StaleSelectionError):
+        return Response(
+            {
+                "error": {
+                    "code": "stale_selection",
+                    "message": str(exc),
+                    "fields": {
+                        "assignments": [
+                            ",".join(str(item) for item in exc.assignment_ids)
+                        ]
+                    },
                 }
             },
             status=status.HTTP_409_CONFLICT,

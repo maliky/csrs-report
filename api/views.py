@@ -5,12 +5,15 @@ from decimal import Decimal
 from typing import Any, cast
 
 from django.contrib.auth import logout
+from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import Http404
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +32,7 @@ from api.presenters import (
     period_payload,
     person_payload,
     proposal_payload,
+    task_management_payload,
 )
 from api.serializers import (
     ObservationSerializer,
@@ -39,6 +43,8 @@ from api.serializers import (
     ProposalResubmitSerializer,
     ProposalUpdateSerializer,
     TaskCreateSerializer,
+    TaskBulkDeleteSerializer,
+    TaskManagementQuerySerializer,
     TaskUpdateSerializer,
     TransitionSerializer,
 )
@@ -55,6 +61,7 @@ from work.services import (
     add_observation,
     assignable_employee_ids,
     can_self_assign,
+    can_delete_reporting_data,
     can_review_proposal,
     can_view_assignment,
     can_view_employee,
@@ -72,6 +79,7 @@ from work.services import (
     update_assignment_details,
     update_proposal,
     validate_completion,
+    delete_task_assignments,
     visible_team_proposals,
     visible_employee_ids,
     workload_for,
@@ -151,6 +159,7 @@ class SessionView(APIView):
                     "manage_availability": can_manage_availability(user),
                     "prepare_weekly_agenda": can_prepare_agenda(user),
                     "view_weekly_agenda": can_view_agenda(user),
+                    "delete_tasks": can_delete_reporting_data(user),
                 },
             }
         )
@@ -281,6 +290,79 @@ class TaskCreateView(APIView):
         return Response(
             assignment_detail_payload(assignment, user),
             status=status.HTTP_201_CREATED,
+        )
+
+
+class TaskManagementView(APIView):
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("q", OpenApiTypes.STR, required=False),
+            OpenApiParameter("status", OpenApiTypes.STR, required=False),
+            OpenApiParameter("employee_id", OpenApiTypes.INT, required=False),
+            OpenApiParameter("page", OpenApiTypes.INT, required=False),
+            OpenApiParameter("page_size", OpenApiTypes.INT, required=False),
+        ],
+        responses=OpenApiTypes.OBJECT,
+    )
+    def get(self, request: Request) -> Response:
+        user = request_user(request)
+        if not can_delete_reporting_data(user):
+            raise PermissionDenied("Seul un administrateur IT peut gerer les taches.")
+        serializer = TaskManagementQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        queryset = TaskAssignment.objects.select_related(
+            "task", "employee", "manager"
+        ).prefetch_related("progress_entries")
+        query = str(data["q"]).strip()
+        if query:
+            queryset = queryset.filter(
+                Q(task__code__icontains=query)
+                | Q(task__title__icontains=query)
+                | Q(employee__login_alias__icontains=query)
+                | Q(employee__first_name__icontains=query)
+                | Q(employee__last_name__icontains=query)
+            )
+        if data["status"]:
+            queryset = queryset.filter(status=data["status"])
+        if data.get("employee_id"):
+            queryset = queryset.filter(employee_id=data["employee_id"])
+        queryset = queryset.order_by("employee__last_name", "task__code", "pk")
+        paginator = Paginator(queryset, int(data["page_size"]))
+        page = paginator.get_page(int(data["page"]))
+        employees = User.objects.filter(task_assignments__isnull=False).distinct()
+        return Response(
+            {
+                "items": [task_management_payload(item) for item in page.object_list],
+                "total": paginator.count,
+                "page": page.number,
+                "pages": paginator.num_pages,
+                "page_size": int(data["page_size"]),
+                "employees": [
+                    person_payload(item)
+                    for item in employees.order_by("last_name", "first_name")
+                ],
+            }
+        )
+
+
+class TaskBulkDeleteView(APIView):
+    @extend_schema(request=TaskBulkDeleteSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request) -> Response:
+        serializer = TaskBulkDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        result = delete_task_assignments(
+            actor=request_user(request),
+            selections=((item["id"], item["revision"]) for item in data["assignments"]),
+            reason=data["reason"],
+        )
+        return Response(
+            {
+                "audit_id": result.audit_id,
+                "deleted_assignments": result.deleted_assignments,
+                "deleted_tasks": result.deleted_tasks,
+            }
         )
 
 
