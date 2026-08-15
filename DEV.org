@@ -1,6 +1,9 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-14 ven. 21:01>
+pour l organigram regarder tusis et voir comment je genere des graphique pour genere ici  l'organigram de la structure.
+
 * <2026-08-14 ven.> Preproduction dediee
 ** Decision d'exploitation
 
