@@ -544,6 +544,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/bulk-action/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Apply one audited account action to at most one visible page. */
+        post: operations["users_bulk_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/options/": {
         parameters: {
             query?: never;
@@ -597,6 +614,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `deactivate` - deactivate
+         *     * `delete` - delete
+         * @enum {string}
+         */
+        ActionEnum: "deactivate" | "delete";
         /**
          * @description * `programs` - programs
          *     * `administration` - administration
@@ -819,6 +842,17 @@ export interface components {
          * @enum {string}
          */
         TransitionEnum: "validate" | "reject" | "close_early";
+        UserBulkAction: {
+            action: components["schemas"]["ActionEnum"];
+            users: components["schemas"]["UserSelection"][];
+            reason?: string;
+            /** @default  */
+            confirmation: string;
+        };
+        UserSelection: {
+            id: number;
+            state_token: string;
+        };
         UserWrite: {
             /** Format: email */
             email: string;
@@ -1905,6 +1939,33 @@ export interface operations {
                 "application/json": components["schemas"]["StateToken"];
                 "application/x-www-form-urlencoded": components["schemas"]["StateToken"];
                 "multipart/form-data": components["schemas"]["StateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    users_bulk_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserBulkAction"];
+                "application/x-www-form-urlencoded": components["schemas"]["UserBulkAction"];
+                "multipart/form-data": components["schemas"]["UserBulkAction"];
             };
         };
         responses: {

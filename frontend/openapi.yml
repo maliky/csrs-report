@@ -1131,6 +1131,34 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/users/bulk-action/:
+    post:
+      operationId: users_bulk_action
+      description: Apply one audited account action to at most one visible page.
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBulkAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserBulkAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserBulkAction'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/users/options/:
     get:
       operationId: user_options
@@ -1234,6 +1262,14 @@ paths:
           description: ''
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - deactivate
+      - delete
+      type: string
+      description: |-
+        * `deactivate` - deactivate
+        * `delete` - delete
     AgendaDirectionEnum:
       enum:
       - programs
@@ -1730,6 +1766,40 @@ components:
         * `validate` - validate
         * `reject` - reject
         * `close_early` - close_early
+    UserBulkAction:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSelection'
+        reason:
+          oneOf:
+          - type: string
+            default: ''
+            maxLength: 75
+            minLength: 3
+          - type: string
+            maxLength: 0
+        confirmation:
+          type: string
+          default: ''
+      required:
+      - action
+      - users
+    UserSelection:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        state_token:
+          type: string
+      required:
+      - id
+      - state_token
     UserWrite:
       type: object
       properties:

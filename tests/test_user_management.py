@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from typing import Any, Protocol, cast
 
 import pytest
 from django.contrib.auth import authenticate
 from django.core import mail
+from django.test import Client
 from django.utils import timezone
 
 from accounts.models import User
+from accounts.services import user_management_state_token
 from work.models import (
     OrganizationMembership,
     OrganizationUnit,
@@ -25,6 +28,14 @@ from work.services import collaborator_state_token
 pytestmark = pytest.mark.django_db
 
 
+class ClientResponse(Protocol):
+    status_code: int
+
+    def json(self) -> Any: ...
+
+    def __getitem__(self, key: str) -> str: ...
+
+
 def create_it_admin(alias: str = "it") -> User:
     return User.objects.create_user(
         f"{alias}@example.test",
@@ -35,8 +46,11 @@ def create_it_admin(alias: str = "it") -> User:
     )
 
 
-def json_post(client, path: str, data: dict[str, object]):
-    return client.post(path, data, content_type="application/json")
+def json_post(client: Client, path: str, data: dict[str, object]) -> ClientResponse:
+    return cast(
+        ClientResponse,
+        client.post(path, data, content_type="application/json"),
+    )
 
 
 def test_user_management_requires_it_and_preserves_deactivated_account(client) -> None:
@@ -137,6 +151,201 @@ def test_user_management_requires_it_and_preserves_deactivated_account(client) -
     assert reactivated.status_code == 200
     user.refresh_from_db()
     assert user.is_active
+
+
+def test_user_list_exposes_batch_tokens_and_bulk_deactivation_is_atomic(
+    client: Client,
+) -> None:
+    administrator = create_it_admin()
+    first = User.objects.create_user(
+        "first.batch@example.test", "Batch-password-2026!", login_alias="first_batch"
+    )
+    second = User.objects.create_user(
+        "second.batch@example.test", "Batch-password-2026!", login_alias="second_batch"
+    )
+    client.force_login(administrator)
+
+    listed = client.get("/api/v1/users/?page_size=100")
+    assert listed.status_code == 200
+    rows = {item["id"]: item for item in listed.json()["items"]}
+    assert rows[administrator.pk]["batch_capabilities"]["deactivate"] is False
+    assert rows[first.pk]["batch_capabilities"]["deactivate"] is True
+    assert rows[first.pk]["state_token"] == user_management_state_token(first)
+
+    stale_token = rows[second.pk]["state_token"]
+    second.position = "Fonction modifiée ailleurs"
+    second.save(update_fields=["position"])
+    stale = json_post(
+        client,
+        "/api/v1/users/bulk-action/",
+        {
+            "action": "deactivate",
+            "users": [
+                {"id": first.pk, "state_token": rows[first.pk]["state_token"]},
+                {"id": second.pk, "state_token": stale_token},
+            ],
+        },
+    )
+    assert stale.status_code == 409
+    first.refresh_from_db()
+    assert first.is_active
+
+    deactivated = json_post(
+        client,
+        "/api/v1/users/bulk-action/",
+        {
+            "action": "deactivate",
+            "users": [
+                {"id": first.pk, "state_token": user_management_state_token(first)},
+                {"id": second.pk, "state_token": user_management_state_token(second)},
+            ],
+        },
+    )
+    assert deactivated.status_code == 200
+    assert deactivated.json() == {"action": "deactivate", "affected": 2}
+    assert User.objects.filter(pk__in=(first.pk, second.pk), is_active=False).count() == 2
+    assert first.history.filter(
+        is_active=False,
+        history_user=administrator,
+        history_change_reason="Désactivation groupée du compte",
+    ).exists()
+
+
+def test_bulk_user_action_requires_it_and_rejects_invalid_selection(
+    client: Client,
+) -> None:
+    target = User.objects.create_user(
+        "batch.target@example.test", "Batch-password-2026!", login_alias="batch_target"
+    )
+    ordinary = User.objects.create_user(
+        "batch.ordinary@example.test", "Batch-password-2026!"
+    )
+    selection: list[dict[str, object]] = [
+        {"id": target.pk, "state_token": user_management_state_token(target)}
+    ]
+    payload: dict[str, object] = {
+        "action": "deactivate",
+        "users": selection,
+    }
+    client.force_login(ordinary)
+    assert json_post(client, "/api/v1/users/bulk-action/", payload).status_code == 403
+
+    administrator = create_it_admin()
+    client.force_login(administrator)
+    duplicate_payload = {
+        **payload,
+        "users": selection * 2,
+    }
+    assert (
+        json_post(client, "/api/v1/users/bulk-action/", duplicate_payload).status_code
+        == 400
+    )
+    oversized_payload = {
+        **payload,
+        "users": selection * 101,
+    }
+    assert (
+        json_post(client, "/api/v1/users/bulk-action/", oversized_payload).status_code
+        == 400
+    )
+
+
+def test_bulk_delete_removes_only_inactive_orphans_and_keeps_audit(
+    client: Client,
+) -> None:
+    administrator = create_it_admin()
+    orphan = User.objects.create_user(
+        "orphan@example.test", "Batch-password-2026!", login_alias="orphan"
+    )
+    orphan.is_active = False
+    orphan.save(update_fields=["is_active"])
+    linked = User.objects.create_user(
+        "linked@example.test", "Batch-password-2026!", login_alias="linked"
+    )
+    linked.is_active = False
+    linked.save(update_fields=["is_active"])
+    unit = OrganizationUnit.objects.create(
+        code="BATCH-USERS", short_name="Lot", long_name="Unité du lot"
+    )
+    OrganizationMembership.objects.create(
+        user=linked,
+        unit=unit,
+        start_date=timezone.localdate(),
+        is_primary=True,
+    )
+    task_linked = User.objects.create_user(
+        "task-linked@example.test",
+        "Batch-password-2026!",
+        login_alias="task_linked",
+    )
+    task_linked.is_active = False
+    task_linked.save(update_fields=["is_active"])
+    Task.objects.create(
+        code="BATCH-USER-TASK",
+        title="Tâche liée au compte",
+        description="Cette relation protégée interdit la suppression du compte.",
+        created_by=task_linked,
+    )
+    client.force_login(administrator)
+
+    blocked = json_post(
+        client,
+        "/api/v1/users/bulk-action/",
+        {
+            "action": "delete",
+            "users": [
+                {"id": orphan.pk, "state_token": user_management_state_token(orphan)},
+                {"id": linked.pk, "state_token": user_management_state_token(linked)},
+                {
+                    "id": task_linked.pk,
+                    "state_token": user_management_state_token(task_linked),
+                },
+            ],
+            "reason": "Compte pilote créé par erreur",
+            "confirmation": "SUPPRIMER",
+        },
+    )
+    assert blocked.status_code == 400
+    assert "linked" in blocked.json()["error"]["message"]
+    assert "task_linked" in str(blocked.json()["error"]["fields"]["users"])
+    assert User.objects.filter(pk=orphan.pk).exists()
+
+    orphan_id = orphan.pk
+    deleted = json_post(
+        client,
+        "/api/v1/users/bulk-action/",
+        {
+            "action": "delete",
+            "users": [
+                {"id": orphan_id, "state_token": user_management_state_token(orphan)}
+            ],
+            "reason": "Compte pilote créé par erreur",
+            "confirmation": "SUPPRIMER",
+        },
+    )
+    assert deleted.status_code == 200
+    assert deleted.json() == {"action": "delete", "affected": 1}
+    assert not User.objects.filter(pk=orphan_id).exists()
+    deletion_history = User.history.get(id=orphan_id, history_type="-")
+    assert deletion_history.history_user == administrator
+    assert (
+        deletion_history.history_change_reason
+        == "Suppression groupée : Compte pilote créé par erreur"
+    )
+
+    missing_confirmation = json_post(
+        client,
+        "/api/v1/users/bulk-action/",
+        {
+            "action": "delete",
+            "users": [
+                {"id": linked.pk, "state_token": user_management_state_token(linked)}
+            ],
+            "reason": "Nettoyage",
+        },
+    )
+    assert missing_confirmation.status_code == 400
+    assert User.objects.filter(pk=linked.pk).exists()
 
 
 def test_temporary_password_is_one_time_and_blocks_business_access(client) -> None:

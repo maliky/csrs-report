@@ -1,15 +1,19 @@
 """Audited account-management and activation services."""
 
+from collections.abc import Sequence
 from datetime import date
 from hashlib import sha256
 import secrets
+from typing import cast
 
 from django.contrib.auth import password_validation
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.http import HttpRequest
-from django.db import transaction
+from django.db import DEFAULT_DB_ALIAS, transaction
+from django.db.models import Model
+from django.db.models.deletion import Collector, ProtectedError, RestrictedError
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -19,6 +23,9 @@ from accounts.models import User
 
 class StaleUserStateError(Exception):
     """Raised when an account form was based on an obsolete state."""
+
+
+USER_BULK_ACTIONS = frozenset({"deactivate", "delete"})
 
 
 def can_manage_users(user: User) -> bool:
@@ -61,6 +68,136 @@ def _attribute_history(user: User, actor: User, reason: str) -> None:
     """Attribute the next simple-history row without exposing credentials."""
     user._history_user = actor  # type: ignore[attr-defined]
     user._change_reason = reason[:100]  # type: ignore[attr-defined]
+
+
+def managed_user_deletion_blockers(user: User) -> tuple[str, ...]:
+    """Describe why an inactive account is not an orphan safe to delete."""
+    blockers: list[str] = []
+    if user.is_active:
+        blockers.append("le compte est encore actif")
+    if user.is_staff or user.is_superuser or user.is_it_admin:
+        blockers.append("le compte possède encore des droits techniques")
+    if user.groups.exists() or user.user_permissions.exists():
+        blockers.append("le compte possède encore des groupes ou permissions")
+
+    database = user._state.db or DEFAULT_DB_ALIAS
+    relation_labels: set[str] = set()
+    for relation in user._meta.related_objects:
+        related_model = cast(type[Model], relation.related_model)
+        if (
+            related_model._base_manager.using(database)
+            .filter(**{relation.field.name: user.pk})
+            .exists()
+        ):
+            relation_labels.add(str(related_model._meta.verbose_name_plural))
+    if relation_labels:
+        blockers.append("le compte est lié à " + ", ".join(sorted(relation_labels)))
+
+    if not relation_labels:
+        collector = Collector(using=database, origin=user)
+        try:
+            collector.collect([user])
+        except (ProtectedError, RestrictedError):
+            blockers.append("le compte est lié à des données protégées")
+        else:
+            collected_relations = any(
+                model is not User and bool(objects)
+                for model, objects in collector.data.items()
+            )
+            fast_relations = any(queryset.exists() for queryset in collector.fast_deletes)
+            updated_relations = any(
+                batch.exists() if hasattr(batch, "exists") else bool(batch)
+                for batches in collector.field_updates.values()
+                for batch in batches
+            )
+            if collected_relations or fast_relations or updated_relations:
+                blockers.append("le compte est lié à d'autres données persistantes")
+    return tuple(blockers)
+
+
+def _deactivate_locked_users(*, actor: User, users: Sequence[User]) -> int:
+    """Deactivate one already locked and state-checked selection."""
+    invalid = [
+        user.login_alias or user.email
+        for user in users
+        if not user.is_active or user.pk == actor.pk
+    ]
+    if invalid:
+        raise ValidationError(
+            {
+                "users": (
+                    "Ces comptes ne peuvent pas être désactivés : "
+                    + ", ".join(invalid)
+                    + "."
+                )
+            }
+        )
+    for user in users:
+        user.is_active = False
+        _attribute_history(user, actor, "Désactivation groupée du compte")
+        user.save(update_fields=["is_active"])
+    return len(users)
+
+
+def _delete_locked_orphans(*, actor: User, users: Sequence[User], reason: str) -> int:
+    """Delete one already locked selection after checking every relation."""
+    blocked: list[str] = []
+    for user in users:
+        blockers = list(managed_user_deletion_blockers(user))
+        if user.pk == actor.pk:
+            blockers.insert(0, "vous ne pouvez pas supprimer votre propre compte")
+        if blockers:
+            blocked.append(f"{user.login_alias or user.email} : " + "; ".join(blockers))
+    if blocked:
+        raise ValidationError({"users": blocked})
+
+    history_reason = f"Suppression groupée : {reason.strip()}"
+    for user in users:
+        _attribute_history(user, actor, history_reason)
+        user.delete()
+    return len(users)
+
+
+@transaction.atomic
+def bulk_manage_users(
+    *,
+    actor: User,
+    action: str,
+    selections: Sequence[tuple[int, str]],
+    reason: str = "",
+) -> int:
+    """Deactivate accounts or delete inactive orphans as one audited batch."""
+    ensure_can_manage_users(actor)
+    if action not in USER_BULK_ACTIONS:
+        raise ValidationError({"action": "Cette action groupée est inconnue."})
+
+    requested_ids = [user_id for user_id, _state_token in selections]
+    locked_by_id = {
+        user.pk: user
+        for user in User.objects.select_for_update().filter(pk__in=requested_ids)
+    }
+    missing_ids = sorted(set(requested_ids) - set(locked_by_id))
+    if missing_ids:
+        raise ValidationError(
+            {"users": f"Comptes introuvables : {', '.join(map(str, missing_ids))}."}
+        )
+
+    users = [locked_by_id[user_id] for user_id in requested_ids]
+    stale_labels: list[str] = []
+    for user, (_user_id, expected_token) in zip(users, selections, strict=True):
+        ensure_can_manage_users(actor, user)
+        if user_management_state_token(user) != expected_token:
+            stale_labels.append(user.login_alias or user.email)
+    if stale_labels:
+        raise StaleUserStateError(
+            "Ces comptes ont changé depuis leur sélection : "
+            + ", ".join(stale_labels)
+            + ". Rechargez la liste."
+        )
+
+    if action == "deactivate":
+        return _deactivate_locked_users(actor=actor, users=users)
+    return _delete_locked_orphans(actor=actor, users=users, reason=reason)
 
 
 def _assign_identity(
