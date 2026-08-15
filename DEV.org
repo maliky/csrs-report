@@ -1,6 +1,21 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-15 sam.> Actions groupees sur les comptes
+** Decision d'architecture
+
+La page React =/app/administration/utilisateurs= permet de selectionner individuellement ou en une fois les comptes de la page courante, dans la limite de 100. La selection est abandonnee lors d'un changement de filtre ou de page. Un lot doit contenir uniquement des comptes actifs a desactiver ou uniquement des comptes desactives a supprimer.
+
+La desactivation groupee conserve les comptes, leurs rattachements et leurs historiques. Par exception a la decision du 14 aout, une suppression definitive est autorisee seulement pour un compte deja desactive, sans droit technique, groupe, permission, rattachement ni autre donnee persistante. Le serveur verrouille et controle tout le lot avant ecriture; un compte absent, protege, lie ou modifie annule l'operation complete.
+
+Chaque requete transmet les identifiants et jetons d'etat. La suppression exige un motif et la confirmation =SUPPRIMER=. La ligne active disparait, mais =HistoricalUser= conserve l'acteur, le motif et la trace de suppression.
+
+** Verification
+
+- [X] Permissions, limite du lot, concurrence, atomicite et criteres d'un compte orphelin couverts par pytest.
+- [X] Selection, selection complete, lots mixtes et confirmations couverts par Vitest.
+- [X] OpenAPI, typage des modules applicatifs modifies, formatage des fichiers modifies et build React verifies.
+
 * <2026-08-14 ven.> Gestion React des utilisateurs et des equipes
 ** Decision d'architecture
 

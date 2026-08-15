@@ -147,6 +147,45 @@ class UserManagementQuerySerializer(serializers.Serializer):
     )
 
 
+class UserSelectionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1)
+    state_token = serializers.CharField(allow_blank=False)
+
+
+class UserBulkActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("deactivate", "delete"))
+    users = UserSelectionSerializer(many=True, allow_empty=False, max_length=100)
+    reason = serializers.CharField(
+        min_length=3,
+        max_length=75,
+        trim_whitespace=True,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    confirmation = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_users(
+        self, value: list[dict[str, int | str]]
+    ) -> list[dict[str, int | str]]:
+        ids = [int(item["id"]) for item in value]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError("Un compte ne peut apparaître qu'une fois.")
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        if attrs["action"] == "delete":
+            if len(str(attrs.get("reason", "")).strip()) < 3:
+                raise serializers.ValidationError(
+                    {"reason": "Le motif de suppression est obligatoire."}
+                )
+            if attrs.get("confirmation") != "SUPPRIMER":
+                raise serializers.ValidationError(
+                    {"confirmation": "Saisissez exactement SUPPRIMER."}
+                )
+        return attrs
+
+
 class UserWriteSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=254)
     login_alias = serializers.RegexField(

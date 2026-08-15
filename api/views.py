@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from accounts.models import AgendaDirection, User
 from accounts.services import (
     StaleUserStateError,
+    bulk_manage_users,
     can_manage_users,
     complete_temporary_password_change,
     create_managed_user,
@@ -68,6 +69,7 @@ from api.serializers import (
     TemporaryPasswordChangeSerializer,
     TransitionSerializer,
     UserManagementQuerySerializer,
+    UserBulkActionSerializer,
     UserUpdateSerializer,
     UserWriteSerializer,
 )
@@ -75,6 +77,7 @@ from work.models import (
     InstitutionalAction,
     OrganizationMembership,
     OrganizationUnit,
+    ReportingLine,
     TaskAssignment,
     TaskProposal,
     WorkCalendar,
@@ -127,12 +130,18 @@ def managed_user_queryset() -> QuerySet[User]:
     memberships = OrganizationMembership.objects.filter(
         end_date__isnull=True
     ).select_related("unit")
+    reporting_lines = ReportingLine.objects.filter(end_date__isnull=True)
     return User.objects.prefetch_related(
         Prefetch(
             "organization_memberships",
             queryset=memberships,
             to_attr="current_organization_memberships",
-        )
+        ),
+        Prefetch(
+            "reporting_lines",
+            queryset=reporting_lines,
+            to_attr="current_reporting_lines",
+        ),
     )
 
 
@@ -276,7 +285,8 @@ class UserListCreateView(APIView):
         return Response(
             {
                 "items": [
-                    user_management_summary_payload(user) for user in page.object_list
+                    user_management_summary_payload(user, actor)
+                    for user in page.object_list
                 ],
                 "total": paginator.count,
                 "page": page.number,
@@ -317,6 +327,32 @@ class UserListCreateView(APIView):
             user_management_detail_payload(user, actor),
             status=status.HTTP_201_CREATED,
         )
+
+
+class UserBulkActionView(APIView):
+    """Apply one audited account action to at most one visible page."""
+
+    @extend_schema(
+        operation_id="users_bulk_action",
+        request=UserBulkActionSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def post(self, request: Request) -> Response:
+        serializer = UserBulkActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        selections = [
+            (cast(int, item["id"]), str(item["state_token"]))
+            for item in cast(list[dict[str, object]], data["users"])
+        ]
+        action = str(data["action"])
+        affected = bulk_manage_users(
+            actor=request_user(request),
+            action=action,
+            selections=selections,
+            reason=str(data.get("reason", "")),
+        )
+        return Response({"action": action, "affected": affected})
 
 
 class UserOptionsView(APIView):

@@ -11,10 +11,33 @@
 }
 
 .filterActions,
-.pagination {
+.pagination,
+.batchActions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.batchToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.batchToolbar .resultCount {
+  margin: 0;
+}
+
+.batchActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.selectionHint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-muted);
 }
 
 .resultCount {
@@ -49,6 +72,10 @@
 
 .table td span {
   display: block;
+}
+
+.selectedRow {
+  background: #fff5e2;
 }
 
 .pagination {
@@ -198,6 +225,13 @@
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
 }
 
+.selectedUsers {
+  max-height: 10rem;
+  margin: var(--space-4) 0;
+  padding-left: 1.4rem;
+  overflow-y: auto;
+}
+
 .temporaryPassword {
   display: block;
   margin: var(--space-5) 0;
@@ -237,6 +271,15 @@
   .sectionHeading,
   .accessCard {
     grid-template-columns: 1fr;
+  }
+
+  .batchToolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .batchActions {
+    justify-content: flex-start;
   }
 }
 

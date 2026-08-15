@@ -22,6 +22,11 @@ urlpatterns = [
     ),
     path("users/", views.UserListCreateView.as_view(), name="user-list"),
     path("users/options/", views.UserOptionsView.as_view(), name="user-options"),
+    path(
+        "users/bulk-action/",
+        views.UserBulkActionView.as_view(),
+        name="user-bulk-action",
+    ),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user-detail"),
     path(
         "users/<int:pk>/activation-link/",

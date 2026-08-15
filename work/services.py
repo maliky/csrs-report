@@ -1175,11 +1175,21 @@ def validate_supervisor_unit(
 
 def organization_state_token(user: User) -> str:
     """Return a stable token for optimistic organization edits in the admin."""
-    memberships = OrganizationMembership.objects.filter(
-        user=user, end_date__isnull=True
-    ).order_by("pk")
-    lines = ReportingLine.objects.filter(employee=user, end_date__isnull=True).order_by(
-        "pk"
+    prefetched_memberships = getattr(user, "current_organization_memberships", None)
+    memberships = (
+        sorted(prefetched_memberships, key=lambda row: row.pk)
+        if prefetched_memberships is not None
+        else OrganizationMembership.objects.filter(
+            user=user, end_date__isnull=True
+        ).order_by("pk")
+    )
+    prefetched_lines = getattr(user, "current_reporting_lines", None)
+    lines = (
+        sorted(prefetched_lines, key=lambda row: row.pk)
+        if prefetched_lines is not None
+        else ReportingLine.objects.filter(employee=user, end_date__isnull=True).order_by(
+            "pk"
+        )
     )
     payload = [
         *(

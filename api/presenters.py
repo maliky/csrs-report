@@ -57,7 +57,7 @@ def organization_unit_payload(unit: OrganizationUnit) -> dict[str, object]:
     }
 
 
-def user_management_summary_payload(user: User) -> dict[str, object]:
+def user_management_summary_payload(user: User, viewer: User) -> dict[str, object]:
     """Return one compact user row for routine IT administration."""
     prefetched = getattr(user, "current_organization_memberships", None)
     if prefetched is None:
@@ -67,6 +67,7 @@ def user_management_summary_payload(user: User) -> dict[str, object]:
             .order_by("-is_primary", "pk")
         )
     membership = next((item for item in prefetched if item.is_primary), None)
+    protected = user.is_superuser and not viewer.is_superuser
     return {
         **person_payload(user),
         "email": user.email,
@@ -77,6 +78,18 @@ def user_management_summary_payload(user: User) -> dict[str, object]:
         "primary_unit": (
             organization_unit_payload(membership.unit) if membership else None
         ),
+        "state_token": user_management_state_token(user),
+        "batch_capabilities": {
+            "deactivate": user.is_active and user.pk != viewer.pk and not protected,
+            "delete": (
+                not user.is_active
+                and user.pk != viewer.pk
+                and not protected
+                and not user.is_staff
+                and not user.is_it_admin
+                and not user.is_superuser
+            ),
+        },
     }
 
 
@@ -101,7 +114,7 @@ def user_management_detail_payload(user: User, viewer: User) -> dict[str, object
     )
     protected = user.is_superuser and not viewer.is_superuser
     return {
-        **user_management_summary_payload(user),
+        **user_management_summary_payload(user, viewer),
         "first_name": user.first_name,
         "last_name": user.last_name,
         "phone": user.phone,

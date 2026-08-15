@@ -118,6 +118,11 @@ export type ManagedUserSummary = Person & {
   password_change_required: boolean;
   has_usable_password: boolean;
   primary_unit: OrganizationUnitOption | null;
+  state_token: string;
+  batch_capabilities: {
+    deactivate: boolean;
+    delete: boolean;
+  };
 };
 
 export type ManagedUserDetail = ManagedUserSummary & {
@@ -152,6 +157,11 @@ export type UserManagementOptions = {
   units: OrganizationUnitOption[];
   users: Person[];
   agenda_directions: Array<{ value: string; label: string }>;
+};
+
+export type UserBulkActionResult = {
+  action: "deactivate" | "delete";
+  affected: number;
 };
 
 export type CollaboratorManagement = {
