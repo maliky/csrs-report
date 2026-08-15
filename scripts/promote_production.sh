@@ -166,7 +166,7 @@ deploy_target() {
     fi
     "${compose[@]}" build "${build_services[@]}"
 
-    built_image="$("${compose[@]}" images -q web | head -n 1)"
+    built_image="$(docker image inspect --format '{{.Id}}' "$previous_image_name")"
     [[ -n "$built_image" ]] || die "Image web construite introuvable."
     built_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$built_image")"
     [[ "$built_revision" == "$candidate" ]] || die "L'image construite ne porte pas le SHA attendu."

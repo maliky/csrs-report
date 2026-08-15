@@ -44,6 +44,8 @@ def test_promotion_script_keeps_release_safety_guards() -> None:
     assert 'grep -F "DEPLOYMENT_OK candidate=$candidate "' in source
     assert "--force-recreate web" in source
     assert 'docker compose -p "$project" -f compose.yml ps -q web' in source
+    assert "docker image inspect --format '{{.Id}}' \"$previous_image_name\"" in source
+    assert '"${compose[@]}" images -q web' not in source
     assert "docker compose down" not in source
     assert "reset --hard" not in source
     assert "push --force" not in source
