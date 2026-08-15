@@ -20,8 +20,11 @@ test("réduit la barre latérale et mémorise le choix", async () => {
   const team = screen.getByRole("link", { name: "Mon équipe" });
   const proposals = screen.getByRole("link", { name: "Propositions" });
   expect(
-    screen.getByRole("link", { name: "Interface classique" }),
-  ).toHaveAttribute("href", "/classique/");
+    screen.queryByRole("link", { name: "Interface classique" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: "Processus" }),
+  ).not.toBeInTheDocument();
   expect(
     team.compareDocumentPosition(proposals) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();

@@ -1,12 +1,28 @@
 # CSRS Report
 
-Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse de Recherches Scientifiques en Côte d'Ivoire.
+Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse
+de Recherches Scientifiques en Côte d'Ivoire.
 
 Le cycle métier est documenté dans [`docs/task-lifecycle.org`](docs/task-lifecycle.org) et son rendu [`docs/task-lifecycle.png`](docs/task-lifecycle.png).
 
 Le [manuel utilisateur illustré](MANUAL.org) factorise les procédures communes et décrit les parcours d'un collaborateur, d'un responsable intermédiaire, de la Direction générale, du secrétariat, des RH et de l'administrateur de l'organigramme.
 
-## Développement local
+## Stack Docker — parcours recommandé
+
+Docker Compose démarre toute l'application :
+
+| Service | Rôle |
+| --- | --- |
+| `db` | PostgreSQL 17 avec volume persistant |
+| `web` | Django, migrations, fichiers statiques et Gunicorn |
+| `notifier` | traitement périodique des notifications |
+
+Le service Django se connecte automatiquement à PostgreSQL par le nom Compose
+`db`. Il n'est pas nécessaire de lancer `manage.py runserver`.
+
+### Prérequis
+
+Sous Linux, installer Docker Engine et **Docker Compose v2**. Sur Ubuntu 24.04 :
 
 Créer d'abord un environnement Python isolé. Python 3.13 est la version de référence :
 
@@ -21,14 +37,14 @@ python manage.py runserver
 
 Si `pyenv` est installé, `.python-version` peut aussi activer l'environnement `csrs`. Sans `DATABASE_URL`, Django utilise une base SQLite locale ignorée par Git. `python manage.py seed_demo` ajoute uniquement des données fictives.
 
-Contrôles :
+## Contrôles de développement
 
 ```bash
-pytest -m "not selenium"
-pytest -m selenium
-ruff format --check .
-ruff check .
-mypy accounts work config
+python -m pytest -m "not selenium"
+python -m pytest -m selenium
+python -m ruff format --check .
+python -m ruff check .
+python -m mypy accounts work config
 python manage.py makemigrations --check --dry-run
 ```
 

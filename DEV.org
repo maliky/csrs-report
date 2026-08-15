@@ -1,6 +1,70 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-13 jeu.> Calendrier unique et chargement non bloquant des agendas
+** Decision d'architecture
+
+Le choix de periode du secretariat utilise =@daypicker/react= en mode =range=, localise en francais et limite a 30 nuits, soit 31 jours inclusifs conformement a la validation serveur. Un panneau contextuel affiche deux mois sur ordinateur et un mois sur telephone. La selection se fait directement sur le calendrier: premier clic pour le debut, second clic pour la fin; une plage incomplete affiche une instruction sans etre traitee comme une erreur.
+
+La periode en cours de selection reste distincte de la periode appliquee. Seuls =Appliquer= et le raccourci =Semaine prochaine= declenchent le chargement; une plage incomplete, une saisie invalide ou =Annuler= n'envoie aucune requete. L'aperçu, les visites et les versions sont charges ensemble puis remplaces atomiquement afin de ne jamais melanger deux periodes. Une reponse devenue obsolete est ignoree.
+
+Le premier chargement conserve son squelette et son erreur de page. Pour toute mise a jour ulterieure, le dernier agenda valide reste visible avec un statut local; une erreur affiche =Reessayer= sans masquer ni bloquer la page.
+
+Un seul selecteur =Direction de l'agenda= pilote la requete d'apercu et la direction transmise a la generation. L'interface expose donc un seul bouton =Generer le PDF= et ne repete plus un second choix de direction dans la section d'apercu.
+
+* <2026-08-13 jeu.> Exclusion explicite du DG des agendas
+** Decision d'architecture
+
+=accounts.User.include_in_direction_agendas= est un booleen audite, actif par defaut et visible dans l'administration. Le DG existant et le compte fictif =dg= ont ce reglage desactive; leurs taches sont absentes des deux apercus et des prochains PDF sans supprimer les taches ni modifier les PDF archives. Une personne non classee ne figure dans les deux agendas que si ce reglage reste actif.
+
+* <2026-08-13 jeu. 07:51>
+Regle general pour attribuer les directions.
+- program, laboratoire, stations : direction des programmes DRD
+- cellule et services : direction administrative DAF
+
+Il faut maintenant séparer ces entités ci dessous feront parties de l'agenda de la Direction de la Recherche devenue maintenant la Direction des programmes
+
+DRD => Direction des programmes
+-   UAR
+-   HDSS/
+-   TAABO
+-   Laboratoires microbio/ chimie/
+-   parasito
+-   Programmes Afrique One
+-   Botanique
+
+Les autres services et cellules feront parties de l'agenda de la DAF
+
+** Decision mise en oeuvre
+
+Le classement initial est une migration auditee et non une synchronisation permanente. Elle ne modifie que les utilisateurs dont =agenda_direction= est vide et possedant une appartenance principale ouverte. Une branche sous =DP= est toujours classee =programs= et une branche sous =DAF= toujours =administration=, avant le repli par type d'unite: =programme=, =laboratory= et =station= vers les programmes; =cell= et =service= vers l'administration. Les unites transversales ou sans appartenance principale restent non classees et figurent donc dans les deux agendas sauf exclusion explicite. Tout choix manuel deja effectue est conserve et les ajouts reels futurs restent classes explicitement dans la fiche utilisateur.
+
+Le jeu de demonstration applique la meme regle seulement lorsqu'un compte est nouveau ou encore non classe. Il produit 22 comptes =programs=, 14 comptes =administration= et conserve sans classement =dev=, =dg=, =secretariat_dg=, =coordination=, =pilotage= et =expertise=. Les cellules =CG=, =CI=, =RSE= et =GEI= placees sous =PSPI= suivent le repli par type et appartiennent a l'agenda administratif.
+
+** Perimetre de structure
+
+=UAR= existe deja dans l'organigramme canonique sous =DP=. Aucune unite distincte =HDSS=, =TAABO=, =Microbiologie=, =Chimie=, =Parasitologie=, =Programme Afrique One= ou =Botanique= n'est inventee dans ce lot: leurs rattachements et responsables devront etre confirmes avant creation.
+
+* <2026-08-13 jeu.> Deux agendas de direction sur une periode choisie
+** Decision d'architecture
+
+Le secretariat choisit une periode inclusive de 31 jours maximum, proposee par defaut du lundi au dimanche de la semaine suivante. Une tache est retenue lorsque son affectation chevauche cette periode. Les evenements majeurs, visites et indisponibilites sont partages, puis deux PDF independants sont produits pour =programs= et =administration=.
+
+=accounts.User.agenda_direction= est un =CharField= audite par =django-simple-history= avec exactement deux valeurs non vides: =programs= et =administration=. Le vide represente explicitement l'attente du classement officiel; aucun champ de direction n'est ajoute aux taches afin d'eviter deux sources de verite et le snapshot PDF fige le classement utilise lors de chaque generation. Le booleen audite =include_in_direction_agendas= permet une exclusion explicite, notamment celle du DG, sans detruire les taches.
+
+=AgendaDraft= porte la periode et les evenements majeurs partages. =AgendaVersion= porte en plus la direction et un compteur de version independant par triplet =periode + direction=. La migration renomme les anciens modeles sans recreer leurs tables, transforme leur lundi en periode de sept jours et marque leurs versions =legacy=; les octets PDF, chemins de stockage et empreintes ne sont pas reecrits.
+
+Le snapshot =schema_version= 2 filtre les affectations par chevauchement de periode et par inclusion explicite, conserve les commentaires de la periode, classe la personne dans son unite principale valide a la fin de periode avec repli sur l'unite historique de l'affectation et fournit la liste distincte des utilisateurs non classes encore inclus. Le PDF et React affichent les dates en =jj/mm/aaaa= et signalent chaque personne non classee.
+
+Les anciens agendas hebdomadaires restent des =Agenda global historique= avec leurs PDF et empreintes d'origine. Le module =Processus= est desactive dans React, l'API et l'administration sans supprimer ses tables; =/classique/= reste accessible directement, mais son lien n'est plus affiche.
+
+** Procedure d'administration du classement
+
+1. Ouvrir =Administration > Utilisateurs= puis la fiche de la personne.
+2. Dans =Identite=, choisir =Direction des programmes= ou =Direction administrative= dans =Direction de l'agenda=.
+3. Laisser le champ vide seulement tant que la liste officielle n'a pas tranche; verifier alors que l'avertissement de double inclusion apparait dans les deux apercus. Decochez =Inclure dans les agendas de direction= uniquement pour une exclusion explicite comme celle du DG.
+4. Enregistrer. Le nouveau classement et l'inclusion s'appliquent aux prochaines generations seulement et ne modifient jamais un PDF deja archive.
+
 
 * <2026-08-12 mer.> Manuel utilisateur illustre et deploiement public verifie
 ** Etat public confirme
@@ -13,16 +77,16 @@ Le conteneur =csrs_web_1= est sain depuis le 12/08/2026 a 07:02 UTC et =csrs_not
 
 ** Manuel et captures reproductibles
 
-=MANUAL.org= factorise les procedures communes puis les applique a trois positions hierarchiques: =atall= en feuille, =daf= au milieu et =dg= au sommet. Il couvre la connexion, la navigation responsive, la consultation et la mise a jour d'une tache, les observations, les propositions, l'affectation directe, la validation, l'equipe, l'auto-affectation du DG, les ordres de mission, les absences RH, la preparation de l'agenda par le secretariat, la generation du PDF et l'ajout d'une personne dans l'organigramme par l'administrateur IT.
+=MANUAL.org= factorise les procedures communes puis les applique a trois positions hierarchiques: =atall= en feuille, =daf= au milieu et =dg= au sommet. Il couvre la connexion, la navigation responsive, la consultation et la mise a jour d'une tache, les observations, les propositions, l'affectation directe, la validation, l'equipe, l'auto-affectation du DG, les absences RH, la preparation des deux agendas par le secretariat, la generation des PDF et l'ajout d'une personne dans l'organigramme par l'administrateur IT. La procedure Processus et sa capture ont ete retirees lors de la desactivation du module le 13/08/2026.
 
-Les vingt captures versionnees dans =docs/manual/screenshots/= sont produites par =scripts/capture_manual.sh=. Le script refuse toute cible distante, cree une base SQLite et un stockage prive temporaires, charge les donnees d'illustration, lance Django et Vite sur =127.0.0.1=, execute Playwright avec Chromium puis supprime l'environnement temporaire. Les mots de passe sont demandes sans affichage et ne sont ni ecrits dans le depot ni passes a un site public.
+Les dix-neuf captures versionnees dans =docs/manual/screenshots/= sont produites par =scripts/capture_manual.sh=. Le script refuse toute cible distante, cree une base SQLite et un stockage prive temporaires, charge les donnees d'illustration, lance Django et Vite sur =127.0.0.1=, execute Playwright avec Chromium puis supprime l'environnement temporaire. Les mots de passe sont demandes sans affichage et ne sont ni ecrits dans le depot ni passes a un site public.
 
 Les scripts =backup_db.sh=, =seed_pilot.sh= et =deploy_preprod.sh= detectent maintenant Docker Compose v2 et utilisent =docker-compose= v1 seulement comme solution de compatibilite sur un hote qui ne possede pas le greffon v2. =CSRS_SQLITE_PATH= permet d'isoler explicitement la base de la fabrique de captures sans alterer =DATABASE_URL= sur les autres environnements.
 
 ** Verification
 
 - [X] Revue visuelle des parcours tache, agenda, archive PDF et insertion dans l'organigramme.
-- [X] Generation de 20 captures depuis un environnement local ephemere sans ecriture metier sur le site public.
+- [X] Generation de 19 captures depuis un environnement local ephemere sans ecriture metier sur le site public.
 - [X] Suite Django complete avec Selenium, 26 tests Vitest, build TypeScript/Vite, audit npm des dependances de production, verification des scripts Bash et absence d'erreur de diff.
 - [X] Verification publique de l'image, des migrations, de la sante, des routes d'administration et d'un PDF avec =RAS=.
 

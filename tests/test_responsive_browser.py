@@ -1,4 +1,3 @@
-import shutil
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -35,10 +34,6 @@ from work.models import (
 
 
 @pytest.mark.selenium
-@pytest.mark.skipif(
-    shutil.which("chromedriver") is None,
-    reason="chromedriver systeme indisponible",
-)
 class ResponsiveSmokeTest(StaticLiveServerTestCase):
     def setUp(self) -> None:
         self.password = f"Browser9!{get_random_string(18)}"
@@ -64,6 +59,11 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
             action_plan=action_plan, name="Action navigateur", code="ACT-BROWSER"
         )
         calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
+        unit = OrganizationUnit.objects.create(
+            code="BROWSER",
+            short_name="Equipe navigateur",
+            long_name="Equipe utilisee par la verification navigateur",
+        )
         personal_start = timezone.localdate() - timedelta(days=14)
         task = Task.objects.create(
             code="BROWSER-01",

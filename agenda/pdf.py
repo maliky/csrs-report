@@ -1,8 +1,8 @@
-"""Printable A4 rendering for immutable weekly agenda snapshots."""
+"""Printable A4 rendering for immutable agenda snapshots."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -48,6 +48,13 @@ def _text(value: object) -> str:
     return escape(str(value)).replace("\n", "<br/>")
 
 
+def _date_text(value: object) -> str:
+    try:
+        return date.fromisoformat(str(value)).strftime("%d/%m/%Y")
+    except ValueError:
+        return _text(value)
+
+
 def _visitor_summary(rows: list[dict[str, object]]) -> str:
     if not rows:
         return "RAS"
@@ -69,9 +76,9 @@ def _availability_summary(rows: list[dict[str, object]]) -> str:
     for row in rows:
         employee = cast(dict[str, object], row["employee"])
         dates = (
-            str(row["start_date"])
+            _date_text(row["start_date"])
             if row["start_date"] == row["end_date"]
-            else f"{row['start_date']} au {row['end_date']}"
+            else f"{_date_text(row['start_date'])} au {_date_text(row['end_date'])}"
         )
         note = f" — {_text(row['note'])}" if row.get("note") else ""
         lines.append(
@@ -81,7 +88,7 @@ def _availability_summary(rows: list[dict[str, object]]) -> str:
     return "<br/>".join(lines)
 
 
-def render_weekly_agenda_pdf(
+def render_agenda_pdf(
     snapshot: dict[str, object], *, generated_at: datetime, version: int
 ) -> bytes:
     """Render the same frozen snapshot used by the preview API."""
@@ -152,16 +159,29 @@ def render_weekly_agenda_pdf(
         rightMargin=12 * mm,
         topMargin=13 * mm,
         bottomMargin=15 * mm,
-        title="Agenda de la semaine",
+        title=f"Agenda — {snapshot['agenda_direction_label']}",
         author="CSRS Report",
     )
     story: list[object] = [
-        Paragraph("AGENDA DE LA SEMAINE", title),
+        Paragraph(f"AGENDA — {_text(snapshot['agenda_direction_label']).upper()}", title),
         Paragraph(
-            f"Semaine du {_text(snapshot['week_start'])} au {_text(snapshot['week_end'])}",
+            f"Période du {_date_text(snapshot['period_start'])} au {_date_text(snapshot['period_end'])}",
             subtitle,
         ),
     ]
+
+    unclassified = cast(list[dict[str, object]], snapshot["unclassified_users"])
+    if unclassified:
+        story.extend(
+            [
+                Paragraph(
+                    "Attention : les personnes non classées sont incluses provisoirement dans les deux agendas : "
+                    + _text(", ".join(str(person["name"]) for person in unclassified)),
+                    unit_body,
+                ),
+                Spacer(1, 3 * mm),
+            ]
+        )
 
     summaries = (
         ("ÉVÉNEMENTS MAJEURS", _text(snapshot.get("major_events") or "RAS")),
@@ -229,8 +249,13 @@ def render_weekly_agenda_pdf(
         lines: list[str] = []
         for employee in cast(list[dict[str, object]], unit["employees"]):
             person = cast(dict[str, object], employee["person"])
+            classification = (
+                " <font color='#9B4D00'>(non classé — présent dans les deux agendas)</font>"
+                if employee.get("unclassified")
+                else ""
+            )
             lines.append(
-                f"<b>{_text(person['name'])}</b> — taux moyen : "
+                f"<b>{_text(person['name'])}</b>{classification} — taux moyen : "
                 f"<b>{cast(int, employee['completion_rate'])}%</b>"
             )
             for task in cast(list[dict[str, object]], employee["tasks"]):
@@ -266,7 +291,7 @@ def render_weekly_agenda_pdf(
 
     if not unit_cards:
         story.append(
-            Paragraph("Aucune activité enregistrée pour cette semaine.", unit_body)
+            Paragraph("Aucune tâche ouverte ou clôturée sur cette période.", unit_body)
         )
     else:
         for index in range(0, len(unit_cards), 2):

@@ -1,12 +1,12 @@
 #+TITLE: Manuel utilisateur de CSRS Report
-#+SUBTITLE: Tâches, suivi hiérarchique et préparation du support de réunion
+#+SUBTITLE: Tâches, suivi hiérarchique et agendas de direction
 #+LANGUAGE: fr
 #+OPTIONS: toc:3 num:t
 #+STARTUP: overview
 
 * À propos de ce manuel
 
-CSRS Report permet de créer et attribuer des tâches, suivre leur progression réelle, échanger des observations, valider le travail terminé et préparer le support hebdomadaire de la réunion de direction. Le présent manuel décrit l'interface React disponible sous =/app/= et réserve l'administration technique à une annexe.
+CSRS Report permet de créer et attribuer des tâches, suivre leur progression réelle, échanger des observations, valider le travail terminé et préparer les agendas de la Direction des programmes et de la Direction administrative. Le présent manuel décrit l'interface React disponible sous =/app/= et réserve l'administration technique à une annexe.
 
 Les écrans visibles dépendent de la position hiérarchique et des délégations actives. L'absence d'un menu signifie généralement que le compte ne possède pas cette responsabilité; elle ne doit pas être contournée en utilisant le compte d'une autre personne.
 
@@ -278,27 +278,6 @@ Appliquer [[#proc-equipe][Consulter l'équipe]] puis ouvrir seulement les direct
 #+ATTR_ORG: :width 1000
 [[file:docs/manual/screenshots/12-equipe-dg.png]]
 
-* Annexe — Ordre de mission
-:PROPERTIES:
-:CUSTOM_ID: proc-mission
-:END:
-
-Tout utilisateur possédant une appartenance principale active peut préparer sa demande de mission.
-
-1. Ouvrir =Processus= puis =Nouvel ordre de mission=.
-2. Choisir =Mission nationale= ou =Mission internationale=.
-3. Saisir la destination, le motif, l'itinéraire, les dates, le transport, le financement et les frais pris en charge.
-4. Pour une mission nationale, sélectionner les participants internes; le demandeur est toujours ajouté automatiquement.
-5. Indiquer si un véhicule de service doit être préparé.
-6. Enregistrer le brouillon.
-7. Ouvrir le dossier, ajouter les pièces autorisées puis sélectionner l'action de soumission affichée.
-8. Suivre les étapes =Préparation=, =Décision DG=, =Distribution= et, si nécessaire, =Véhicule=.
-
-#+CAPTION: Formulaire de préparation d'une demande de mission.
-#+ATTR_HTML: :alt "Formulaire d'ordre de mission avec destination, dates, transport et participants" :width "100%"
-#+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/13-mission-atall.png]]
-
 * Annexe — Support de la réunion de direction
 
 ** Déclarer les absences et missions dans l'agenda
@@ -318,24 +297,25 @@ Le compte RH ouvre =Absences et missions=, choisit la semaine, l'agent, la natur
 :CUSTOM_ID: proc-generer-agenda
 :END:
 
-Cette procédure est réalisée par =secretariat_dg=. Le fichier produit est l'agenda hebdomadaire PDF utilisé comme support de la réunion de direction.
+Cette procédure est réalisée par le secrétariat de la Direction générale. Elle produit séparément un PDF pour la Direction des programmes et un PDF pour la Direction administrative.
 
 1. Ouvrir =Agenda=.
-2. Choisir la semaine; l'application ramène la sélection au lundi correspondant.
+2. Sélectionner le bouton qui affiche la période courante pour ouvrir un calendrier unique. Cliquer d'abord sur la date de début, puis sur la date de fin de la plage mise en évidence; le premier clic affiche une instruction et non une erreur. Sur ordinateur, deux mois sont visibles côte à côte et sur téléphone un seul mois est affiché. Sélectionner =Appliquer= seulement lorsque la période est correcte; =Annuler= ferme le panneau sans modifier l'agenda. =Semaine prochaine= applique directement le lundi au dimanche proposé par défaut. Une période ne peut pas dépasser 31 jours inclusifs.
 3. Dans =Visiteurs=, enregistrer chaque arrivée et marquer le départ lorsqu'il survient. Les noms sont facultatifs, mais le nombre déclaré doit être exact.
-4. Dans =Événements majeurs=, saisir les faits à placer en tête du rapport. S'il n'existe aucun événement particulier, saisir obligatoirement =RAS=.
-5. Contrôler l'aperçu : arrivées, départs, congés, absences, missions, services avec activité, tâches, pourcentages et observations.
-6. Si le travail doit être repris plus tard, sélectionner =Enregistrer le brouillon=.
-7. Lorsque l'aperçu est correct, sélectionner =Générer le PDF=.
-8. Attendre le message =La nouvelle version PDF est archivée et prête à imprimer.=.
-9. Dans =Versions archivées=, sélectionner =Ouvrir le PDF=, puis télécharger ou imprimer le fichier pour la réunion.
+4. Dans =Événements majeurs=, saisir les faits à placer en tête des deux rapports. S'il n'existe aucun événement particulier, saisir =RAS=.
+5. Dans =Direction de l'agenda=, choisir =Direction des programmes= ou =Direction administrative=. Ce sélecteur actualise l'aperçu affiché et détermine le PDF produit; contrôler ensuite les arrivées, départs, congés, absences, missions, services avec activité, tâches, pourcentages et observations. Pendant une mise à jour, le dernier agenda reste visible. Si le chargement échoue, sélectionner =Réessayer= dans l'avertissement local; aucune boîte de dialogue ne bloque le reste de la page.
+6. Vérifier l'avertissement =Personnes non classées=. Les tâches de ces personnes apparaissent volontairement dans les deux agendas jusqu'à leur classement par l'administrateur IT. Les tâches du DG sont explicitement exclues des deux agendas et ne déclenchent pas cet avertissement.
+7. Si le travail doit être repris plus tard, sélectionner =Enregistrer le brouillon=.
+8. Lorsque l'aperçu est correct, sélectionner l'unique bouton =Générer le PDF=. Changer ensuite la direction dans le sélecteur pour préparer l'autre agenda; les deux générations sont indépendantes et peuvent avoir des numéros de version différents.
+9. Attendre le message confirmant la direction archivée.
+10. Dans =Versions archivées=, contrôler la période, la direction et le numéro de version, puis sélectionner =Ouvrir le PDF= pour télécharger ou imprimer le fichier.
 
-#+CAPTION: Préparation par le secrétariat avec la valeur RAS et l'aperçu hebdomadaire.
-#+ATTR_HTML: :alt "Agenda hebdomadaire préparé par le secrétariat avec RAS et bouton Générer le PDF" :width "100%"
+#+CAPTION: Préparation par le secrétariat avec le calendrier unique de sélection de période.
+#+ATTR_HTML: :alt "Calendrier unique ouvert pour choisir le début et la fin de la période d'un agenda" :width "100%"
 #+ATTR_ORG: :width 1000
 [[file:docs/manual/screenshots/14-agenda-secretariat-preparation.png]]
 
-Chaque génération crée une nouvelle version figée et auditable. Une correction ultérieure ne remplace pas l'ancienne version : enregistrer le nouveau brouillon puis générer une version supplémentaire.
+Chaque génération crée une nouvelle version figée et auditable pour une seule direction. Une correction ultérieure ne remplace pas l'ancienne version : enregistrer le brouillon partagé puis générer une version supplémentaire de la direction concernée.
 
 #+CAPTION: Confirmation et version PDF archivée après génération.
 #+ATTR_HTML: :alt "Message de génération réussie et lien vers la version PDF archivée" :width "100%"
@@ -348,7 +328,7 @@ Chaque génération crée une nouvelle version figée et auditable. Une correcti
 :END:
 
 1. Se connecter comme Direction générale et ouvrir =Agenda=.
-2. Repérer la semaine et le numéro de version attendus.
+2. Repérer la période, la direction et le numéro de version attendus. Les anciens agendas globaux restent identifiés comme historiques.
 3. Sélectionner =Ouvrir le PDF= pour consulter, télécharger ou réimprimer le support.
 4. Demander au secrétariat de produire une nouvelle version si une correction est nécessaire; la Direction générale consulte les archives en lecture seule.
 
@@ -368,13 +348,15 @@ Cette annexe concerne uniquement l'administrateur IT =dev=. Les autorisations re
 
 1. Ouvrir =Administration= puis =Utilisateurs= et sélectionner =Ajouter utilisateur=.
 2. Saisir l'email institutionnel, l'identifiant court facultatif, le prénom, le nom, la fonction et le téléphone facultatif.
-3. Dans =Unités actuelles=, déplacer l'unité d'accueil et les éventuelles unités secondaires vers les unités choisies.
-4. Choisir une seule =Unité principale=.
-5. Choisir le =Responsable principal=; le laisser vide uniquement pour une véritable racine de l'organigramme.
-6. Saisir la =Date d'effet= au format =jj/mm/aaaa=.
-7. Enregistrer puis rouvrir la fiche afin de contrôler les valeurs.
-8. Depuis la liste des utilisateurs, lancer =Envoyer un lien d'activation= après vérification de l'adresse.
-9. Se connecter comme responsable et contrôler la présence de la personne dans =Mon équipe= à la date d'effet.
+3. Choisir une seule =Direction de l'agenda= : =Direction des programmes= ou =Direction administrative=. Laisser vide uniquement si le classement officiel n'est pas encore connu; les tâches de la personne apparaîtront alors dans les deux agendas avec un avertissement.
+4. Conserver =Inclure dans les agendas de direction= coché. Le décocher uniquement pour une exclusion explicite validée, comme celle du DG; la personne et ses tâches seront alors absentes des deux agendas.
+5. Dans =Unités actuelles=, déplacer l'unité d'accueil et les éventuelles unités secondaires vers les unités choisies.
+6. Choisir une seule =Unité principale=.
+7. Choisir le =Responsable principal=; le laisser vide uniquement pour une véritable racine de l'organigramme.
+8. Saisir la =Date d'effet= au format =jj/mm/aaaa=.
+9. Enregistrer puis rouvrir la fiche afin de contrôler les valeurs.
+10. Depuis la liste des utilisateurs, lancer =Envoyer un lien d'activation= après vérification de l'adresse.
+11. Se connecter comme responsable et contrôler la présence de la personne dans =Mon équipe= à la date d'effet.
 
 Le compte est créé sans mot de passe partagé. Les anciennes appartenances et lignes hiérarchiques sont clôturées et conservées dans l'historique au lieu d'être supprimées.
 

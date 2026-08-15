@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import cast
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404, HttpResponse
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -18,15 +19,16 @@ from rest_framework.views import APIView
 
 from accounts.models import User
 from agenda.models import (
+    AgendaDirection,
+    AgendaDraft,
+    AgendaVersion,
     AvailabilityKind,
     StaffAvailability,
     VisitorVisit,
-    WeeklyAgendaDraft,
-    WeeklyAgendaVersion,
 )
 from agenda.services import (
     agenda_pdf_bytes,
-    build_week_snapshot,
+    build_agenda_snapshot,
     can_manage_availability,
     can_manage_visits,
     can_prepare_agenda,
@@ -36,14 +38,20 @@ from agenda.services import (
     create_visit,
     generate_agenda,
     mark_visit_departed,
+    next_week_period,
     normalize_week,
     save_draft,
     update_availability,
+    validate_agenda_period,
 )
 from work.models import OrganizationMembership
 
 
 WEEK_PARAMETER = OpenApiParameter("week", OpenApiTypes.DATE, required=False)
+PERIOD_PARAMETERS = [
+    OpenApiParameter("period_start", OpenApiTypes.DATE, required=False),
+    OpenApiParameter("period_end", OpenApiTypes.DATE, required=False),
+]
 
 
 class VisitCreateSerializer(serializers.Serializer):
@@ -80,14 +88,32 @@ class CancelSerializer(RevisionSerializer):
     reason = serializers.CharField()
 
 
-class DraftSerializer(serializers.Serializer):
-    week_start = serializers.DateField()
+class PeriodSerializer(serializers.Serializer):
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        try:
+            validate_agenda_period(
+                cast(date, attrs["period_start"]), cast(date, attrs["period_end"])
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs
+
+
+class DraftSerializer(PeriodSerializer):
     major_events = serializers.CharField(required=False, allow_blank=True, default="")
     revision = serializers.IntegerField(min_value=0, required=False, allow_null=True)
 
 
-class GenerateSerializer(serializers.Serializer):
-    week_start = serializers.DateField()
+class GenerateSerializer(PeriodSerializer):
+    agenda_direction = serializers.ChoiceField(
+        choices=(
+            AgendaDirection.PROGRAMS,
+            AgendaDirection.ADMINISTRATION,
+        )
+    )
 
 
 def _user(request: Request) -> User:
@@ -101,6 +127,31 @@ def _week(request: Request) -> date:
     except ValueError as exc:
         raise serializers.ValidationError({"week": "Date de semaine invalide."}) from exc
     return normalize_week(selected)
+
+
+def _period(request: Request) -> tuple[date, date]:
+    default_start, default_end = next_week_period(timezone.localdate())
+    raw_start = request.query_params.get("period_start", "")
+    raw_end = request.query_params.get("period_end", "")
+    try:
+        period_start = date.fromisoformat(raw_start) if raw_start else default_start
+        period_end = date.fromisoformat(raw_end) if raw_end else default_end
+    except ValueError as exc:
+        raise serializers.ValidationError({"period_start": "Période invalide."}) from exc
+    try:
+        validate_agenda_period(period_start, period_end)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(exc.message_dict) from exc
+    return period_start, period_end
+
+
+def _agenda_direction(request: Request) -> str:
+    value = request.query_params.get("agenda_direction", AgendaDirection.PROGRAMS)
+    if value not in (AgendaDirection.PROGRAMS, AgendaDirection.ADMINISTRATION):
+        raise serializers.ValidationError(
+            {"agenda_direction": "Direction d’agenda inconnue."}
+        )
+    return value
 
 
 def _person(user: User) -> dict[str, object]:
@@ -133,10 +184,13 @@ def availability_payload(item: StaffAvailability) -> dict[str, object]:
     }
 
 
-def version_payload(version: WeeklyAgendaVersion) -> dict[str, object]:
+def version_payload(version: AgendaVersion) -> dict[str, object]:
     return {
         "id": version.pk,
-        "week_start": version.week_start.isoformat(),
+        "period_start": version.period_start.isoformat(),
+        "period_end": version.period_end.isoformat(),
+        "agenda_direction": version.agenda_direction,
+        "agenda_direction_label": version.get_agenda_direction_display(),
         "version": version.version,
         "snapshot_sha256": version.snapshot_sha256,
         "pdf_sha256": version.pdf_sha256,
@@ -148,19 +202,19 @@ def version_payload(version: WeeklyAgendaVersion) -> dict[str, object]:
 
 
 class VisitListCreateView(APIView):
-    @extend_schema(parameters=[WEEK_PARAMETER], responses=OpenApiTypes.OBJECT)
+    @extend_schema(parameters=PERIOD_PARAMETERS, responses=OpenApiTypes.OBJECT)
     def get(self, request: Request) -> Response:
         user = _user(request)
         if not can_manage_visits(user):
             raise Http404
-        monday = _week(request)
-        sunday = monday + timedelta(days=6)
+        period_start, period_end = _period(request)
         visits = VisitorVisit.objects.filter(
-            arrived_at__date__lte=sunday, cancelled_at__isnull=True
-        ).filter(Q(departed_at__isnull=True) | Q(departed_at__date__gte=monday))
+            arrived_at__date__lte=period_end, cancelled_at__isnull=True
+        ).filter(Q(departed_at__isnull=True) | Q(departed_at__date__gte=period_start))
         return Response(
             {
-                "week_start": monday.isoformat(),
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
                 "visits": [visit_payload(item) for item in visits],
             }
         )
@@ -269,23 +323,34 @@ class AvailabilityCancelView(APIView):
 
 
 class AgendaPreviewView(APIView):
-    @extend_schema(parameters=[WEEK_PARAMETER], responses=OpenApiTypes.OBJECT)
+    @extend_schema(
+        parameters=PERIOD_PARAMETERS
+        + [OpenApiParameter("agenda_direction", OpenApiTypes.STR, required=False)],
+        responses=OpenApiTypes.OBJECT,
+    )
     def get(self, request: Request) -> Response:
         user = _user(request)
         if not can_prepare_agenda(user):
             raise Http404
-        monday = _week(request)
-        draft = WeeklyAgendaDraft.objects.filter(week_start=monday).first()
+        period_start, period_end = _period(request)
+        agenda_direction = _agenda_direction(request)
+        draft = AgendaDraft.objects.filter(
+            period_start=period_start, period_end=period_end
+        ).first()
         major_events = draft.major_events if draft else ""
         return Response(
             {
                 "draft": {
-                    "week_start": monday.isoformat(),
+                    "period_start": period_start.isoformat(),
+                    "period_end": period_end.isoformat(),
                     "major_events": major_events,
                     "revision": draft.revision if draft else 0,
                 },
-                "snapshot": build_week_snapshot(
-                    week_start=monday, major_events=major_events
+                "snapshot": build_agenda_snapshot(
+                    period_start=period_start,
+                    period_end=period_end,
+                    agenda_direction=agenda_direction,
+                    major_events=major_events,
                 ),
             }
         )
@@ -305,7 +370,8 @@ class AgendaDraftView(APIView):
         )
         return Response(
             {
-                "week_start": draft.week_start.isoformat(),
+                "period_start": draft.period_start.isoformat(),
+                "period_end": draft.period_end.isoformat(),
                 "major_events": draft.major_events,
                 "revision": draft.revision,
             }
@@ -313,24 +379,35 @@ class AgendaDraftView(APIView):
 
 
 class AgendaVersionListCreateView(APIView):
-    @extend_schema(parameters=[WEEK_PARAMETER], responses=OpenApiTypes.OBJECT)
+    @extend_schema(
+        parameters=PERIOD_PARAMETERS
+        + [OpenApiParameter("agenda_direction", OpenApiTypes.STR, required=False)],
+        responses=OpenApiTypes.OBJECT,
+    )
     def get(self, request: Request) -> Response:
         user = _user(request)
         if not can_view_agenda(user):
             raise Http404
-        versions = WeeklyAgendaVersion.objects.select_related("generated_by")
-        raw = request.query_params.get("week")
-        if raw:
-            versions = versions.filter(week_start=_week(request))
+        versions = AgendaVersion.objects.select_related("generated_by")
+        if request.query_params.get("period_start") or request.query_params.get(
+            "period_end"
+        ):
+            period_start, period_end = _period(request)
+            versions = versions.filter(period_start=period_start, period_end=period_end)
+        direction = request.query_params.get("agenda_direction")
+        if direction:
+            if direction not in AgendaDirection.values:
+                raise serializers.ValidationError(
+                    {"agenda_direction": "Direction d’agenda inconnue."}
+                )
+            versions = versions.filter(agenda_direction=direction)
         return Response({"versions": [version_payload(item) for item in versions]})
 
     @extend_schema(request=GenerateSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request: Request) -> Response:
         serializer = GenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        version = generate_agenda(
-            actor=_user(request), week_start=serializer.validated_data["week_start"]
-        )
+        version = generate_agenda(actor=_user(request), **serializer.validated_data)
         return Response(version_payload(version), status=status.HTTP_201_CREATED)
 
 
@@ -340,13 +417,14 @@ class AgendaVersionPdfView(APIView):
         user = _user(request)
         if not can_view_agenda(user):
             raise Http404
-        version = get_object_or_404(WeeklyAgendaVersion, pk=pk)
+        version = get_object_or_404(AgendaVersion, pk=pk)
         response = HttpResponse(agenda_pdf_bytes(version), content_type="application/pdf")
         response["Content-Disposition"] = cast(
             str,
             content_disposition_header(
                 False,
-                f"agenda-{version.week_start.isoformat()}-v{version.version}.pdf",
+                f"agenda-{version.agenda_direction}-{version.period_start.isoformat()}-"
+                f"{version.period_end.isoformat()}-v{version.version}.pdf",
             ),
         )
         response["Cache-Control"] = "private, no-store"

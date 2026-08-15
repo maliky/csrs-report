@@ -17,13 +17,14 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from accounts.agenda_directions import classify_agenda_direction
 from accounts.models import User
 from access.models import GrantScope, RoleGrant, ScopedRole
 from agenda.models import (
+    AgendaDraft,
+    AgendaVersion,
     StaffAvailability,
     VisitorVisit,
-    WeeklyAgendaDraft,
-    WeeklyAgendaVersion,
 )
 from processes.models import (
     ProcessCase,
@@ -84,6 +85,8 @@ UNIT_SPECS = tuple(
     (spec.code, spec.long_name, spec.parent_code) for spec in ORGANOGRAM_SPECS
 )
 UNIT_SHORT_NAMES = {spec.code: spec.short_name for spec in ORGANOGRAM_SPECS}
+UNIT_PARENT_CODES = {spec.code: spec.parent_code for spec in ORGANOGRAM_SPECS}
+UNIT_KINDS = {spec.code: spec.kind for spec in ORGANOGRAM_SPECS}
 
 SCENARIO_ALIASES = {
     "agriculture",
@@ -413,7 +416,7 @@ class Command(BaseCommand):
         )
 
         draft_ids = list(
-            WeeklyAgendaDraft.objects.filter(
+            AgendaDraft.objects.filter(
                 Q(updated_by_id__in=target_ids)
                 | Q(versions__generated_by_id__in=target_ids)
             )
@@ -455,8 +458,8 @@ class Command(BaseCommand):
         visits.delete()
         availability.delete()
         if draft_ids:
-            WeeklyAgendaVersion._base_manager.filter(draft_id__in=draft_ids).delete()
-            WeeklyAgendaDraft.objects.filter(pk__in=draft_ids).delete()
+            AgendaVersion._base_manager.filter(draft_id__in=draft_ids).delete()
+            AgendaDraft.objects.filter(pk__in=draft_ids).delete()
 
         if case_ids:
             ProcessSignature._base_manager.filter(case_id__in=case_ids).delete()
@@ -571,6 +574,13 @@ class Command(BaseCommand):
             user.is_staff = is_admin
             user.is_superuser = is_admin
             user.is_it_admin = is_admin
+            user.include_in_direction_agendas = spec.alias != "dg"
+            if not user.agenda_direction and spec.unit_code:
+                user.agenda_direction = classify_agenda_direction(
+                    unit_code=spec.unit_code,
+                    unit_kind=UNIT_KINDS[spec.unit_code],
+                    parent_by_code=UNIT_PARENT_CODES,
+                )
             if created or reset_password or not user.has_usable_password():
                 user.set_password(admin_password if is_admin else demo_password)
             user.save()

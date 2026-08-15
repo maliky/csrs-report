@@ -138,13 +138,6 @@ test("génère les captures du manuel depuis la démonstration locale", async ({
     atall.page.getByRole("heading", { name: "Proposer une tâche" }),
   ).toBeVisible();
   await capture(atall.page, "06-proposer-tache-atall.png");
-  await atall.page.goto(site("/app/processus/nouveau/ordre-mission"));
-  await expect(
-    atall.page.getByRole("heading", {
-      name: "Préparer une demande de mission",
-    }),
-  ).toBeVisible();
-  await capture(atall.page, "13-mission-atall.png");
   await atall.context.close();
 
   const daf = await desktop(browser, "daf");
@@ -189,16 +182,30 @@ test("génère les captures du manuel depuis la démonstration locale", async ({
   const secretary = await desktop(browser, "secretariat_dg");
   await secretary.page.goto(site("/app/agenda"));
   await expect(
-    secretary.page.getByRole("heading", { name: "Agenda hebdomadaire" }),
+    secretary.page.getByRole("heading", { name: "Agendas de direction" }),
+  ).toBeVisible();
+  await expect(
+    secretary.page.getByRole("button", {
+      name: /Du \d{2}\/\d{2}\/\d{4} au \d{2}\/\d{2}\/\d{4}/,
+    }),
   ).toBeVisible();
   await secretary.page
     .getByLabel("Éléments à faire apparaître en tête du rapport")
     .fill("RAS");
+  await secretary.page
+    .getByRole("button", {
+      name: /Du \d{2}\/\d{2}\/\d{4} au \d{2}\/\d{2}\/\d{4}/,
+    })
+    .click();
+  await expect(
+    secretary.page.getByRole("dialog", { name: "Choisir la période" }),
+  ).toBeVisible();
   await capture(secretary.page, "14-agenda-secretariat-preparation.png");
+  await secretary.page.getByRole("button", { name: "Annuler" }).click();
   await secretary.page.getByRole("button", { name: "Générer le PDF" }).click();
   await expect(
     secretary.page.getByText(
-      "La nouvelle version PDF est archivée et prête à imprimer.",
+      "La nouvelle version PDF « Direction des programmes » est archivée et prête à imprimer.",
     ),
   ).toBeVisible();
   await expect(
@@ -234,6 +241,12 @@ test("génère les captures du manuel depuis la démonstration locale", async ({
   await expect(dev.page.locator('select[name="primary_unit"]')).toBeVisible();
   await expect(
     dev.page.locator('select[name="primary_supervisor"]'),
+  ).toBeVisible();
+  await expect(
+    dev.page.locator('select[name="agenda_direction"]'),
+  ).toBeVisible();
+  await expect(
+    dev.page.locator('input[name="include_in_direction_agendas"]'),
   ).toBeVisible();
   await capture(dev.page, "18-administration-personne-organigramme.png");
   await dev.page.goto(site("/admin/work/organizationunit/add/"));

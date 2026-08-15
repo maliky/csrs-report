@@ -1,14 +1,12 @@
 import {
   CalendarDays,
   ClipboardList,
-  ExternalLink,
   Lightbulb,
   ListPlus,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Route,
   Settings,
   Users,
   UserRoundCheck,
@@ -160,12 +158,6 @@ export function AppShell() {
               <span className={styles.navLabel}>Mon équipe</span>
             </NavLink>
           )}
-          {session.capabilities.view_processes && (
-            <NavLink to="/processus" className={navClass} title="Processus">
-              <Route size={iconSize} aria-hidden="true" />
-              <span className={styles.navLabel}>Processus</span>
-            </NavLink>
-          )}
           {session.capabilities.view_weekly_agenda && (
             <NavLink
               to="/agenda"
@@ -202,14 +194,6 @@ export function AppShell() {
           )}
         </nav>
         <div className={styles.sidebarSecondary}>
-          <a
-            href="/classique/"
-            className={styles.navItem}
-            title="Interface classique"
-          >
-            <ExternalLink size={iconSize} aria-hidden="true" />
-            <span className={styles.navLabel}>Interface classique</span>
-          </a>
           {session.capabilities.admin && (
             <a href="/admin/" className={styles.navItem} title="Administration">
               <Settings size={iconSize} aria-hidden="true" />
