@@ -1,10 +1,14 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-15 sam.> Chemin du deploiement de preproduction
+
+Le checkout de =preprod.report.ent.koba.sarl= reside directement dans =/srv/apps/csrs-report-preprod=. Le projet Compose =csrs_preprod=, le port =18008= et les volumes nommes existants sont conserves.
+
 * <2026-08-15 sam.> Promotion controlee de la preproduction vers la production
 ** Decision d'exploitation
 
-La branche =preprod= deployee sous =/srv/apps/csrs-preprod/app= sur =54.36.60.51= est la source des releases. Le script =scripts/promote_production.sh= verifie que le checkout, =origin/preprod= et l'etiquette Git de l'image saine portent le meme SHA, affiche le diff avec =main=, exige une confirmation explicite puis avance =main= uniquement en fast-forward.
+La branche =preprod= deployee sous =/srv/apps/csrs-report-preprod= sur =54.36.60.51= est la source des releases. Le script =scripts/promote_production.sh= verifie que le checkout, =origin/preprod= et l'etiquette Git de l'image saine portent le meme SHA, affiche le diff avec =main=, exige une confirmation explicite puis avance =main= uniquement en fast-forward.
 
 Le deploiement est orchestre depuis la preproduction, mais la sauvegarde PostgreSQL et documents, la construction et la recreation de =web= s'executent par SSH sur =jil@179.237.107.40=. Le projet =csrs=, le port =18005= et =CSRS_START_NOTIFIER=0= sont verifies avant toute ecriture. PostgreSQL, ClamAV, Nginx, DNS, Certbot et les volumes ne sont pas recrees.
 
@@ -31,7 +35,7 @@ pour l organigram regarder tusis et voir comment je genere des graphique pour ge
 * <2026-08-14 ven.> Preproduction dediee
 ** Decision d'exploitation
 
-Le checkout principal suit desormais =preprod= et =origin/preprod=. Le site =preprod.report.ent.koba.sarl= deploie cette branche depuis =/srv/apps/csrs-preprod/app= avec le projet Compose =csrs_preprod=, le port local =18008= et des volumes propres. Les branches, conteneurs, donnees et routes du site courant restent inchanges.
+Le checkout principal suit desormais =preprod= et =origin/preprod=. Le site =preprod.report.ent.koba.sarl= deploie cette branche depuis =/srv/apps/csrs-report-preprod= avec le projet Compose =csrs_preprod=, le port local =18008= et des volumes propres. Les branches, conteneurs, donnees et routes du site courant restent inchanges.
 
 * <2026-08-14 ven.> Gestion React des utilisateurs et des equipes
 ** Decision d'architecture

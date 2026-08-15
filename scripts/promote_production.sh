@@ -17,7 +17,7 @@ Usage:
   scripts/promote_production.sh --candidate SHA --check
   scripts/promote_production.sh --candidate SHA --apply
 
-La commande publique se lance depuis /srv/apps/csrs-preprod/app sur
+La commande publique se lance depuis /srv/apps/csrs-report-preprod sur
 54.36.60.51. --check ne modifie ni main ni la production. --apply exige une
 confirmation, avance main uniquement en fast-forward, sauvegarde la production
 et redeploie web par SSH.
