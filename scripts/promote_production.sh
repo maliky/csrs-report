@@ -336,7 +336,7 @@ previous_image="$(docker inspect --format '{{.Image}}' "$web_id")"
 previous_image_name="$(docker inspect --format '{{.Config.Image}}' "$web_id")"
 
 echo "REMOTE_BACKUP_START"
-./scripts/backup_db.sh
+./scripts/backup_db.sh </dev/null
 echo "REMOTE_BACKUP_OK"
 echo "REMOTE_GIT_SYNC_START"
 git fetch origin refs/heads/main:refs/remotes/origin/main
