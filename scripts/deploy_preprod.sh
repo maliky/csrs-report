@@ -27,9 +27,16 @@ if [[ "$start_notifier" == "1" ]]; then
     services+=(notifier)
 fi
 
+revision="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    revision="dirty-${revision}"
+fi
+export CSRS_GIT_SHA="$revision"
+
 "${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml up -d --build "${services[@]}"
 if [[ "$start_notifier" == "0" ]]; then
     "${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml stop notifier >/dev/null 2>&1 || true
 fi
 "${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml exec -T web python manage.py check --deploy
 "${CSRS_COMPOSE[@]}" -p "$project" -f compose.yml ps
+echo "Revision de l'image : $revision"

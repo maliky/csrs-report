@@ -8,6 +8,9 @@ RUN npm run build
 
 FROM python:3.13-slim
 
+ARG CSRS_GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${CSRS_GIT_SHA}"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 

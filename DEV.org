@@ -1,6 +1,15 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-15 sam.> Promotion controlee de la preproduction vers la production
+** Decision d'exploitation
+
+La branche =preprod= deployee sous =/srv/apps/csrs-preprod/app= sur =54.36.60.51= est la source des releases. Le script =scripts/promote_production.sh= verifie que le checkout, =origin/preprod= et l'etiquette Git de l'image saine portent le meme SHA, affiche le diff avec =main=, exige une confirmation explicite puis avance =main= uniquement en fast-forward.
+
+Le deploiement est orchestre depuis la preproduction, mais la sauvegarde PostgreSQL et documents, la construction et la recreation de =web= s'executent par SSH sur =jil@179.237.107.40=. Le projet =csrs=, le port =18005= et =CSRS_START_NOTIFIER=0= sont verifies avant toute ecriture. PostgreSQL, ClamAV, Nginx, DNS, Certbot et les volumes ne sont pas recrees.
+
+Sans forge GitHub ou GitLab, le rapport, le SHA obligatoire et la confirmation =PROMOUVOIR <SHA>= remplacent la pull request. Une image precedente est conservee pour restaurer automatiquement =web= si le nouveau conteneur ne devient pas sain; les migrations ne sont jamais annulees automatiquement.
+
 * <2026-08-15 sam.> Actions groupees sur les comptes
 ** Decision d'architecture
 
@@ -65,7 +74,7 @@ Les comptes, droits, delegations, organigramme, calendriers et referentiels stra
 
 Le choix de periode du secretariat utilise =@daypicker/react= en mode =range=, localise en francais et limite a 30 nuits, soit 31 jours inclusifs conformement a la validation serveur. Un panneau contextuel affiche deux mois sur ordinateur et un mois sur telephone. La selection se fait directement sur le calendrier: premier clic pour le debut, second clic pour la fin; une plage incomplete affiche une instruction sans etre traitee comme une erreur.
 
-La periode en cours de selection reste distincte de la periode appliquee. Seuls =Appliquer= et le raccourci =Semaine prochaine= declenchent le chargement; une plage incomplete, une saisie invalide ou =Annuler= n'envoie aucune requete. L'aperçu, les visites et les versions sont charges ensemble puis remplaces atomiquement afin de ne jamais melanger deux periodes. Une reponse devenue obsolete est ignoree.
+La periode en cours de selection reste distincte de la periode appliquee. Seuls =Appliquer= et le raccourci =Semaine prochaine= declenchent le chargement; une plage incomplete ou =Annuler= n'envoie aucune requete. L'aperçu, les visites et les versions sont charges ensemble puis remplaces atomiquement afin de ne jamais melanger deux periodes. Une reponse devenue obsolete est ignoree.
 
 Le premier chargement conserve son squelette et son erreur de page. Pour toute mise a jour ulterieure, le dernier agenda valide reste visible avec un statut local; une erreur affiche =Reessayer= sans masquer ni bloquer la page.
 
@@ -136,7 +145,7 @@ Le conteneur =csrs_web_1= est sain depuis le 12/08/2026 a 07:02 UTC et =csrs_not
 
 ** Manuel et captures reproductibles
 
-=MANUAL.org= factorise les procedures communes puis les applique a trois positions hierarchiques: =atall= en feuille, =daf= au milieu et =dg= au sommet. Il couvre la connexion, la navigation responsive, la consultation et la mise a jour d'une tache, les observations, les propositions, l'affectation directe, la validation, l'equipe, l'auto-affectation du DG, les absences RH, la preparation des deux agendas par le secretariat, la generation des PDF et l'ajout d'une personne dans l'organigramme par l'administrateur IT. La procedure Processus et sa capture ont ete retirees lors de la desactivation du module le 13/08/2026.
+=docs/MANUAL.org= factorise les procedures communes puis les applique a trois positions hierarchiques: =atall= en feuille, =daf= au milieu et =dg= au sommet. Il couvre la connexion, la navigation responsive, la consultation et la mise a jour d'une tache, les observations, les propositions, l'affectation directe, la validation, l'equipe, l'auto-affectation du DG, les absences RH, la preparation des deux agendas par le secretariat, la generation des PDF et l'ajout d'une personne dans l'organigramme par l'administrateur IT. La procedure Processus et sa capture ont ete retirees lors de la desactivation du module le 13/08/2026.
 
 Les dix-neuf captures versionnees dans =docs/manual/screenshots/= sont produites par =scripts/capture_manual.sh=. Le script refuse toute cible distante, cree une base SQLite et un stockage prive temporaires, charge les donnees d'illustration, lance Django et Vite sur =127.0.0.1=, execute Playwright avec Chromium puis supprime l'environnement temporaire. Les mots de passe sont demandes sans affichage et ne sont ni ecrits dans le depot ni passes a un site public.
 
@@ -476,7 +485,7 @@ au survol sur le graphique enlever les information redondante comme date, jour o
 * <2026-07-31 ven.> Cadrage des workflows issus des quatre premiers logigrammes
 ** Objet de cette phase
 
-Cette entree prepare l'implementation des quatre premiers processus decrits dans =docs/Logigrams/logigrams.org= :
+Cette entree preparait l'implementation des quatre premiers processus decrits dans l'ancien fichier =docs/Logigrams/logigrams.org=, retire du depot le 15/08/2026 :
 
 1. demande et prolongation de visa ;
 2. elaboration des ordres de mission ;
@@ -904,7 +913,7 @@ Lire les sources dans cet ordre :
 
 1. =AGENTS.md= pour les regles de travail, de securite, d'interface et de verification.
 2. =README.md= pour demarrer Django et executer les controles existants.
-3. =docs/task-lifecycle.png= ou =docs/task-lifecycle.org= pour comprendre le cycle d'une tache.
+3. =docs/MANUAL.org= pour comprendre les parcours utilisateur et le cycle d'une tache.
 4. La section [[*<2026-07-12 dim.> Aide-memoire des comptes d'illustration][Aide-memoire des comptes d'illustration]] pour les roles et la hierarchie fictive, sans recopier de mot de passe dans le code ou la documentation.
 5. La section [[*<2026-07-17 ven. 06:05> Appartenances, roles et delegations par service][Appartenances, roles et delegations par service]] pour comprendre les autorisations par service.
 6. =work/models.py=, =work/services.py= et =access/services.py= pour identifier la source des regles metier et des permissions.
@@ -1998,7 +2007,7 @@ Chaque subordonne recoit cinq affectations reparties sur douze semaines ainsi qu
 - [X] Audit par =django-simple-history= avec attribution de l'utilisateur par middleware.
 - [X] Interfaces responsive en francais : tableau employe, detail, curseur de progression, proposition, synthese equipe et file de validation.
 - [X] File email pour nouvelles taches et nouveaux commentaires : lots limites, cinq tentatives, attente exponentielle et journal limite au type d'erreur.
-- [X] Source Org/PlantUML dans =docs/task-lifecycle.org= et rendu PNG valide dans =docs/task-lifecycle.png=.
+- [X] Cycle des taches documente dans =docs/MANUAL.org= et couvert par les tests des services metier.
 - [X] Donnees de demonstration strictement fictives via =python manage.py seed_demo=.
 - [X] Configuration de deploiement locale sur =127.0.0.1:18005= et modele Nginx pour =csrs.koba.sarl=.
 

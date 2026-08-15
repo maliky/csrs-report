@@ -10,7 +10,7 @@ Référence de l'API utilisée par l'interface React de CSRS Report.
 - Schéma OpenAPI : `/api/v1/openapi/`
 - Interface Swagger : `/api/v1/documentation/`
 
-Le code Django et le schéma OpenAPI restent les sources de vérité. Cette référence décrit le comportement vérifié le 5 août 2026.
+Le code Django et le schéma OpenAPI restent les sources de vérité. Cette référence décrit le comportement vérifié le 15 août 2026.
 
 ## Authentification et CSRF
 
@@ -232,12 +232,12 @@ Valeurs possibles de `status` : `submitted`, `accepted`, `rejected`.
 | `POST` | `/api/v1/proposals/{id}/resubmit/` | Resoumission par l'auteur |
 | `GET` | `/api/v1/team/` | Arbre d'équipe et nombre de tâches sur la période |
 | `GET` | `/api/v1/team/{id}/` | Tâches visibles d'un collaborateur |
-| `GET`, `POST` | `/api/v1/visits/` | Visites de la semaine et notification d'une arrivée |
+| `GET`, `POST` | `/api/v1/visits/` | Visites de la période demandée et notification d'une arrivée |
 | `POST` | `/api/v1/visits/{id}/departure/` | Notification du départ d'un groupe de visiteurs |
 | `GET`, `POST` | `/api/v1/availability/` | Indisponibilités de la semaine et nouvelle déclaration RH |
 | `PATCH` | `/api/v1/availability/{id}/` | Correction d'une indisponibilité avec contrôle de révision |
 | `POST` | `/api/v1/availability/{id}/cancel/` | Annulation motivée d'une indisponibilité |
-| `GET` | `/api/v1/agenda/preview/` | Brouillon et synthèse hebdomadaire non figée |
+| `GET` | `/api/v1/agenda/preview/` | Brouillon et synthèse non figée d'une période et d'une direction |
 | `PUT` | `/api/v1/agenda/draft/` | Enregistrement des événements majeurs du brouillon |
 | `GET`, `POST` | `/api/v1/agenda/versions/` | Archives visibles ou génération d'une version PDF figée |
 | `GET` | `/api/v1/agenda/versions/{id}/pdf/` | Téléchargement privé d'une version PDF |
@@ -589,9 +589,11 @@ Seul l'auteur peut resoumettre une proposition rejetée.
 
 Réponse `200` : `Proposal` avec le statut `submitted`.
 
-## Agenda hebdomadaire
+## Agendas par période et direction
 
-Le paramètre facultatif `week=YYYY-MM-DD` est normalisé au lundi de la semaine. Les routes de visite et de préparation sont réservées au secrétariat DG, les indisponibilités aux RH, et les archives au secrétariat DG et au DG. Une ressource hors autorisation répond `404` afin de ne pas révéler son existence.
+Les listes de visites et l'agenda utilisent les paramètres facultatifs `period_start=YYYY-MM-DD` et `period_end=YYYY-MM-DD`. Sans ces paramètres, l'API propose le lundi au dimanche de la semaine suivante. La période est inclusive et limitée à 31 jours. L'aperçu utilise aussi `agenda_direction=programs` ou `agenda_direction=administration`, avec `programs` par défaut. La liste RH des indisponibilités conserve son paramètre hebdomadaire `week=YYYY-MM-DD`.
+
+Les routes de visite et de préparation sont réservées au secrétariat DG, les indisponibilités aux RH, et les archives au secrétariat DG et au DG. Une ressource hors autorisation répond `404` afin de ne pas révéler son existence.
 
 ### Visiteurs
 
@@ -603,9 +605,11 @@ Le paramètre facultatif `week=YYYY-MM-DD` est normalisé au lundi de la semaine
 
 ### Aperçu, génération et archives
 
-`GET /api/v1/agenda/preview/` agrège les événements majeurs, les arrivées et départs, les indisponibilités et les tâches qui ont une activité dans la semaine. Les tâches sont regroupées par service puis par agent avec progression, variation et dernière observation hebdomadaire.
+`GET /api/v1/agenda/preview/?period_start=2026-08-17&period_end=2026-08-23&agenda_direction=programs` agrège les événements majeurs, les arrivées et départs, les indisponibilités et les tâches retenues pour la période. Une affectation est retenue si elle a commencé au plus tard à la fin de la période et n'a pas été clôturée avant son début. Les utilisateurs de la direction choisie et les utilisateurs non classés sont inclus, à moins que leur champ `include_in_direction_agendas` soit désactivé. Les tâches sont regroupées par service puis par agent avec progression, variation et dernière observation de la période.
 
-`PUT /api/v1/agenda/draft/` enregistre `week_start`, `major_events` et la `revision` attendue. `POST /api/v1/agenda/versions/` reçoit `week_start` et crée une nouvelle version immuable : instantané JSON, empreintes SHA-256 et PDF A4 dans le stockage privé. Une génération ultérieure produit une nouvelle version sans modifier les précédentes.
+`PUT /api/v1/agenda/draft/` enregistre `period_start`, `period_end`, `major_events` et la `revision` attendue. Le brouillon est partagé par les deux directions pour une même période.
+
+`POST /api/v1/agenda/versions/` reçoit `period_start`, `period_end` et `agenda_direction`. Il crée une version immuable contenant un instantané JSON, des empreintes SHA-256 et un PDF A4 dans le stockage privé. La numérotation est indépendante pour chaque combinaison période et direction; une génération ultérieure ne modifie jamais les versions précédentes. `GET /api/v1/agenda/versions/` accepte les mêmes filtres de période et un filtre facultatif de direction; sans filtre de période, il renvoie les archives visibles.
 
 ## Erreurs
 

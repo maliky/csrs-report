@@ -446,7 +446,7 @@ Les groupes Django gèrent les permissions techniques globales. Ils ne remplacen
 | Une baisse de progression ne s'enregistre pas | Saisir l'observation obligatoire expliquant la reprise. |
 | Une écriture annonce que la ressource a changé | Recharger la page, relire les nouvelles données puis recommencer sans écraser le travail récent. |
 | Une proposition est rejetée | Lire le motif et appliquer [[#proc-corriger-proposition][Corriger une proposition rejetée]]. |
-| Le PDF de réunion ne se génère pas | Vérifier la semaine, saisir les événements majeurs ou =RAS=, puis réessayer; transmettre le message d'erreur à l'administrateur si l'échec persiste. |
+| Le PDF de réunion ne se génère pas | Vérifier la période et la direction, saisir les événements majeurs ou =RAS=, puis réessayer; transmettre le message d'erreur à l'administrateur si l'échec persiste. |
 | Une personne n'apparaît pas dans l'équipe | Vérifier son unité principale, son responsable principal, la date d'effet et le filtre =Tous=. |
 
 * Régénérer les captures                                              :noexport:
