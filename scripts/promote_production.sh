@@ -316,8 +316,11 @@ read -r -p "Saisir '${expected_confirmation}' pour continuer: " confirmation
 
 git push origin "$candidate:refs/heads/main"
 
+deployment_output="$(mktemp)"
+trap 'rm -f "$deployment_output"' EXIT
+set +e
 ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$production_ssh" \
-    bash -s -- "$production_path" "$candidate" <<'REMOTE'
+    bash -s -- "$production_path" "$candidate" <<'REMOTE' | tee "$deployment_output"
 set -euo pipefail
 path="$1"
 candidate="$2"
@@ -332,7 +335,10 @@ web_id="$(docker compose -p "$project" -f compose.yml ps -q web)"
 previous_image="$(docker inspect --format '{{.Image}}' "$web_id")"
 previous_image_name="$(docker inspect --format '{{.Config.Image}}' "$web_id")"
 
+echo "REMOTE_BACKUP_START"
 ./scripts/backup_db.sh
+echo "REMOTE_BACKUP_OK"
+echo "REMOTE_GIT_SYNC_START"
 git fetch origin refs/heads/main:refs/remotes/origin/main
 [[ "$(git rev-parse origin/main)" == "$candidate" ]] || {
     echo "ERREUR: origin/main ne correspond pas au candidat apres promotion." >&2
@@ -341,6 +347,8 @@ git fetch origin refs/heads/main:refs/remotes/origin/main
 git switch main
 git merge --ff-only origin/main
 [[ "$(git rev-parse HEAD)" == "$candidate" ]] || { echo "ERREUR: main local incorrect." >&2; exit 1; }
+echo "REMOTE_GIT_SYNC_OK"
+echo "REMOTE_DEPLOY_START"
 
 CSRS_DEPLOY_LOCK_HELD=1 exec ./scripts/promote_production.sh \
     --deploy-target \
@@ -349,6 +357,15 @@ CSRS_DEPLOY_LOCK_HELD=1 exec ./scripts/promote_production.sh \
     --previous-image "$previous_image" \
     --previous-image-name "$previous_image_name"
 REMOTE
+deployment_status="${PIPESTATUS[0]}"
+set -e
+if ((deployment_status != 0)); then
+    die "Le deploiement distant a echoue avec le statut $deployment_status."
+fi
+grep -F "DEPLOYMENT_OK candidate=$candidate " "$deployment_output" >/dev/null || \
+    die "Le deploiement distant n'a pas emis le marqueur de succes attendu."
+rm -f "$deployment_output"
+trap - EXIT
 
 tag="production-$(date -u +%Y%m%dT%H%M%SZ)"
 if git tag -a "$tag" "$candidate" -m "Production CSRS $candidate" && git push origin "refs/tags/$tag"; then

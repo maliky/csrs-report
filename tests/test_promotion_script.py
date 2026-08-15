@@ -41,6 +41,7 @@ def test_promotion_script_keeps_release_safety_guards() -> None:
     assert 'git push origin "$candidate:refs/heads/main"' in source
     assert "StrictHostKeyChecking=yes" in source
     assert "./scripts/backup_db.sh" in source
+    assert 'grep -F "DEPLOYMENT_OK candidate=$candidate "' in source
     assert "--force-recreate web" in source
     assert 'docker compose -p "$project" -f compose.yml ps -q web' in source
     assert "docker compose down" not in source
