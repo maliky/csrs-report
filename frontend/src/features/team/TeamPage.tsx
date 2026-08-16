@@ -32,6 +32,34 @@ function selectedTaskFilter(params: URLSearchParams): TaskFilter {
   return value === "with" || value === "without" ? value : "all";
 }
 
+function UserAvatar({
+  avatar,
+  name,
+  className,
+}: {
+  avatar: string | null;
+  name: string;
+  className: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const initial = name.trim().slice(0, 1).toUpperCase() || "?";
+
+  if (!avatar || imageError) {
+    return <span className={className}>{initial}</span>;
+  }
+
+  return (
+    <span className={className} aria-hidden="true">
+      <img
+        src={avatar}
+        className={styles.avatarImage}
+        alt=""
+        onError={() => setImageError(true)}
+      />
+    </span>
+  );
+}
+
 function filterTeamNodes(
   nodes: TeamNode[],
   filter: TaskFilter,
@@ -168,9 +196,11 @@ function TeamTreeNode({
             onClick={(event) => event.stopPropagation()}
           >
             <span className={styles._person}>
-              <span className={styles.avatar} aria-hidden="true">
-                {node.employee.name.slice(0, 1).toUpperCase()}
-              </span>
+              <UserAvatar
+                avatar={node.employee.avatar ?? null}
+                name={node.employee.name}
+                className={styles.avatar}
+              />
               <span className={styles.identity}>
                 <strong>{node.employee.name}</strong>
                 <span>{node.employee.position || "Collaborateur"}</span>
