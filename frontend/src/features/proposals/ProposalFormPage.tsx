@@ -4,6 +4,15 @@ import type { PlanningOptions, Proposal } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";
 import {
+  type WorkloadUnit,
+  estimatedWorkDaysFromInput,
+  nextWorkloadInputValue,
+  normalizeWorkloadInputValue,
+  workloadInputFromDays,
+  workloadInputMin,
+  workloadInputStep,
+} from "../workload";
+import {
   Button,
   ButtonLink,
   Card,
@@ -11,32 +20,6 @@ import {
   FrenchDateInput,
   Skeleton,
 } from "../../components/ui";
-
-type WorkloadUnit = "days" | "hours";
-const HOURS_PER_WORKDAY = 8;
-
-function workloadInputFromDays(
-  estimatedWorkDays: string,
-  unit: WorkloadUnit,
-): string {
-  const days = Number.parseFloat(estimatedWorkDays);
-  if (!Number.isFinite(days) || days <= 0) return "";
-  if (unit === "hours") {
-    return Math.max(1, Math.round(days * HOURS_PER_WORKDAY)).toString();
-  }
-  return Number(days).toString();
-}
-
-function estimatedWorkDaysFromInput(
-  input: string,
-  unit: WorkloadUnit,
-): string | null {
-  const parsed = Number.parseFloat(input);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  if (unit === "days") return parsed.toFixed(1);
-  return (parsed / HOURS_PER_WORKDAY).toFixed(1);
-}
-
 export function ProposalFormPage({ mode }: { mode: "create" | "edit" }) {
   const { proposalId } = useParams();
   const options = useApi<PlanningOptions>("/api/v1/planning/options/");
@@ -140,11 +123,35 @@ function ProposalForm({
     }
   }, [schedule.estimated_work_days, workloadUnit, workloadInputValue, source]);
 
+  function updateWorkload(nextInput: string) {
+    setWorkloadInputValue(nextInput);
+    const nextDays = estimatedWorkDaysFromInput(nextInput, workloadUnit);
+    if (nextDays === null) return;
+    setSchedule((current) => ({ ...current, estimated_work_days: nextDays }));
+  }
+
+  function normalizeWorkloadField() {
+    const normalized = normalizeWorkloadInputValue(
+      workloadInputValue,
+      workloadUnit,
+    );
+    if (normalized === "") return;
+    updateWorkload(normalized);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    normalizeWorkloadField();
     setSaving(true);
     setSaveError(null);
     const form = new FormData(event.currentTarget);
+    const normalizedWorkload = normalizeWorkloadInputValue(
+      workloadInputValue,
+      workloadUnit,
+    );
+    const estimatedWorkDays =
+      estimatedWorkDaysFromInput(normalizedWorkload, workloadUnit) ??
+      schedule.estimated_work_days;
     const payload = {
       title: form.get("title"),
       description: form.get("description"),
@@ -152,7 +159,7 @@ function ProposalForm({
       calendar_id: calendarId,
       start_date: schedule.start_date,
       due_date: schedule.due_date,
-      estimated_work_days: schedule.estimated_work_days,
+      estimated_work_days: estimatedWorkDays,
     };
     try {
       const saved = await apiFetch<Proposal>(
@@ -268,27 +275,40 @@ function ProposalForm({
             />
           </div>
           <div className="form-field">
-            <label htmlFor="workload-unit">Unité</label>
-            <select
-              id="workload-unit"
-              value={workloadUnit}
-              onChange={(event) => {
-                const unit = event.target.value as WorkloadUnit;
-                setSource("workload");
-                setWorkloadUnit(unit);
-                setWorkloadInputValue(
-                  unit === "days"
-                    ? workloadInputFromDays(
-                        schedule.estimated_work_days,
-                        unit,
-                      )
-                    : "",
-                );
-              }}
+            <label id="workload-unit-label">Unité</label>
+            <div
+              role="group"
+              aria-labelledby="workload-unit-label"
+              className="cluster"
             >
-              <option value="days">Jours</option>
-              <option value="hours">Heures</option>
-            </select>
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "days"}
+                title="1 jour ouvré = 8h"
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("days");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(schedule.estimated_work_days, "days"),
+                  );
+                }}
+              >
+                Jours
+              </button>
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "hours"}
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("hours");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(schedule.estimated_work_days, "hours"),
+                  );
+                }}
+              >
+                Heures
+              </button>
+            </div>
           </div>
           <div className="form-field">
             <label htmlFor="workload">
@@ -299,8 +319,8 @@ function ProposalForm({
             <input
               id="workload"
               type="number"
-              min={workloadUnit === "days" ? "0.5" : "1"}
-              step={workloadUnit === "days" ? "0.5" : "1"}
+              min={workloadInputMin(workloadUnit)}
+              step={workloadInputStep(workloadUnit)}
               required
               value={workloadInputValue}
               onFocus={(event) => {
@@ -309,26 +329,19 @@ function ProposalForm({
               }}
               onChange={(event) => {
                 setSource("workload");
-                const nextInput = event.target.value;
-                const baseline = workloadInputFromDays(
-                  schedule.estimated_work_days,
-                  workloadUnit,
+                updateWorkload(event.target.value);
+              }}
+              onBlur={normalizeWorkloadField}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                event.preventDefault();
+                updateWorkload(
+                  nextWorkloadInputValue(
+                    workloadInputValue,
+                    workloadUnit,
+                    event.key === "ArrowUp" ? 1 : -1,
+                  ),
                 );
-                const nextInputValue =
-                  nextInput.length > baseline.length &&
-                  nextInput.startsWith(baseline)
-                    ? nextInput.slice(baseline.length) || ""
-                    : nextInput;
-                setWorkloadInputValue(nextInputValue);
-                const nextDays = estimatedWorkDaysFromInput(
-                  nextInputValue,
-                  workloadUnit,
-                );
-                if (nextDays === null) return;
-                setSchedule((current) => ({
-                  ...current,
-                  estimated_work_days: nextDays,
-                }));
               }}
             />
           </div>

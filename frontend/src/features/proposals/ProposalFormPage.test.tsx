@@ -22,7 +22,7 @@ test("définit le bon pas/minimum selon l'unité sélectionnée", async () => {
   expect(workload).toHaveAttribute("min", "0.5");
   expect(workload).toHaveAttribute("step", "0.5");
 
-  await user.selectOptions(screen.getByLabelText("Unité"), "hours");
+  await user.click(screen.getByRole("button", { name: "Heures" }));
   expect(workload).toHaveAttribute("min", "1");
   expect(workload).toHaveAttribute("step", "1");
 });
@@ -84,7 +84,7 @@ test("convertit la saisie heures en jours pour la planification et l'enregistrem
 
   await user.type(await screen.findByLabelText("Nom court"), "Saisie en heures");
   await user.type(screen.getByLabelText("Description"), "Description test");
-  await user.selectOptions(screen.getByLabelText("Unité"), "hours");
+  await user.click(screen.getByRole("button", { name: "Heures" }));
   const workload = screen.getByLabelText(/Charge estimée/);
   await user.clear(workload);
   await user.type(workload, "16");
@@ -100,4 +100,40 @@ test("convertit la saisie heures en jours pour la planification et l'enregistrem
     expect(lastSubmit).not.toBeNull();
     expect(lastSubmit).toMatchObject({ estimated_work_days: "2.0" });
   });
+});
+
+test("arrondit la saisie manuelle selon l'unité et la progression clavier", async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/propositions/nouvelle"]}>
+      <Routes>
+        <Route
+          path="/propositions/nouvelle"
+          element={<ProposalFormPage mode="create" />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const workload = await screen.findByLabelText(/Charge estimée/);
+  await user.clear(workload);
+  await user.type(workload, "1.2");
+  await user.tab();
+  expect(workload).toHaveValue(1);
+
+  await user.click(screen.getByRole("button", { name: "Heures" }));
+  await user.clear(workload);
+  await user.type(workload, "13");
+  await user.tab();
+  expect(workload).toHaveValue(13);
+
+  await user.click(screen.getByRole("button", { name: "Jours" }));
+  await user.clear(workload);
+  await user.type(workload, "2.1");
+  await user.tab();
+  expect(workload).toHaveValue(2);
+
+  await user.click(workload);
+  await user.keyboard("{ArrowUp}");
+  expect(workload).toHaveValue(2.5);
 });

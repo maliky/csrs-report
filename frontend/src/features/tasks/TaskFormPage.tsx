@@ -4,6 +4,15 @@ import type { PlanningOptions, TaskDetail } from "../../lib/api/types";
 import { apiFetch, ApiError } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";
 import {
+  type WorkloadUnit,
+  estimatedWorkDaysFromInput,
+  nextWorkloadInputValue,
+  normalizeWorkloadInputValue,
+  workloadInputFromDays,
+  workloadInputMin,
+  workloadInputStep,
+} from "../workload";
+import {
   Button,
   ButtonLink,
   Card,
@@ -53,14 +62,19 @@ function TaskForm({
   const navigate = useNavigate();
   const initial = task ?? options.defaults;
   const calendarId = task?.calendar.id ?? options.defaults.calendar_id;
+  const initialEstimatedWorkDays =
+    "estimated_work_days" in initial
+      ? initial.estimated_work_days
+      : options.defaults.estimated_work_days;
   const [schedule, setSchedule] = useState({
     start_date: initial.start_date,
     due_date: initial.due_date,
-    estimated_work_days:
-      "estimated_work_days" in initial
-        ? initial.estimated_work_days
-        : options.defaults.estimated_work_days,
+    estimated_work_days: initialEstimatedWorkDays,
   });
+  const [workloadUnit, setWorkloadUnit] = useState<WorkloadUnit>("days");
+  const [workloadInputValue, setWorkloadInputValue] = useState(() =>
+    workloadInputFromDays(initialEstimatedWorkDays, "days"),
+  );
   const [source, setSource] = useState<"workload" | "due">("workload");
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
@@ -92,18 +106,52 @@ function TaskForm({
     source === "due" ? schedule.due_date : schedule.estimated_work_days,
   ]);
 
+  useEffect(() => {
+    const nextValue = workloadInputFromDays(
+      schedule.estimated_work_days,
+      workloadUnit,
+    );
+    if (source !== "workload" && nextValue !== workloadInputValue) {
+      setWorkloadInputValue(nextValue);
+    }
+  }, [schedule.estimated_work_days, workloadUnit, workloadInputValue, source]);
+
+  function updateWorkload(nextInput: string) {
+    setWorkloadInputValue(nextInput);
+    const nextDays = estimatedWorkDaysFromInput(nextInput, workloadUnit);
+    if (nextDays === null) return;
+    setSchedule((current) => ({ ...current, estimated_work_days: nextDays }));
+  }
+
+  function normalizeWorkloadField() {
+    const normalized = normalizeWorkloadInputValue(
+      workloadInputValue,
+      workloadUnit,
+    );
+    if (normalized === "") return;
+    updateWorkload(normalized);
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError(null);
+    normalizeWorkloadField();
     const form = new FormData(event.currentTarget);
+    const normalizedWorkload = normalizeWorkloadInputValue(
+      workloadInputValue,
+      workloadUnit,
+    );
+    const estimatedWorkDays =
+      estimatedWorkDaysFromInput(normalizedWorkload, workloadUnit) ??
+      schedule.estimated_work_days;
     const payload = {
       title: form.get("title"),
       description: form.get("description"),
       action_id: form.get("action_id") ? Number(form.get("action_id")) : null,
       start_date: schedule.start_date,
       due_date: schedule.due_date,
-      estimated_work_days: schedule.estimated_work_days,
+      estimated_work_days: estimatedWorkDays,
     };
     try {
       const saved =
@@ -227,20 +275,73 @@ function TaskForm({
             />
           </div>
           <div className="form-field">
-            <label htmlFor="workload">Charge estimée (jours ouvrés)</label>
+            <label id="workload-unit-label">Unité</label>
+            <div
+              role="group"
+              aria-labelledby="workload-unit-label"
+              className="cluster"
+            >
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "days"}
+                title="1 jour ouvré = 8h"
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("days");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(schedule.estimated_work_days, "days"),
+                  );
+                }}
+              >
+                Jours
+              </button>
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "hours"}
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("hours");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(schedule.estimated_work_days, "hours"),
+                  );
+                }}
+              >
+                Heures
+              </button>
+            </div>
+          </div>
+          <div className="form-field">
+            <label htmlFor="workload">
+              {workloadUnit === "days"
+                ? "Charge estimée (jours ouvrés)"
+                : "Charge estimée (heures)"}
+            </label>
             <input
               id="workload"
               type="number"
-              min="0.1"
-              step="0.1"
-              value={schedule.estimated_work_days}
+              min={workloadInputMin(workloadUnit)}
+              step={workloadInputStep(workloadUnit)}
+              value={workloadInputValue}
               onFocus={() => setSource("workload")}
               onChange={(event) => {
                 setSource("workload");
-                setSchedule({
-                  ...schedule,
-                  estimated_work_days: event.target.value,
-                });
+                updateWorkload(event.target.value);
+              }}
+              onBlur={normalizeWorkloadField}
+              onKeyDown={(event) => {
+                if (
+                  event.key !== "ArrowUp" &&
+                  event.key !== "ArrowDown"
+                )
+                  return;
+                event.preventDefault();
+                updateWorkload(
+                  nextWorkloadInputValue(
+                    workloadInputValue,
+                    workloadUnit,
+                    event.key === "ArrowUp" ? 1 : -1,
+                  ),
+                );
               }}
             />
           </div>
