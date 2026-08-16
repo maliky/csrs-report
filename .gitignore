@@ -71,6 +71,7 @@ backups/
 *svg
 *png
 /docs/Logigrams/Exports
+/Exports/
 !/docs/manual/screenshots/*.png
 
 # Generated static assets

@@ -21,5 +21,8 @@ COPY . .
 COPY --from=frontend /src/static/react ./static/react
 RUN python manage.py collectstatic --noinput
 
+ARG CSRS_GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${CSRS_GIT_SHA}"
+
 EXPOSE 8000
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60"]

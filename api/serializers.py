@@ -154,7 +154,11 @@ class UserSelectionSerializer(serializers.Serializer):
 
 class UserBulkActionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=("deactivate", "delete"))
-    users = UserSelectionSerializer(many=True, allow_empty=False, max_length=100)
+    users = UserSelectionSerializer(
+        many=True,
+        allow_empty=False,
+        max_length=100,  # type: ignore[call-arg]
+    )
     reason = serializers.CharField(
         min_length=3,
         max_length=75,

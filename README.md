@@ -1,11 +1,8 @@
 # CSRS Report
 
-Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse
-de Recherches Scientifiques en Côte d'Ivoire.
+Application Django responsive de suivi hebdomadaire des tâches du Centre Suisse de Recherches Scientifiques en Côte d'Ivoire.
 
-Le cycle métier est documenté dans [`docs/task-lifecycle.org`](docs/task-lifecycle.org) et son rendu [`docs/task-lifecycle.png`](docs/task-lifecycle.png).
-
-Le [manuel utilisateur illustré](MANUAL.org) factorise les procédures communes et décrit les parcours d'un collaborateur, d'un responsable intermédiaire, de la Direction générale, du secrétariat, des RH et de l'administrateur de l'organigramme.
+Le [manuel utilisateur illustré](docs/MANUAL.org) factorise les procédures communes et décrit les parcours d'un collaborateur, d'un responsable intermédiaire, de la Direction générale, du secrétariat, des RH et de l'administrateur de l'organigramme.
 
 ## Stack Docker — parcours recommandé
 
@@ -17,22 +14,34 @@ Docker Compose démarre toute l'application :
 | `web` | Django, migrations, fichiers statiques et Gunicorn |
 | `notifier` | traitement périodique des notifications |
 
-Le service Django se connecte automatiquement à PostgreSQL par le nom Compose
-`db`. Il n'est pas nécessaire de lancer `manage.py runserver`.
+Le service Django se connecte automatiquement à PostgreSQL par le nom Compose `db`. Il n'est pas nécessaire de lancer `manage.py runserver`.
 
 ### Prérequis
 
-Sous Linux, installer Docker Engine et **Docker Compose v2**. Sur Ubuntu 24.04 :
+Sous Linux, installer Docker Engine et **Docker Compose v2**, puis contrôler leur disponibilité :
 
-Créer d'abord un environnement Python isolé. Python 3.13 est la version de référence :
+```bash
+docker --version
+docker compose version
+```
+
+Depuis un clone neuf, initialiser la configuration locale puis démarrer les services :
+
+```bash
+./scripts/bootstrap_env.sh
+docker compose -p csrs -f compose.yml up -d --build
+```
+
+Le script de bootstrap refuse d'écraser un fichier `.env` existant. Le port local par défaut est `127.0.0.1:18005`.
+
+### Environnement Python local facultatif
+
+Pour exécuter les contrôles ou déboguer Django sans conteneur, créer un environnement Python isolé. Python 3.13 est la version de référence :
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
 ```
 
 Si `pyenv` est installé, `.python-version` peut aussi activer l'environnement `csrs`. Sans `DATABASE_URL`, Django utilise une base SQLite locale ignorée par Git. `python manage.py seed_demo` ajoute uniquement des données fictives.
@@ -65,7 +74,7 @@ navigateur React (/app/)
   -> base configurée (PostgreSQL en preproduction, SQLite local par défaut)
 ```
 
-Django reste donc responsable de l'authentification, des permissions, des règles métier, de l'audit et de la base. React présente les données et envoie les actions autorisées. Le client conserve les cookies de session et transmet le jeton CSRF pour les écritures. En preproduction, React, l'API et la page de connexion sont servis par la même origine `https://psiaka.koba.sarl/`.
+Django reste donc responsable de l'authentification, des permissions, des règles métier, de l'audit et de la base. React présente les données et envoie les actions autorisées. Le client conserve les cookies de session et transmet le jeton CSRF pour les écritures. Le déploiement public CSRS sert React, l'API et la connexion sur la même origine à `https://csrs.koba.sarl/` et `https://179.237.107.40/`. La préproduction de release est séparée à `https://preprod.report.ent.koba.sarl/`; la préproduction étudiante reste à `https://psiaka.koba.sarl/`.
 
 Les principaux points d'entrée sont `frontend/src/lib/api/` pour le client et les types, `frontend/src/features/` pour les écrans métier, `api/urls.py` et `api/views.py` pour l'API, puis `work/services.py` et `access/services.py` pour les règles applicatives.
 
@@ -75,13 +84,13 @@ Le dashboard `/app/propositions` filtre par statut, collaborateur et période ch
 
 La synthèse `/app/equipe` reprend l'arbre dépliable de l'interface classique. Les branches du premier niveau sont ouvertes à l'arrivée et chargent une seule fois leurs tâches; les niveaux inférieurs restent fermés jusqu'à leur ouverture explicite. Les titres mènent au détail de progression. Le filtre segmenté `Tous / Avec tâches / Sans tâche` porte sur les tâches propres à chaque personne pour la période sélectionnée et conserve les ancêtres nécessaires à la lecture de la hiérarchie. Son état est conservé dans l'URL avec `tasks=with` ou `tasks=without`, y compris lors d'un changement de semaine ou de mois.
 
-### Agenda hebdomadaire de la Direction générale
+### Agendas de direction par période
 
-Le compte fictif `secretariat_dg` ouvre `/app/agenda`, notifie l’arrivée d’un groupe de visiteurs avec un nombre obligatoire et des noms facultatifs, puis marque son départ. Il complète les événements majeurs, vérifie l’aperçu regroupé par service et agent et génère une version PDF A4 figée. Le DG peut consulter et réimprimer les versions archivées sans modifier le brouillon.
+Le compte fictif `secretariat_dg` ouvre `/app/agenda`, choisit une période inclusive de 31 jours maximum dans un calendrier unique, notifie l’arrivée d’un groupe de visiteurs avec un nombre obligatoire et des noms facultatifs, puis marque son départ. La période proposée par défaut est la semaine suivante. Un seul sélecteur `Direction de l’agenda` pilote l’aperçu et l’unique bouton `Générer le PDF`; le secrétariat produit ainsi séparément le rapport de la Direction des programmes et celui de la Direction administrative. Le DG peut consulter et réimprimer les versions archivées sans modifier le brouillon.
 
-Le compte `rh` ouvre `/app/absences` et enregistre les congés, absences et missions avec l’agent et la période concernée. Les RH n’accèdent pas au rapport complet. Les PDF sont conservés dans le stockage privé déjà monté sur `/private-media` et ne sont jamais servis par WhiteNoise. Les noms facultatifs des visiteurs et les versions générées ne font l’objet d’aucune purge automatique tant que la durée institutionnelle de conservation n’a pas été confirmée.
+Le compte `rh` ouvre `/app/absences` et enregistre les congés, absences et missions avec l’agent et la période concernée. Les RH n’accèdent pas au rapport complet. Les événements majeurs, visites et indisponibilités sont partagés par les deux directions. Les PDF sont conservés dans le stockage privé déjà monté sur `/private-media` et ne sont jamais servis par WhiteNoise. Les noms facultatifs des visiteurs et les versions générées ne font l’objet d’aucune purge automatique tant que la durée institutionnelle de conservation n’a pas été confirmée.
 
-L’activité hebdomadaire provient des tâches qui chevauchent la semaine et de leurs progressions ou observations. Le taux d’un agent est la moyenne de ses tâches retenues, calculée à la fin de la semaine; les services sans activité ne sont pas ajoutés au PDF. L’organigramme d’août 2026 qui fixe l’ordre des services se trouve dans [`docs/organogram.org`](docs/organogram.org).
+Une tâche est retenue si son affectation a commencé au plus tard à la fin de la période et n’a pas été clôturée avant son début. Le classement de l’utilisateur détermine son agenda; une personne encore non classée apparaît dans les deux agendas avec un avertissement, sauf exclusion explicite par `include_in_direction_agendas`. Le DG est ainsi exclu des deux agendas. Le taux d’un agent est la moyenne de ses tâches retenues à la fin de la période et les services sans activité ne sont pas ajoutés au PDF. Chaque période et chaque direction possèdent une numérotation de versions indépendante. L’organigramme d’août 2026 qui fixe l’ordre des services se trouve dans [`docs/organogram.org`](docs/organogram.org).
 
 ### Deux modes de développement React
 

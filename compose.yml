@@ -15,7 +15,10 @@ services:
       retries: 10
 
   web:
-    build: .
+    build:
+      context: .
+      args:
+        CSRS_GIT_SHA: ${CSRS_GIT_SHA:-unknown}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -44,7 +47,10 @@ services:
       retries: 12
 
   notifier:
-    build: .
+    build:
+      context: .
+      args:
+        CSRS_GIT_SHA: ${CSRS_GIT_SHA:-unknown}
     restart: unless-stopped
     env_file: .env
     environment:
