@@ -43,6 +43,7 @@ def person_payload(user: User) -> dict[str, object]:
         "name": str(user),
         "position": user.position,
         "login_alias": user.login_alias,
+        "avatar": user.avatar,
     }
 
 

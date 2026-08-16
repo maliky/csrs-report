@@ -25,6 +25,34 @@ import { PasswordChangePage } from "../features/users/PasswordChangePage";
 
 const SIDEBAR_STORAGE_KEY = "csrs.sidebar.collapsed";
 
+function UserAvatar({
+  avatar,
+  name,
+  className,
+}: {
+  avatar: string | null;
+  name: string;
+  className: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const initial = name.trim().slice(0, 1).toUpperCase() || "?";
+
+  if (!avatar || imageError) {
+    return <span className={className}>{initial}</span>;
+  }
+
+  return (
+    <span className={className} aria-hidden="true">
+      <img
+        src={avatar}
+        className={styles.avatarImage}
+        alt=""
+        onError={() => setImageError(true)}
+      />
+    </span>
+  );
+}
+
 export function AppShell() {
   const {
     data: session,
@@ -244,9 +272,11 @@ export function AppShell() {
             className={`${styles.user} ${styles.userLink}`}
             title="Voir mon profil"
           >
-            <span className={styles.avatar} aria-hidden="true">
-              {session.user.name.slice(0, 1).toUpperCase()}
-            </span>
+            <UserAvatar
+              avatar={session.user.avatar ?? null}
+              name={session.user.name}
+              className={styles.avatar}
+            />
             <span className={styles.userDetails}>
               <strong>{session.user.name}</strong>
               <small>{session.user.position}</small>

@@ -3,6 +3,7 @@ export type Person = {
   name: string;
   position: string;
   login_alias: string | null;
+  avatar?: string;
 };
 
 export type UserProfile = Person & {
