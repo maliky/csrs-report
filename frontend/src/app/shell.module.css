@@ -105,6 +105,14 @@
   padding: 0.6rem 0.7rem;
   color: #d6e3df;
 }
+.userLink {
+  text-decoration: none;
+  color: inherit;
+}
+.userLink:hover,
+.userLink:focus-visible {
+  color: white;
+}
 .avatar {
   width: 2rem;
   height: 2rem;

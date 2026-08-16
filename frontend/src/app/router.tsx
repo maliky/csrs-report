@@ -14,6 +14,7 @@ import { AgendaPage } from "../features/agenda/AgendaPage";
 import { AvailabilityPage } from "../features/agenda/AvailabilityPage";
 import { UserFormPage } from "../features/users/UserFormPage";
 import { UserManagementPage } from "../features/users/UserManagementPage";
+import { ProfilePage } from "../features/profile/ProfilePage";
 
 export function AppRouter() {
   return (
@@ -61,6 +62,7 @@ export function AppRouter() {
           />
           <Route path="equipe" element={<TeamPage />} />
           <Route path="equipe/:employeeId" element={<EmployeePage />} />
+          <Route path="profil" element={<ProfilePage />} />
           <Route path="agenda" element={<AgendaPage />} />
           <Route path="absences" element={<AvailabilityPage />} />
         </Route>

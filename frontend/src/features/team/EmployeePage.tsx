@@ -5,6 +5,7 @@ import {
   ButtonLink,
   EmptyState,
   ErrorState,
+  Card,
   Skeleton,
 } from "../../components/ui";
 import { PeriodNavigation } from "../tasks/PeriodNavigation";
@@ -36,6 +37,31 @@ export function EmployeePage() {
           Retour à l'équipe
         </ButtonLink>
       </header>
+      <Card>
+        <h2>Informations collaborateur</h2>
+        <dl className="details-grid">
+          <div className="detail">
+            <dt>Prénom</dt>
+            <dd>{data.employee.first_name || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>Nom</dt>
+            <dd>{data.employee.last_name || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>Identifiant</dt>
+            <dd>{data.employee.login_alias || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>E-mail</dt>
+            <dd>{data.employee.email || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>Téléphone</dt>
+            <dd>{data.employee.phone || "—"}</dd>
+          </div>
+        </dl>
+      </Card>
       <PeriodNavigation period={data.period} />
       {data.tasks.length ? (
         <div className="grid">
@@ -48,6 +74,15 @@ export function EmployeePage() {
           Changez de période pour consulter d'autres engagements.
         </EmptyState>
       )}
+      <Card>
+        <details>
+          <summary>Cahier des charges</summary>
+          <p style={{ whiteSpace: "pre-wrap" }}>
+            {data.employee.terms_of_reference ||
+              "Aucun cahier des charges saisi."}
+          </p>
+        </details>
+      </Card>
     </>
   );
 }

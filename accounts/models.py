@@ -65,9 +65,11 @@ class User(AbstractUser):
     )
     position = models.CharField("fonction", max_length=160, blank=True)
     phone = models.CharField("telephone", max_length=32, blank=True)
+    avatar = models.CharField("avatar", max_length=512, blank=True, default="")
     phone_verified_at = models.DateTimeField(
         "telephone verifie le", null=True, blank=True
     )
+    terms_of_reference = models.TextField("cahier des charges", blank=True, default="")
     is_it_admin = models.BooleanField("administrateur IT", default=False)
     password_change_required = models.BooleanField(
         "changement de mot de passe obligatoire",

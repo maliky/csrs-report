@@ -1,21 +1,16 @@
-import { AlertTriangle, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "../../lib/router";
 import type {
-  TaskSummary,
   Team,
-  TeamEmployee,
   TeamNode,
 } from "../../lib/api/types";
-import { dayCount, formatDate } from "../../lib/format";
 import { useApi } from "../../lib/useApi";
 import {
-  AlertBadge,
   Button,
   EmptyState,
   ErrorState,
   Skeleton,
-  StatusBadge,
 } from "../../components/ui";
 import { PeriodNavigation } from "../tasks/PeriodNavigation";
 import styles from "./team.module.css";
@@ -116,7 +111,7 @@ export function TeamPage() {
             <TeamTreeNode
               key={node.employee.id}
               node={node}
-              periodQuery={data.period.query}
+              teamQuery={searchParams.toString()}
               depth={0}
             />
           ))}
@@ -143,20 +138,18 @@ export function TeamPage() {
 
 function TeamTreeNode({
   node,
-  periodQuery,
+  teamQuery,
   depth,
 }: {
   node: FilteredTeamNode;
-  periodQuery: string;
+  teamQuery: string;
   depth: number;
 }) {
   const initiallyOpen = depth === 0;
   const [isOpen, setIsOpen] = useState(initiallyOpen);
-  const [hasOpened, setHasOpened] = useState(initiallyOpen);
-  const profile = useApi<TeamEmployee>(
-    `/api/v1/team/${node.employee.id}/?${periodQuery}`,
-    hasOpened && node.task_count > 0,
-  );
+  const employeePath = teamQuery
+    ? `/equipe/${node.employee.id}/?${teamQuery}`
+    : `/equipe/${node.employee.id}/`;
 
   return (
     <details
@@ -165,18 +158,25 @@ function TeamTreeNode({
       open={isOpen}
       onToggle={(event) => {
         setIsOpen(event.currentTarget.open);
-        if (event.currentTarget.open) setHasOpened(true);
       }}
     >
       <summary className={styles.summary}>
         <span className={styles.person}>
-          <span className={styles.avatar} aria-hidden="true">
-            {node.employee.name.slice(0, 1).toUpperCase()}
-          </span>
-          <span className={styles.identity}>
-            <strong>{node.employee.name}</strong>
-            <span>{node.employee.position || "Collaborateur"}</span>
-          </span>
+          <Link
+            to={employeePath}
+            className={styles.employeeLink}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className={styles._person}>
+              <span className={styles.avatar} aria-hidden="true">
+                {node.employee.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className={styles.identity}>
+                <strong>{node.employee.name}</strong>
+                <span>{node.employee.position || "Collaborateur"}</span>
+              </span>
+            </span>
+          </Link>
         </span>
         <span className={styles.summaryMeta}>
           <span className={styles.taskCount}>
@@ -190,16 +190,6 @@ function TeamTreeNode({
         </span>
       </summary>
       <div className={styles.content}>
-        {hasOpened && (
-          <TeamProfile
-            employeeName={node.employee.name}
-            expectedTaskCount={node.task_count}
-            data={profile.data}
-            error={profile.error}
-            loading={profile.loading}
-            retry={profile.reload}
-          />
-        )}
         {node.children.length > 0 && (
           <section className={styles.subteam}>
             <h2>
@@ -211,7 +201,7 @@ function TeamTreeNode({
                 <TeamTreeNode
                   key={child.employee.id}
                   node={child}
-                  periodQuery={periodQuery}
+                  teamQuery={teamQuery}
                   depth={depth + 1}
                 />
               ))}
@@ -220,92 +210,5 @@ function TeamTreeNode({
         )}
       </div>
     </details>
-  );
-}
-
-function TeamProfile({
-  employeeName,
-  expectedTaskCount,
-  data,
-  error,
-  loading,
-  retry,
-}: {
-  employeeName: string;
-  expectedTaskCount: number;
-  data: TeamEmployee | null;
-  error: Error | null;
-  loading: boolean;
-  retry: () => Promise<void>;
-}) {
-  if (expectedTaskCount === 0)
-    return (
-      <p className={styles.profileStatus}>Aucune tâche sur cette période.</p>
-    );
-  if (loading || (!data && !error))
-    return <Skeleton label={`Chargement des tâches de ${employeeName}`} />;
-  if (error || !data)
-    return (
-      <div className={styles.profileError} role="alert">
-        <AlertTriangle size={20} aria-hidden="true" />
-        <span>{error?.message ?? "Profil indisponible"}</span>
-        <Button variant="quiet" onClick={() => void retry()}>
-          Réessayer
-        </Button>
-      </div>
-    );
-  if (!data.tasks.length)
-    return (
-      <p className={styles.profileStatus}>Aucune tâche sur cette période.</p>
-    );
-  return (
-    <section
-      className={styles.profile}
-      aria-label={`Tâches de ${employeeName}`}
-    >
-      <h2>Profil des tâches</h2>
-      <div className={styles.tasks}>
-        {data.tasks.map((task) => (
-          <TeamTaskProfile key={task.id} task={task} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function TeamTaskProfile({ task }: { task: TaskSummary }) {
-  return (
-    <article className={styles.taskProfile} data-team-task-id={task.id}>
-      <header className={styles.taskHeader}>
-        <div>
-          <span className={styles.taskCode}>{task.code}</span>
-          <h3>
-            <Link to={`/taches/${task.id}`}>{task.title}</Link>
-          </h3>
-        </div>
-        <div className={styles.badges}>
-          {task.blocked && <AlertBadge>Point d'attention</AlertBadge>}
-          <StatusBadge status={task.status}>{task.status_label}</StatusBadge>
-        </div>
-      </header>
-      <div className={styles.progressMeta}>
-        <strong>{task.percentage} % réalisé</strong>
-        <span>{dayCount(task.workload.remaining)} restants</span>
-      </div>
-      <div
-        className={styles.meter}
-        role="progressbar"
-        aria-label={`Progression de ${task.title}`}
-        aria-valuenow={task.percentage}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <span style={{ width: `${task.percentage}%` }} />
-      </div>
-      <div className={styles.taskDates}>
-        <span>Début {formatDate(task.start_date)}</span>
-        <span>Fin prévue {formatDate(task.due_date)}</span>
-      </div>
-    </article>
   );
 }
