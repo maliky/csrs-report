@@ -64,13 +64,13 @@ test("ne charge pas le détail collaborateur à l'ouverture de la branche", asyn
     within(root).getByRole("link", {
       name: /Direction administrative et financière/,
     }),
-  ).toHaveAttribute("href", "/equipe/11/?month=2026-07");
+  ).toHaveAttribute("href", "/equipe/11?month=2026-07");
   if (!child) throw new Error("Branche enfant introuvable");
   expect(
     within(child).getByRole("link", {
       name: /Awa Finances/,
     }),
-  ).toHaveAttribute("href", "/equipe/12/?month=2026-07");
+  ).toHaveAttribute("href", "/equipe/12?month=2026-07");
 
   await user.click(summaryFor("Awa Finances"));
   expect(child).toHaveAttribute("open");
