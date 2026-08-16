@@ -65,6 +65,7 @@ class User(AbstractUser):
     )
     position = models.CharField("fonction", max_length=160, blank=True)
     phone = models.CharField("telephone", max_length=32, blank=True)
+    avatar = models.CharField("avatar", max_length=512, blank=True, default="")
     phone_verified_at = models.DateTimeField(
         "telephone verifie le", null=True, blank=True
     )

@@ -63,9 +63,6 @@
 }
 .person {
   min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 .identity {
   min-width: 0;
@@ -84,6 +81,15 @@
 .employeeLink {
   color: inherit;
   text-decoration: none;
+}
+.employeeLink:focus-visible,
+.employeeLink:hover {
+  outline: none;
+}
+._person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 .employeeLink:hover,
 .employeeLink:focus-visible {

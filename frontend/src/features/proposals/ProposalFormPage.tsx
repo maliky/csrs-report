@@ -12,6 +12,31 @@ import {
   Skeleton,
 } from "../../components/ui";
 
+type WorkloadUnit = "days" | "hours";
+const HOURS_PER_WORKDAY = 8;
+
+function workloadInputFromDays(
+  estimatedWorkDays: string,
+  unit: WorkloadUnit,
+): string {
+  const days = Number.parseFloat(estimatedWorkDays);
+  if (!Number.isFinite(days) || days <= 0) return "";
+  if (unit === "hours") {
+    return Math.max(1, Math.round(days * HOURS_PER_WORKDAY)).toString();
+  }
+  return Number(days).toString();
+}
+
+function estimatedWorkDaysFromInput(
+  input: string,
+  unit: WorkloadUnit,
+): string | null {
+  const parsed = Number.parseFloat(input);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  if (unit === "days") return parsed.toFixed(1);
+  return (parsed / HOURS_PER_WORKDAY).toFixed(1);
+}
+
 export function ProposalFormPage({ mode }: { mode: "create" | "edit" }) {
   const { proposalId } = useParams();
   const options = useApi<PlanningOptions>("/api/v1/planning/options/");
@@ -61,13 +86,18 @@ function ProposalForm({
 }) {
   const navigate = useNavigate();
   const calendarId = proposal?.calendar.id ?? options.defaults.calendar_id;
+  const initialEstimatedWorkDays =
+    proposal?.estimated_work_days ?? options.defaults.estimated_work_days;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<Error | null>(null);
+  const [workloadUnit, setWorkloadUnit] = useState<WorkloadUnit>("days");
+  const [workloadInputValue, setWorkloadInputValue] = useState(() =>
+    workloadInputFromDays(initialEstimatedWorkDays, "days"),
+  );
   const [schedule, setSchedule] = useState({
     start_date: proposal?.start_date ?? options.defaults.start_date,
     due_date: proposal?.due_date ?? options.defaults.due_date,
-    estimated_work_days:
-      proposal?.estimated_work_days ?? options.defaults.estimated_work_days,
+    estimated_work_days: initialEstimatedWorkDays,
   });
   const [source, setSource] = useState<"workload" | "due">("workload");
 
@@ -99,6 +129,16 @@ function ProposalForm({
     source,
     source === "due" ? schedule.due_date : schedule.estimated_work_days,
   ]);
+
+  useEffect(() => {
+    const nextValue = workloadInputFromDays(
+      schedule.estimated_work_days,
+      workloadUnit,
+    );
+    if (nextValue !== workloadInputValue) {
+      setWorkloadInputValue(nextValue);
+    }
+  }, [schedule.estimated_work_days, workloadUnit, workloadInputValue]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -228,21 +268,45 @@ function ProposalForm({
             />
           </div>
           <div className="form-field">
-            <label htmlFor="workload">Charge estimée</label>
+            <label htmlFor="workload-unit">Unité</label>
+            <select
+              id="workload-unit"
+              value={workloadUnit}
+              onChange={(event) =>
+                setWorkloadUnit(event.target.value as WorkloadUnit)
+              }
+            >
+              <option value="days">Jours</option>
+              <option value="hours">Heures</option>
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="workload">
+              {workloadUnit === "days"
+                ? "Charge estimée (jours ouvrés)"
+                : "Charge estimée (heures)"}
+            </label>
             <input
               id="workload"
               type="number"
-              min="0.1"
-              step="0.1"
+              min={workloadUnit === "days" ? "0.5" : "1"}
+              step={workloadUnit === "days" ? "0.5" : "1"}
               required
-              value={schedule.estimated_work_days}
+              value={workloadInputValue}
               onFocus={() => setSource("workload")}
               onChange={(event) => {
                 setSource("workload");
-                setSchedule({
-                  ...schedule,
-                  estimated_work_days: event.target.value,
-                });
+                const nextInput = event.target.value;
+                setWorkloadInputValue(nextInput);
+                const nextDays = estimatedWorkDaysFromInput(
+                  nextInput,
+                  workloadUnit,
+                );
+                if (nextDays === null) return;
+                setSchedule((current) => ({
+                  ...current,
+                  estimated_work_days: nextDays,
+                }));
               }}
             />
           </div>

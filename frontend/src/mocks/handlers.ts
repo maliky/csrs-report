@@ -93,13 +93,21 @@ export const handlers = [
   http.get("/api/v1/me/profile/", () => HttpResponse.json(profileState)),
   http.patch("/api/v1/me/profile/", async ({ request }) => {
     const body = (await request.json()) as {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      avatar?: string;
       terms_of_reference?: string;
     };
-    if ("terms_of_reference" in body) {
-      profileState = {
-        ...profileState,
-        terms_of_reference: body.terms_of_reference ?? "",
-      };
+    profileState = {
+      ...profileState,
+      ...(typeof body.first_name === "string" ? { first_name: body.first_name } : {}),
+      ...(typeof body.last_name === "string" ? { last_name: body.last_name } : {}),
+      ...(typeof body.phone === "string" ? { phone: body.phone } : {}),
+      ...(typeof body.avatar === "string" ? { avatar: body.avatar } : {}),
+      ...(typeof body.terms_of_reference === "string"
+        ? { terms_of_reference: body.terms_of_reference }
+        : {}),
     }
     return HttpResponse.json(profileState);
   }),
@@ -394,7 +402,10 @@ export const handlers = [
     if (!node) return apiError(404, "not_found", "Collaborateur introuvable.");
     return HttpResponse.json({
       period: teamFixture.period,
-      employee: node.employee,
+      employee: {
+        ...node.employee,
+        avatar: "",
+      },
       tasks: taskGroups()
         .tasks.slice(0, node.task_count)
         .map((task) => ({ ...task, employee: node.employee })),

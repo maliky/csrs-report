@@ -76,6 +76,44 @@ def update_terms_of_reference(user: User, actor: User, terms_of_reference: str) 
     return user
 
 
+def update_own_profile(
+    user: User,
+    actor: User,
+    *,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    phone: str | None = None,
+    avatar: str | None = None,
+    terms_of_reference: str | None = None,
+) -> User:
+    """Store editable identity details and the user's own TOR."""
+    changed_fields: list[str] = []
+    if first_name is not None:
+        user.first_name = first_name.strip()
+        changed_fields.append("first_name")
+    if last_name is not None:
+        user.last_name = last_name.strip()
+        changed_fields.append("last_name")
+    if phone is not None:
+        user.phone = phone.strip()
+        changed_fields.append("phone")
+    if avatar is not None:
+        user.avatar = avatar.strip()
+        changed_fields.append("avatar")
+    if terms_of_reference is not None:
+        user.terms_of_reference = terms_of_reference.strip()
+        changed_fields.append("terms_of_reference")
+    if not changed_fields:
+        return user
+    _attribute_history(
+        user,
+        actor=actor,
+        reason="Mise à jour du profil personnel",
+    )
+    user.save(update_fields=changed_fields)
+    return user
+
+
 def _attribute_history(user: User, actor: User, reason: str) -> None:
     """Attribute the next simple-history row without exposing credentials."""
     user._history_user = actor  # type: ignore[attr-defined]

@@ -30,7 +30,7 @@ from accounts.services import (
     reset_managed_user_password,
     send_activation,
     set_managed_user_active,
-    update_terms_of_reference,
+    update_own_profile,
     update_managed_user,
     user_management_state_token,
 )
@@ -236,10 +236,14 @@ class MeProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         user = request_user(request)
-        user = update_terms_of_reference(
+        user = update_own_profile(
             user=user,
             actor=user,
-            terms_of_reference=str(data.get("terms_of_reference", "")),
+            first_name=data.get("first_name"),
+            last_name=data.get("last_name"),
+            phone=data.get("phone"),
+            avatar=data.get("avatar"),
+            terms_of_reference=data.get("terms_of_reference"),
         )
         return Response(user_profile_payload(user))
 
