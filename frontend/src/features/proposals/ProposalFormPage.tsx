@@ -135,10 +135,10 @@ function ProposalForm({
       schedule.estimated_work_days,
       workloadUnit,
     );
-    if (nextValue !== workloadInputValue) {
+    if (source !== "workload" && nextValue !== workloadInputValue) {
       setWorkloadInputValue(nextValue);
     }
-  }, [schedule.estimated_work_days, workloadUnit, workloadInputValue]);
+  }, [schedule.estimated_work_days, workloadUnit, workloadInputValue, source]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -272,9 +272,19 @@ function ProposalForm({
             <select
               id="workload-unit"
               value={workloadUnit}
-              onChange={(event) =>
-                setWorkloadUnit(event.target.value as WorkloadUnit)
-              }
+              onChange={(event) => {
+                const unit = event.target.value as WorkloadUnit;
+                setSource("workload");
+                setWorkloadUnit(unit);
+                setWorkloadInputValue(
+                  unit === "days"
+                    ? workloadInputFromDays(
+                        schedule.estimated_work_days,
+                        unit,
+                      )
+                    : "",
+                );
+              }}
             >
               <option value="days">Jours</option>
               <option value="hours">Heures</option>
@@ -293,13 +303,25 @@ function ProposalForm({
               step={workloadUnit === "days" ? "0.5" : "1"}
               required
               value={workloadInputValue}
-              onFocus={() => setSource("workload")}
+              onFocus={(event) => {
+                setSource("workload");
+                event.currentTarget.select();
+              }}
               onChange={(event) => {
                 setSource("workload");
                 const nextInput = event.target.value;
-                setWorkloadInputValue(nextInput);
+                const baseline = workloadInputFromDays(
+                  schedule.estimated_work_days,
+                  workloadUnit,
+                );
+                const nextInputValue =
+                  nextInput.length > baseline.length &&
+                  nextInput.startsWith(baseline)
+                    ? nextInput.slice(baseline.length) || ""
+                    : nextInput;
+                setWorkloadInputValue(nextInputValue);
                 const nextDays = estimatedWorkDaysFromInput(
-                  nextInput,
+                  nextInputValue,
                   workloadUnit,
                 );
                 if (nextDays === null) return;
