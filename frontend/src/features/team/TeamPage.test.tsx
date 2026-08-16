@@ -1,14 +1,8 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter, useLocation } from "../../lib/router";
-import { dashboardFixture, teamFixture } from "../../mocks/fixtures";
+import { teamFixture } from "../../mocks/fixtures";
 import { server } from "../../mocks/server";
 import { TeamPage } from "./TeamPage";
 
@@ -32,19 +26,21 @@ function summaryFor(name: string): HTMLElement {
   return summary;
 }
 
-test("charge une seule fois les tâches dans la branche du collaborateur", async () => {
+test("ne charge pas le détail collaborateur à l'ouverture de la branche", async () => {
   const user = userEvent.setup();
-  const employee = teamFixture.nodes[0].children[0].employee;
   let requests = 0;
   server.use(
     http.get("/api/v1/team/12/", () => {
       requests += 1;
       return HttpResponse.json({
         period: teamFixture.period,
-        employee,
-        tasks: dashboardFixture.tasks
-          .slice(0, 2)
-          .map((task) => ({ ...task, employee })),
+        employee: {
+          id: 12,
+          name: "Awa Finances",
+          position: "Responsable des finances",
+          login_alias: "finances",
+        },
+        tasks: [],
       });
     }),
   );
@@ -65,22 +61,25 @@ test("charge une seule fois les tâches dans la branche du collaborateur", async
   expect(child).not.toHaveAttribute("open");
   if (!root) throw new Error("Branche racine introuvable");
   expect(
-    within(root).getByText("Aucune tâche sur cette période."),
-  ).toBeVisible();
-  await user.click(summaryFor("Awa Finances"));
-
+    within(root).getByRole("link", {
+      name: /Direction administrative et financière/,
+    }),
+  ).toHaveAttribute("href", "/equipe/11/?month=2026-07");
   if (!child) throw new Error("Branche enfant introuvable");
   expect(
-    await within(child).findByRole("link", {
-      name: "Finaliser les priorités de la quinzaine",
+    within(child).getByRole("link", {
+      name: /Awa Finances/,
     }),
-  ).toHaveAttribute("href", "/taches/31");
-  expect(within(child).getAllByRole("progressbar")).toHaveLength(2);
-  expect(requests).toBe(1);
+  ).toHaveAttribute("href", "/equipe/12/?month=2026-07");
 
   await user.click(summaryFor("Awa Finances"));
+  expect(child).toHaveAttribute("open");
+  expect(requests).toBe(0);
+
   await user.click(summaryFor("Awa Finances"));
-  await waitFor(() => expect(requests).toBe(1));
+  await user.click(summaryFor("Direction administrative et financière"));
+  await user.click(summaryFor("Direction administrative et financière"));
+  await waitFor(() => expect(requests).toBe(0));
 });
 
 test("filtre récursivement et conserve le choix entre les périodes", async () => {

@@ -62,12 +62,6 @@ export function EmployeePage() {
           </div>
         </dl>
       </Card>
-      <Card>
-        <h2>Cahier des charges</h2>
-        <p style={{ whiteSpace: "pre-wrap" }}>
-          {data.employee.terms_of_reference || "Aucun cahier des charges saisi."}
-        </p>
-      </Card>
       <PeriodNavigation period={data.period} />
       {data.tasks.length ? (
         <div className="grid">
@@ -80,6 +74,15 @@ export function EmployeePage() {
           Changez de période pour consulter d'autres engagements.
         </EmptyState>
       )}
+      <Card>
+        <details>
+          <summary>Cahier des charges</summary>
+          <p style={{ whiteSpace: "pre-wrap" }}>
+            {data.employee.terms_of_reference ||
+              "Aucun cahier des charges saisi."}
+          </p>
+        </details>
+      </Card>
     </>
   );
 }

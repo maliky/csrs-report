@@ -10,6 +10,7 @@ export type UserProfile = Person & {
   first_name: string;
   last_name: string;
   phone: string;
+  avatar: string;
   terms_of_reference: string;
 };
 

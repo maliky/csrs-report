@@ -9,6 +9,10 @@ export function ProfilePage() {
   const { data, error, loading, reload, setData } = useApi<UserProfile>(
     "/api/v1/me/profile/",
   );
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [avatar, setAvatar] = useState("");
   const [termsOfReference, setTermsOfReference] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -16,7 +20,12 @@ export function ProfilePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (data) setTermsOfReference(data.terms_of_reference);
+    if (!data) return;
+    setFirstName(data.first_name);
+    setLastName(data.last_name);
+    setPhone(data.phone);
+    setAvatar(data.avatar);
+    setTermsOfReference(data.terms_of_reference);
   }, [data]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -27,11 +36,21 @@ export function ProfilePage() {
     try {
       const saved = await apiFetch<UserProfile>("/api/v1/me/profile/", {
         method: "PATCH",
-        body: JSON.stringify({ terms_of_reference: termsOfReference }),
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          avatar,
+          terms_of_reference: termsOfReference,
+        }),
       });
       setData(saved);
+      setFirstName(saved.first_name);
+      setLastName(saved.last_name);
+      setPhone(saved.phone);
+      setAvatar(saved.avatar);
       setTermsOfReference(saved.terms_of_reference);
-      setMessage("Le cahier des charges a été mis à jour.");
+      setMessage("Le profil a été mis à jour.");
     } catch (caught) {
       setMutationError(
         caught instanceof Error ? caught.message : "Enregistrement impossible",
@@ -61,40 +80,47 @@ export function ProfilePage() {
       </header>
       <Card>
         <h2>Informations classiques</h2>
-        <dl className="details-grid">
-          <div className="detail">
-            <dt>Nom</dt>
-            <dd>{data.last_name || "—"}</dd>
-          </div>
-          <div className="detail">
-            <dt>Prénom</dt>
-            <dd>{data.first_name || "—"}</dd>
-          </div>
-          <div className="detail">
-            <dt>Identifiant</dt>
-            <dd>{data.login_alias || "—"}</dd>
-          </div>
-          <div className="detail">
-            <dt>E-mail</dt>
-            <dd>{data.email || "—"}</dd>
-          </div>
-          <div className="detail">
-            <dt>Fonction</dt>
-            <dd>{data.position || "—"}</dd>
-          </div>
-          <div className="detail">
-            <dt>Téléphone</dt>
-            <dd>{data.phone || "—"}</dd>
-          </div>
-        </dl>
-      </Card>
-      <Card>
-        <h2>Cahier des charges de l'employé</h2>
         <p className="muted">
-          Décrivez vos objectifs et vos attendus opérationnels. Ce texte reste
-          consultable pour vos supérieurs.
+          Modifiez vos informations de contact et votre avatar.
         </p>
         <form className="form-grid" onSubmit={onSubmit}>
+          <div className="form-field wide">
+            <label htmlFor="first-name">Prénom</label>
+            <input
+              id="first-name"
+              name="first_name"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+            />
+          </div>
+          <div className="form-field wide">
+            <label htmlFor="last-name">Nom</label>
+            <input
+              id="last-name"
+              name="last_name"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+            />
+          </div>
+          <div className="form-field wide">
+            <label htmlFor="phone">Téléphone</label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+            />
+          </div>
+          <div className="form-field wide">
+            <label htmlFor="avatar">Avatar</label>
+            <input
+              id="avatar"
+              name="avatar"
+              value={avatar}
+              onChange={(event) => setAvatar(event.target.value)}
+            />
+          </div>
           <div className="form-field wide">
             <label htmlFor="terms-of-reference">Cahier des charges</label>
             <textarea

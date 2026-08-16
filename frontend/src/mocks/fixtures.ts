@@ -43,6 +43,7 @@ export const profileFixture: UserProfile = {
   first_name: "Aïssata",
   last_name: "Koné",
   phone: "+225 07 07 07 07 07",
+  avatar: "",
   terms_of_reference: "Cahier des charges de départ : formaliser les priorités mensuelles et valider les arbitrages.",
 };
 

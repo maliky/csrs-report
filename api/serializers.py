@@ -239,6 +239,10 @@ class UserUpdateSerializer(UserWriteSerializer):
 
 
 class MeProfileSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    avatar = serializers.CharField(max_length=512, required=False, allow_blank=True)
     terms_of_reference = serializers.CharField(required=False, allow_blank=True)
 
 
