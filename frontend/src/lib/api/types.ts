@@ -5,6 +5,14 @@ export type Person = {
   login_alias: string | null;
 };
 
+export type UserProfile = Person & {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  terms_of_reference: string;
+};
+
 export type Period = {
   kind: "week" | "month";
   label: string;
@@ -446,7 +454,7 @@ export type TeamNode = {
 export type Team = { period: Period; nodes: TeamNode[] };
 export type TeamEmployee = {
   period: Period;
-  employee: Person;
+  employee: UserProfile;
   tasks: TaskSummary[];
 };
 

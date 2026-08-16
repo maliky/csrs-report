@@ -64,6 +64,18 @@ def user_management_state_token(user: User) -> str:
     return sha256("|".join(payload).encode()).hexdigest()
 
 
+def update_terms_of_reference(user: User, actor: User, terms_of_reference: str) -> User:
+    """Store a user's own terms of reference and track it in history."""
+    user.terms_of_reference = terms_of_reference.strip()
+    _attribute_history(
+        user,
+        actor=actor,
+        reason="Mise à jour du cahier des charges par l'utilisateur",
+    )
+    user.save(update_fields=["terms_of_reference"])
+    return user
+
+
 def _attribute_history(user: User, actor: User, reason: str) -> None:
     """Attribute the next simple-history row without exposing credentials."""
     user._history_user = actor  # type: ignore[attr-defined]

@@ -46,6 +46,17 @@ def person_payload(user: User) -> dict[str, object]:
     }
 
 
+def user_profile_payload(user: User) -> dict[str, object]:
+    return {
+        **person_payload(user),
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "terms_of_reference": user.terms_of_reference,
+    }
+
+
 def organization_unit_payload(unit: OrganizationUnit) -> dict[str, object]:
     """Return the stable labels used in organization selectors."""
     return {

@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import { useLocation } from "../../lib/router";
 import type { Dashboard } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
@@ -26,9 +27,15 @@ export function DashboardPage() {
             charge restante.
           </p>
         </div>
-        <ButtonLink to="/propositions/nouvelle" variant="secondary">
-          Proposer une tâche
-        </ButtonLink>
+        <div className="cluster">
+          <ButtonLink to="/propositions/nouvelle" variant="secondary">
+            Proposer une tâche
+          </ButtonLink>
+          <ButtonLink to="/profil">
+            <FileText size={18} aria-hidden="true" /> Modifier mon cahier des
+            charges
+          </ButtonLink>
+        </div>
       </header>
       {loading && (
         <div className="grid" aria-label="Chargement des tâches">

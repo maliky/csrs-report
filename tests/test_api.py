@@ -111,6 +111,61 @@ def test_team_count_matches_multiple_tasks_in_employee_profile(
     assert len(profile.json()["tasks"]) == 2
 
 
+def test_user_can_read_and_update_own_terms_of_reference(people: dict[str, User]) -> None:
+    employee_client = api_client(people["employee"])
+    endpoint = reverse("api:me-profile")
+    expected = "Cahier des charges aligné sur la période."
+
+    response = employee_client.get(endpoint)
+    assert response.status_code == 200
+    assert response.json()["id"] == people["employee"].pk
+    assert response.json()["terms_of_reference"] == people["employee"].terms_of_reference
+
+    saved = employee_client.patch(
+        endpoint,
+        {"terms_of_reference": expected},
+        content_type="application/json",
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["terms_of_reference"] == expected
+    assert (
+        User.objects.get(pk=people["employee"].pk).terms_of_reference
+        == expected
+    )
+
+
+def test_supervisor_can_read_profile_data_from_team_employee(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    employee = assignment.employee
+    employee.first_name = "Mariam"
+    employee.last_name = "Dia"
+    employee.phone = "+225 01 02 03 04 05"
+    employee.terms_of_reference = "Piloter les arbitrages de la feuille de route."
+    employee.save(
+        update_fields=["first_name", "last_name", "phone", "terms_of_reference"]
+    )
+
+    response = api_client(people["manager"]).get(
+        reverse("api:team-employee", args=[employee.pk]),
+        {"month": assignment.start_date.strftime("%Y-%m")},
+    )
+    payload = response.json()
+    employee_payload = payload["employee"]
+
+    assert response.status_code == 200
+    assert employee_payload["id"] == employee.pk
+    assert employee_payload["first_name"] == "Mariam"
+    assert employee_payload["last_name"] == "Dia"
+    assert employee_payload["email"] == employee.email
+    assert employee_payload["phone"] == "+225 01 02 03 04 05"
+    assert (
+        employee_payload["terms_of_reference"]
+        == "Piloter les arbitrages de la feuille de route."
+    )
+
+
 def test_task_detail_hides_an_assignment_from_an_outsider(
     people: dict[str, User], assignment: TaskAssignment
 ) -> None:

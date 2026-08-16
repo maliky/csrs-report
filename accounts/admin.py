@@ -51,6 +51,7 @@ class InstitutionUserAdmin(UserAdmin, SimpleHistoryAdmin):
                     "phone_verified_at",
                     "agenda_direction",
                     "include_in_direction_agendas",
+                    "terms_of_reference",
                 )
             },
         ),

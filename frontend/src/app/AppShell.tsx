@@ -239,7 +239,11 @@ export function AppShell() {
             <LogOut size={iconSize} aria-hidden="true" />
             <span className={styles.navLabel}>Déconnexion</span>
           </button>
-          <div className={styles.user} title={session.user.name}>
+          <NavLink
+            to="/profil"
+            className={`${styles.user} ${styles.userLink}`}
+            title="Voir mon profil"
+          >
             <span className={styles.avatar} aria-hidden="true">
               {session.user.name.slice(0, 1).toUpperCase()}
             </span>
@@ -247,7 +251,7 @@ export function AppShell() {
               <strong>{session.user.name}</strong>
               <small>{session.user.position}</small>
             </span>
-          </div>
+          </NavLink>
         </div>
         <button
           type="button"

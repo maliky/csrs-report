@@ -153,6 +153,7 @@ class InstitutionUserCreationForm(OrganizationFieldsMixin, forms.ModelForm):
             "last_name",
             "position",
             "phone",
+            "terms_of_reference",
             "agenda_direction",
             "include_in_direction_agendas",
             "organization_units",
