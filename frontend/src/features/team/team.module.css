@@ -81,6 +81,15 @@
   color: var(--color-muted);
   font-size: 0.85rem;
 }
+.employeeLink {
+  color: inherit;
+  text-decoration: none;
+}
+.employeeLink:hover,
+.employeeLink:focus-visible {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
 .avatar {
   width: 2.4rem;
   height: 2.4rem;
@@ -123,6 +132,19 @@
   font-family: var(--font-sans);
   font-size: 0.9rem;
   font-weight: 800;
+}
+.profileDetails {
+  margin-bottom: 0.8rem;
+}
+.profileTor {
+  margin-top: 0.2rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #f7faf8;
+  color: var(--color-ink);
+  white-space: pre-wrap;
 }
 .profileStatus {
   margin: 0;

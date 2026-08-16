@@ -4,6 +4,7 @@ import type {
   ProposalGroups,
   TaskDetail,
   TeamNode,
+  UserProfile,
 } from "../lib/api/types";
 import {
   dashboardFixture,
@@ -12,17 +13,20 @@ import {
   sessionFixture,
   taskDetailFixture,
   taskManagementFixture,
+  profileFixture,
   teamFixture,
 } from "./fixtures";
 
 let taskState: TaskDetail;
 let proposalState: ProposalGroups;
 let taskManagementState = structuredClone(taskManagementFixture);
+let profileState: UserProfile = structuredClone(profileFixture);
 
 export function resetMockState() {
   taskState = structuredClone(taskDetailFixture);
   proposalState = structuredClone(proposalsFixture);
   taskManagementState = structuredClone(taskManagementFixture);
+  profileState = structuredClone(profileFixture);
 }
 
 resetMockState();
@@ -86,6 +90,19 @@ function apiError(status: number, code: string, message: string, fields = {}) {
 
 export const handlers = [
   http.get("/api/v1/session/", () => HttpResponse.json(sessionFixture)),
+  http.get("/api/v1/me/profile/", () => HttpResponse.json(profileState)),
+  http.patch("/api/v1/me/profile/", async ({ request }) => {
+    const body = (await request.json()) as {
+      terms_of_reference?: string;
+    };
+    if ("terms_of_reference" in body) {
+      profileState = {
+        ...profileState,
+        terms_of_reference: body.terms_of_reference ?? "",
+      };
+    }
+    return HttpResponse.json(profileState);
+  }),
   http.post(
     "/api/v1/session/logout/",
     () => new HttpResponse(null, { status: 204 }),

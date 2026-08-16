@@ -20,6 +20,7 @@ urlpatterns = [
         views.SessionPasswordView.as_view(),
         name="session-password",
     ),
+    path("me/profile/", views.MeProfileView.as_view(), name="me-profile"),
     path("users/", views.UserListCreateView.as_view(), name="user-list"),
     path("users/options/", views.UserOptionsView.as_view(), name="user-options"),
     path(

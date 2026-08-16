@@ -238,6 +238,10 @@ class UserUpdateSerializer(UserWriteSerializer):
     state_token = serializers.CharField(allow_blank=False)
 
 
+class MeProfileSerializer(serializers.Serializer):
+    terms_of_reference = serializers.CharField(required=False, allow_blank=True)
+
+
 class StateTokenSerializer(serializers.Serializer):
     state_token = serializers.CharField(allow_blank=False)
 

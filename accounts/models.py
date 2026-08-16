@@ -68,6 +68,7 @@ class User(AbstractUser):
     phone_verified_at = models.DateTimeField(
         "telephone verifie le", null=True, blank=True
     )
+    terms_of_reference = models.TextField("cahier des charges", blank=True, default="")
     is_it_admin = models.BooleanField("administrateur IT", default=False)
     password_change_required = models.BooleanField(
         "changement de mot de passe obligatoire",

@@ -116,6 +116,7 @@ export function TeamPage() {
             <TeamTreeNode
               key={node.employee.id}
               node={node}
+              teamQuery={searchParams.toString()}
               periodQuery={data.period.query}
               depth={0}
             />
@@ -143,16 +144,21 @@ export function TeamPage() {
 
 function TeamTreeNode({
   node,
+  teamQuery,
   periodQuery,
   depth,
 }: {
   node: FilteredTeamNode;
+  teamQuery: string;
   periodQuery: string;
   depth: number;
 }) {
   const initiallyOpen = depth === 0;
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [hasOpened, setHasOpened] = useState(initiallyOpen);
+  const employeePath = teamQuery
+    ? `/equipe/${node.employee.id}/?${teamQuery}`
+    : `/equipe/${node.employee.id}/`;
   const profile = useApi<TeamEmployee>(
     `/api/v1/team/${node.employee.id}/?${periodQuery}`,
     hasOpened && node.task_count > 0,
@@ -174,7 +180,13 @@ function TeamTreeNode({
             {node.employee.name.slice(0, 1).toUpperCase()}
           </span>
           <span className={styles.identity}>
-            <strong>{node.employee.name}</strong>
+            <Link
+              to={employeePath}
+              className={styles.employeeLink}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <strong>{node.employee.name}</strong>
+            </Link>
             <span>{node.employee.position || "Collaborateur"}</span>
           </span>
         </span>
@@ -211,6 +223,7 @@ function TeamTreeNode({
                 <TeamTreeNode
                   key={child.employee.id}
                   node={child}
+                  teamQuery={teamQuery}
                   periodQuery={periodQuery}
                   depth={depth + 1}
                 />
@@ -238,6 +251,7 @@ function TeamProfile({
   loading: boolean;
   retry: () => Promise<void>;
 }) {
+  const employee = data?.employee;
   if (expectedTaskCount === 0)
     return (
       <p className={styles.profileStatus}>Aucune tâche sur cette période.</p>
@@ -263,6 +277,31 @@ function TeamProfile({
       className={styles.profile}
       aria-label={`Tâches de ${employeeName}`}
     >
+      <h2>Profil collaborateur</h2>
+      <div className={styles.profileDetails}>
+        <dl className="details-grid">
+          <div className="detail">
+            <dt>Prénom</dt>
+            <dd>{employee?.first_name || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>Nom</dt>
+            <dd>{employee?.last_name || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>E-mail</dt>
+            <dd>{employee?.email || "—"}</dd>
+          </div>
+          <div className="detail">
+            <dt>Téléphone</dt>
+            <dd>{employee?.phone || "—"}</dd>
+          </div>
+        </dl>
+      </div>
+      <h3>Cahier des charges</h3>
+      <p className={styles.profileTor}>
+        {employee?.terms_of_reference || "Aucun cahier des charges saisi."}
+      </p>
       <h2>Profil des tâches</h2>
       <div className={styles.tasks}>
         {data.tasks.map((task) => (

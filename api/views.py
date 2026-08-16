@@ -30,6 +30,7 @@ from accounts.services import (
     reset_managed_user_password,
     send_activation,
     set_managed_user_active,
+    update_terms_of_reference,
     update_managed_user,
     user_management_state_token,
 )
@@ -47,6 +48,7 @@ from api.presenters import (
     organization_unit_payload,
     period_payload,
     person_payload,
+    user_profile_payload,
     proposal_payload,
     task_management_payload,
     user_management_detail_payload,
@@ -72,6 +74,7 @@ from api.serializers import (
     UserBulkActionSerializer,
     UserUpdateSerializer,
     UserWriteSerializer,
+    MeProfileSerializer,
 )
 from work.models import (
     InstitutionalAction,
@@ -214,6 +217,31 @@ class SessionView(APIView):
                 },
             }
         )
+
+
+class MeProfileView(APIView):
+    """Read and edit the current user's own profile details."""
+
+    @extend_schema(operation_id="my_profile", responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request) -> Response:
+        return Response(user_profile_payload(request_user(request)))
+
+    @extend_schema(
+        operation_id="my_profile_update",
+        request=MeProfileSerializer,
+        responses=OpenApiTypes.OBJECT,
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = MeProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request_user(request)
+        user = update_terms_of_reference(
+            user=user,
+            actor=user,
+            terms_of_reference=str(data.get("terms_of_reference", "")),
+        )
+        return Response(user_profile_payload(user))
 
 
 class LogoutView(APIView):
@@ -1009,7 +1037,7 @@ class TeamEmployeeView(APIView):
         return Response(
             {
                 "period": period_payload(period),
-                "employee": person_payload(employee),
+                "employee": user_profile_payload(employee),
                 "tasks": [
                     assignment_summary_payload(assignment, period)
                     for assignment in assignments
