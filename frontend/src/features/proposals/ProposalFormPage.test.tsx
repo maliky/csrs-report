@@ -20,11 +20,15 @@ test("définit le bon pas/minimum selon l'unité sélectionnée", async () => {
 
   const workload = await screen.findByLabelText(/Charge estimée/);
   expect(workload).toHaveAttribute("min", "0.5");
-  expect(workload).toHaveAttribute("step", "0.5");
+  expect(workload).toHaveAttribute("step", "0.25");
+  const unit = screen.getByRole("group", { name: "Unité" });
+  expect(
+    workload.compareDocumentPosition(unit) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 
   await user.click(screen.getByRole("button", { name: "Heures" }));
   expect(workload).toHaveAttribute("min", "1");
-  expect(workload).toHaveAttribute("step", "1");
+  expect(workload).toHaveAttribute("step", "0.5");
 });
 
 test("convertit la saisie heures en jours pour la planification et l'enregistrement", async () => {
@@ -82,7 +86,10 @@ test("convertit la saisie heures en jours pour la planification et l'enregistrem
     </MemoryRouter>,
   );
 
-  await user.type(await screen.findByLabelText("Nom court"), "Saisie en heures");
+  await user.type(
+    await screen.findByLabelText("Nom court"),
+    "Saisie en heures",
+  );
   await user.type(screen.getByLabelText("Description"), "Description test");
   await user.click(screen.getByRole("button", { name: "Heures" }));
   const workload = screen.getByLabelText(/Charge estimée/);
@@ -119,7 +126,7 @@ test("arrondit la saisie manuelle selon l'unité et la progression clavier", asy
   await user.clear(workload);
   await user.type(workload, "1.2");
   await user.tab();
-  expect(workload).toHaveValue(1);
+  expect(workload).toHaveValue(1.25);
 
   await user.click(screen.getByRole("button", { name: "Heures" }));
   await user.clear(workload);
@@ -135,5 +142,5 @@ test("arrondit la saisie manuelle selon l'unité et la progression clavier", asy
 
   await user.click(workload);
   await user.keyboard("{ArrowUp}");
-  expect(workload).toHaveValue(2.5);
+  expect(workload).toHaveValue(2.25);
 });

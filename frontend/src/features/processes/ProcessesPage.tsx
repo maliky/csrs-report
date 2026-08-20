@@ -1,6 +1,13 @@
 import { Clock3, FileCheck2, Plus } from "lucide-react";
 import { Link, useSearchParams } from "../../lib/router";
-import { ButtonLink, Card, EmptyState, ErrorState, Skeleton, StatusBadge } from "../../components/ui";
+import {
+  ButtonLink,
+  Card,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  StatusBadge,
+} from "../../components/ui";
 import { formatDate } from "../../lib/format";
 import type { ProcessList } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
@@ -28,7 +35,10 @@ export function ProcessesPage() {
         <div>
           <p className="eyebrow">Circuits administratifs</p>
           <h1>Processus</h1>
-          <p>Traitez les dossiers de votre file de service et suivez vos propres demandes.</p>
+          <p>
+            Traitez les dossiers de votre file de service et suivez vos propres
+            demandes.
+          </p>
         </div>
         <ButtonLink to="nouveau/ordre-mission">
           <Plus size={18} aria-hidden="true" /> Nouvel ordre de mission
@@ -46,7 +56,11 @@ export function ProcessesPage() {
           <span>Retours en correction</span>
         </Card>
       </div>
-      <div className={styles.tabs} role="tablist" aria-label="Boîte de processus">
+      <div
+        className={styles.tabs}
+        role="tablist"
+        aria-label="Boîte de processus"
+      >
         <button
           type="button"
           role="tab"
@@ -76,19 +90,28 @@ export function ProcessesPage() {
             <Card key={item.id} className={styles.caseCard}>
               <div className={styles.caseHeading}>
                 <div>
-                  <p className="eyebrow">{item.reference} · {item.mission_type_label}</p>
+                  <p className="eyebrow">
+                    {item.reference} · {item.mission_type_label}
+                  </p>
                   <h2>
                     <Link to={`${item.id}`}>{item.destination}</Link>
                   </h2>
                 </div>
-                <StatusBadge status={item.status}>{item.status_label}</StatusBadge>
+                <StatusBadge status={item.status}>
+                  {item.status_label}
+                </StatusBadge>
               </div>
               <p>{item.purpose}</p>
               <div className={styles.meta}>
                 <span>{item.initiator.name}</span>
                 <span>{item.origin_unit.short_name}</span>
-                <span>{formatDate(item.departure_date)} – {formatDate(item.return_date)}</span>
-                {item.due_date && <span>À traiter avant le {formatDate(item.due_date)}</span>}
+                <span>
+                  {formatDate(item.departure_date)} –{" "}
+                  {formatDate(item.return_date)}
+                </span>
+                {item.due_date && (
+                  <span>À traiter avant le {formatDate(item.due_date)}</span>
+                )}
               </div>
             </Card>
           ))}

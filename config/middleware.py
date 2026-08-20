@@ -11,9 +11,7 @@ from django.utils import translation
 class FrenchAdminLocaleMiddleware:
     """Render Django administration pages in French for every browser locale."""
 
-    def __init__(
-        self, get_response: Callable[[HttpRequest], HttpResponse]
-    ) -> None:
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:

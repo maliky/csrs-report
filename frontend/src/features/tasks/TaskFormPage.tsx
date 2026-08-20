@@ -275,11 +275,43 @@ function TaskForm({
             />
           </div>
           <div className="form-field">
+            <label htmlFor="workload">
+              {workloadUnit === "days"
+                ? "Charge estimée (jours ouvrés)"
+                : "Charge estimée (heures)"}
+            </label>
+            <input
+              id="workload"
+              type="number"
+              min={workloadInputMin(workloadUnit)}
+              step={workloadInputStep(workloadUnit)}
+              value={workloadInputValue}
+              onFocus={() => setSource("workload")}
+              onChange={(event) => {
+                setSource("workload");
+                updateWorkload(event.target.value);
+              }}
+              onBlur={normalizeWorkloadField}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+                  return;
+                event.preventDefault();
+                updateWorkload(
+                  nextWorkloadInputValue(
+                    workloadInputValue,
+                    workloadUnit,
+                    event.key === "ArrowUp" ? 1 : -1,
+                  ),
+                );
+              }}
+            />
+          </div>
+          <div className="form-field">
             <label id="workload-unit-label">Unité</label>
             <div
               role="group"
               aria-labelledby="workload-unit-label"
-              className="cluster"
+              className="workload-unit-toggle"
             >
               <button
                 type="button"
@@ -302,48 +334,16 @@ function TaskForm({
                   setSource("workload");
                   setWorkloadUnit("hours");
                   setWorkloadInputValue(
-                    workloadInputFromDays(schedule.estimated_work_days, "hours"),
+                    workloadInputFromDays(
+                      schedule.estimated_work_days,
+                      "hours",
+                    ),
                   );
                 }}
               >
                 Heures
               </button>
             </div>
-          </div>
-          <div className="form-field">
-            <label htmlFor="workload">
-              {workloadUnit === "days"
-                ? "Charge estimée (jours ouvrés)"
-                : "Charge estimée (heures)"}
-            </label>
-            <input
-              id="workload"
-              type="number"
-              min={workloadInputMin(workloadUnit)}
-              step={workloadInputStep(workloadUnit)}
-              value={workloadInputValue}
-              onFocus={() => setSource("workload")}
-              onChange={(event) => {
-                setSource("workload");
-                updateWorkload(event.target.value);
-              }}
-              onBlur={normalizeWorkloadField}
-              onKeyDown={(event) => {
-                if (
-                  event.key !== "ArrowUp" &&
-                  event.key !== "ArrowDown"
-                )
-                  return;
-                event.preventDefault();
-                updateWorkload(
-                  nextWorkloadInputValue(
-                    workloadInputValue,
-                    workloadUnit,
-                    event.key === "ArrowUp" ? 1 : -1,
-                  ),
-                );
-              }}
-            />
           </div>
           <div className="cluster wide">
             <Button disabled={saving}>

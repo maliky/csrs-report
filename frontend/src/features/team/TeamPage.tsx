@@ -1,17 +1,9 @@
 import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "../../lib/router";
-import type {
-  Team,
-  TeamNode,
-} from "../../lib/api/types";
+import type { Team, TeamNode } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  Skeleton,
-} from "../../components/ui";
+import { Button, EmptyState, ErrorState, Skeleton } from "../../components/ui";
 import { PeriodNavigation } from "../tasks/PeriodNavigation";
 import styles from "./team.module.css";
 

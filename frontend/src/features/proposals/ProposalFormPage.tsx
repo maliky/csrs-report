@@ -275,42 +275,6 @@ function ProposalForm({
             />
           </div>
           <div className="form-field">
-            <label id="workload-unit-label">Unité</label>
-            <div
-              role="group"
-              aria-labelledby="workload-unit-label"
-              className="cluster"
-            >
-              <button
-                type="button"
-                aria-pressed={workloadUnit === "days"}
-                title="1 jour ouvré = 8h"
-                onClick={() => {
-                  setSource("workload");
-                  setWorkloadUnit("days");
-                  setWorkloadInputValue(
-                    workloadInputFromDays(schedule.estimated_work_days, "days"),
-                  );
-                }}
-              >
-                Jours
-              </button>
-              <button
-                type="button"
-                aria-pressed={workloadUnit === "hours"}
-                onClick={() => {
-                  setSource("workload");
-                  setWorkloadUnit("hours");
-                  setWorkloadInputValue(
-                    workloadInputFromDays(schedule.estimated_work_days, "hours"),
-                  );
-                }}
-              >
-                Heures
-              </button>
-            </div>
-          </div>
-          <div className="form-field">
             <label htmlFor="workload">
               {workloadUnit === "days"
                 ? "Charge estimée (jours ouvrés)"
@@ -333,7 +297,8 @@ function ProposalForm({
               }}
               onBlur={normalizeWorkloadField}
               onKeyDown={(event) => {
-                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+                  return;
                 event.preventDefault();
                 updateWorkload(
                   nextWorkloadInputValue(
@@ -344,6 +309,45 @@ function ProposalForm({
                 );
               }}
             />
+          </div>
+          <div className="form-field">
+            <label id="workload-unit-label">Unité</label>
+            <div
+              role="group"
+              aria-labelledby="workload-unit-label"
+              className="workload-unit-toggle"
+            >
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "days"}
+                title="1 jour ouvré = 8h"
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("days");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(schedule.estimated_work_days, "days"),
+                  );
+                }}
+              >
+                Jours
+              </button>
+              <button
+                type="button"
+                aria-pressed={workloadUnit === "hours"}
+                onClick={() => {
+                  setSource("workload");
+                  setWorkloadUnit("hours");
+                  setWorkloadInputValue(
+                    workloadInputFromDays(
+                      schedule.estimated_work_days,
+                      "hours",
+                    ),
+                  );
+                }}
+              >
+                Heures
+              </button>
+            </div>
           </div>
           <div className="cluster wide">
             <Button disabled={saving}>

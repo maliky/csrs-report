@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 from django.test import Client
@@ -129,10 +130,7 @@ def test_user_can_read_and_update_own_terms_of_reference(people: dict[str, User]
 
     assert saved.status_code == 200
     assert saved.json()["terms_of_reference"] == expected
-    assert (
-        User.objects.get(pk=people["employee"].pk).terms_of_reference
-        == expected
-    )
+    assert User.objects.get(pk=people["employee"].pk).terms_of_reference == expected
 
 
 def test_supervisor_can_read_profile_data_from_team_employee(
@@ -262,7 +260,8 @@ def test_manager_can_create_an_unclassified_task(
     start = timezone.localdate() + timedelta(days=1)
     while not calendar.is_working_day(start):
         start += timedelta(days=1)
-    due = calendar.due_date_for(start, assignment.estimated_work_days)
+    estimated_work_days = Decimal("1.625")
+    due = calendar.due_date_for(start, estimated_work_days)
 
     response = client.post(
         reverse("api:task-create"),
@@ -274,14 +273,17 @@ def test_manager_can_create_an_unclassified_task(
             "calendar_id": calendar.pk,
             "start_date": start.isoformat(),
             "due_date": due.isoformat(),
-            "estimated_work_days": "5",
+            "estimated_work_days": str(estimated_work_days),
         },
         content_type="application/json",
     )
 
     assert response.status_code == 201, response.content
     assert response.json()["action"] is None
-    assert response.json()["estimated_work_days"] == "5"
+    assert response.json()["estimated_work_days"] == "1.625"
+    assert TaskAssignment.objects.get(pk=response.json()["id"]).estimated_work_days == (
+        estimated_work_days
+    )
 
 
 def test_manager_accepts_a_proposal_and_receives_the_assignment_link(

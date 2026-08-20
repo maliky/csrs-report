@@ -148,6 +148,28 @@ h2 {
   min-height: 7rem;
   resize: vertical;
 }
+.workload-unit-toggle {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.8rem;
+  padding: 0.2rem;
+  border: 1px solid #aeb9b4;
+  border-radius: var(--radius-sm);
+  background: white;
+}
+.workload-unit-toggle button {
+  min-width: 5.5rem;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 0.15rem);
+  color: var(--color-muted);
+  background: transparent;
+  font-weight: 750;
+  cursor: pointer;
+}
+.workload-unit-toggle button[aria-pressed="true"] {
+  color: white;
+  background: var(--color-primary);
+}
 .field-error {
   color: var(--color-danger);
   font-size: 0.88rem;

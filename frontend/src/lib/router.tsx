@@ -111,7 +111,9 @@ export function MemoryRouter({
   initialEntries?: string[];
   children: ReactNode;
 }) {
-  const [entries, setEntries] = useState(() => initialEntries.map((item) => locationFrom(item)));
+  const [entries, setEntries] = useState(() =>
+    initialEntries.map((item) => locationFrom(item)),
+  );
   const [index, setIndex] = useState(() => Math.max(0, entries.length - 1));
   const location = entries[index] ?? locationFrom("/");
   const navigate: Navigate = (target) => {
@@ -136,7 +138,8 @@ export function MemoryRouter({
 
 function useRouter(): RouterState {
   const value = useContext(RouterContext);
-  if (!value) throw new Error("Ce composant doit être rendu dans un routeur CSRS.");
+  if (!value)
+    throw new Error("Ce composant doit être rendu dans un routeur CSRS.");
   return value;
 }
 
@@ -153,10 +156,7 @@ export function useParams(): Record<string, string> {
 }
 
 type SearchParamsInit =
-  | string
-  | URLSearchParams
-  | Record<string, string>
-  | Array<[string, string]>;
+  string | URLSearchParams | Record<string, string> | Array<[string, string]>;
 
 export function useSearchParams(): [
   URLSearchParams,
@@ -217,10 +217,17 @@ export function NavLink({ end = false, className, ...props }: NavLinkProps) {
   const target = resolvedTarget(props.to, location).split(/[?#]/, 1)[0];
   const isActive = end
     ? location.pathname === target
-    : location.pathname === target || location.pathname.startsWith(`${target}/`);
+    : location.pathname === target ||
+      location.pathname.startsWith(`${target}/`);
   const resolvedClass =
     typeof className === "function" ? className({ isActive }) : className;
-  return <Link {...props} className={resolvedClass} aria-current={isActive ? "page" : undefined} />;
+  return (
+    <Link
+      {...props}
+      className={resolvedClass}
+      aria-current={isActive ? "page" : undefined}
+    />
+  );
 }
 
 type RouteProps = {
@@ -249,13 +256,18 @@ function matchPattern(
   if (pattern === "*") return {};
   const patternParts = normalizedPath(pattern).split("/").filter(Boolean);
   const pathParts = normalizedPath(pathname).split("/").filter(Boolean);
-  if (exact ? patternParts.length !== pathParts.length : patternParts.length > pathParts.length)
+  if (
+    exact
+      ? patternParts.length !== pathParts.length
+      : patternParts.length > pathParts.length
+  )
     return null;
   const params: Record<string, string> = {};
   for (let index = 0; index < patternParts.length; index += 1) {
     const expected = patternParts[index];
     const actual = pathParts[index];
-    if (expected.startsWith(":")) params[expected.slice(1)] = decodeURIComponent(actual);
+    if (expected.startsWith(":"))
+      params[expected.slice(1)] = decodeURIComponent(actual);
     else if (expected !== actual) return null;
   }
   return params;

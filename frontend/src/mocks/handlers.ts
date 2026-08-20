@@ -101,14 +101,18 @@ export const handlers = [
     };
     profileState = {
       ...profileState,
-      ...(typeof body.first_name === "string" ? { first_name: body.first_name } : {}),
-      ...(typeof body.last_name === "string" ? { last_name: body.last_name } : {}),
+      ...(typeof body.first_name === "string"
+        ? { first_name: body.first_name }
+        : {}),
+      ...(typeof body.last_name === "string"
+        ? { last_name: body.last_name }
+        : {}),
       ...(typeof body.phone === "string" ? { phone: body.phone } : {}),
       ...(typeof body.avatar === "string" ? { avatar: body.avatar } : {}),
       ...(typeof body.terms_of_reference === "string"
         ? { terms_of_reference: body.terms_of_reference }
         : {}),
-    }
+    };
     return HttpResponse.json(profileState);
   }),
   http.post(
