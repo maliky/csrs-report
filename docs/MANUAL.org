@@ -99,7 +99,7 @@ Sur ordinateur, le menu reste à gauche et peut être réduit. Sur téléphone, 
 3. Pour remplacer l'icône par une photographie, saisir dans =URL de l'image d'avatar= l'adresse HTTPS directe d'une image accessible par l'application. Ne pas utiliser un lien vers une page web protégée par un mot de passe.
 4. Saisir ou corriger le =Cahier des charges=, c'est-à-dire les responsabilités permanentes de l'employé et non celles d'un projet.
 5. Sélectionner =Enregistrer=. Le nom et l'avatar du menu sont actualisés après l'enregistrement.
-6. Dans =Mes tâches=, retrouver le cahier des charges après la liste des tâches. Il est replié par défaut; sélectionner son titre pour l'ouvrir ou le refermer.
+6. Dans =Mes tâches=, sélectionner =Modifier mon cahier des charges= pour revenir directement à ce formulaire de profil.
 
 Le responsable hiérarchique peut consulter ces informations, mais seul l'employé modifie son profil courant et son cahier des charges depuis cette page.
 
@@ -543,7 +543,7 @@ sudo /usr/local/sbin/csrs-report-preprod-deploy-root <SHA_PREPROD_COMPLET>
 | Une écriture annonce que la ressource a changé | Recharger la page, relire les nouvelles données puis recommencer sans écraser le travail récent. |
 | Une proposition est rejetée | Lire le motif et appliquer [[#proc-corriger-proposition][Corriger une proposition rejetée]]. |
 | L'avatar ne s'affiche pas | Vérifier que l'adresse saisie est une URL HTTPS directe vers une image accessible sans authentification. |
-| Le cahier des charges n'apparaît pas dans =Mes tâches= | Aller après la liste des tâches puis ouvrir la section =Cahier des charges=, repliée par défaut. |
+| Le cahier des charges n'apparaît pas dans =Mes tâches= | Sélectionner =Modifier mon cahier des charges= pour ouvrir le formulaire du profil; la section repliée après les tâches concerne la consultation d'un collaborateur par son responsable. |
 | Le PDF de réunion ne se génère pas | Vérifier la période et la direction, saisir les événements majeurs ou =RAS=, puis réessayer; transmettre le message d'erreur à l'administrateur si l'échec persiste. |
 | Une personne n'apparaît pas dans l'équipe | Vérifier son unité principale, son responsable principal, la date d'effet et le filtre =Tous=. |
 
