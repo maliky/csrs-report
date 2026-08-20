@@ -1,7 +1,15 @@
 #+TITLE: Manuel utilisateur de CSRS Report
 #+SUBTITLE: Tâches, suivi hiérarchique et agendas de direction
+#+AUTHOR: CSRS
+#+DATE:
 #+LANGUAGE: fr
-#+OPTIONS: toc:3 num:t
+#+OPTIONS: toc:3 num:t ^:nil
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [11pt,a4paper]
+#+LATEX_HEADER: \usepackage[margin=18mm]{geometry}
+#+LATEX_HEADER: \usepackage{float}
+#+LATEX_HEADER: \setlength{\parindent}{0pt}
+#+LATEX_HEADER: \setlength{\parskip}{0.6em}
 #+STARTUP: overview
 
 * À propos de ce manuel
@@ -14,6 +22,7 @@ Les exemples reposent exclusivement sur des comptes et données fictifs. Les mot
 
 ** Trois profils de référence
 
+#+ATTR_LATEX: :align p{0.18\linewidth}p{0.12\linewidth}p{0.20\linewidth}p{0.42\linewidth}
 | Profil | Compte fictif | Position illustrée | Parcours principal |
 |--------+----------------+---------------------+--------------------|
 | Collaborateur sans subordonné | =atall= | Feuille de l'organigramme | Consulter ses tâches, saisir une progression, publier une observation et proposer une tâche |
@@ -49,8 +58,10 @@ Les parcours par profil renvoient à ces procédures afin de ne pas répéter le
 
 #+CAPTION: Écran de connexion; le mot de passe doit rester personnel.
 #+ATTR_HTML: :alt "Écran de connexion CSRS Report avec les champs identifiant et mot de passe" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/01-connexion.png]]
+[[file:manual/screenshots/01-connexion.png]]
 
 ** Remplacer un mot de passe temporaire
 :PROPERTIES:
@@ -73,8 +84,31 @@ Sur ordinateur, le menu reste à gauche et peut être réduit. Sur téléphone, 
 
 #+CAPTION: Menu mobile du profil feuille; les fonctions managériales ne sont pas affichées.
 #+ATTR_HTML: :alt "Menu mobile ouvert pour un collaborateur sans subordonné" :width "360"
+#+ATTR_LATEX: :width 0.4\linewidth :placement [H]
+#+ATTR_ODT: :width 6.0
 #+ATTR_ORG: :width 360
-[[file:docs/manual/screenshots/02-navigation-mobile-atall.png]]
+[[file:manual/screenshots/02-navigation-mobile-atall.png]]
+
+** Gérer son profil, son avatar et son cahier des charges
+:PROPERTIES:
+:CUSTOM_ID: proc-profil
+:END:
+
+1. Sélectionner son nom, sa fonction ou son avatar en bas du menu principal pour ouvrir =Mon profil=.
+2. Modifier si nécessaire le prénom, le nom et le numéro de téléphone.
+3. Pour remplacer l'icône par une photographie, saisir dans =URL de l'image d'avatar= l'adresse HTTPS directe d'une image accessible par l'application. Ne pas utiliser un lien vers une page web protégée par un mot de passe.
+4. Saisir ou corriger le =Cahier des charges=, c'est-à-dire les responsabilités permanentes de l'employé et non celles d'un projet.
+5. Sélectionner =Enregistrer=. Le nom et l'avatar du menu sont actualisés après l'enregistrement.
+6. Dans =Mes tâches=, retrouver le cahier des charges après la liste des tâches. Il est replié par défaut; sélectionner son titre pour l'ouvrir ou le refermer.
+
+Le responsable hiérarchique peut consulter ces informations, mais seul l'employé modifie son profil courant et son cahier des charges depuis cette page.
+
+#+CAPTION: Profil personnel avec identité, téléphone, avatar et cahier des charges.
+#+ATTR_HTML: :alt "Profil personnel permettant de modifier le prénom, le nom, le téléphone, l'avatar et le cahier des charges" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
+#+ATTR_ORG: :width 1000
+[[file:manual/screenshots/21-profil-atall.png]]
 
 ** Choisir la période et lire le tableau de bord
 :PROPERTIES:
@@ -89,8 +123,10 @@ Sur ordinateur, le menu reste à gauche et peut être réduit. Sur téléphone, 
 
 #+CAPTION: Tableau de bord personnel du profil feuille.
 #+ATTR_HTML: :alt "Cartes de tâches du tableau de bord personnel avec progression, dates et charge" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/03-dashboard-atall.png]]
+[[file:manual/screenshots/03-dashboard-atall.png]]
 
 ** Lire le détail et le graphique d'une tâche
 :PROPERTIES:
@@ -105,8 +141,10 @@ Utiliser le bouton de légende ou la table alternative pour obtenir une explicat
 
 #+CAPTION: Détail d'une tâche avec dates, charges, graphique et conversation.
 #+ATTR_HTML: :alt "Détail complet d'une tâche et graphique de progression daté" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/04-tache-detail-atall.png]]
+[[file:manual/screenshots/04-tache-detail-atall.png]]
 
 ** Mettre à jour la progression
 :PROPERTIES:
@@ -135,8 +173,10 @@ Une observation publiée appartient à l'historique auditable. En cas d'erreur, 
 
 #+CAPTION: Commandes de progression et d'observation d'une tâche.
 #+ATTR_HTML: :alt "Formulaire de progression, observation associée et publication d'un message" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/05-progression-observation-atall.png]]
+[[file:manual/screenshots/05-progression-observation-atall.png]]
 
 ** Proposer une tâche
 :PROPERTIES:
@@ -151,14 +191,17 @@ Cette procédure convient à tout utilisateur actif, notamment au collaborateur 
 4. Choisir éventuellement une action institutionnelle; ce rattachement est facultatif.
 5. Saisir la date de début au format =jj/mm/aaaa=.
 6. Ajuster soit la fin prévue, soit la charge estimée; le calendrier de travail synchronise l'autre valeur.
-7. Saisir la charge au dixième de jour au maximum, par exemple =12= ou =12,3= selon le contrôle affiché.
-8. Sélectionner =Soumettre=.
-9. Suivre la proposition dans =Mes propositions= jusqu'à sa validation ou son rejet.
+7. Dans =Charge estimée=, saisir d'abord la valeur puis choisir l'unité avec le bouton à deux états =Jours= ou =Heures=. =Jours= est sélectionné par défaut et une journée ouvrée vaut huit heures.
+8. En jours, les flèches du clavier et du champ avancent par =0,25= jour; en heures, elles avancent par =0,5= heure. Une valeur saisie directement est arrondie à la précision la plus proche de l'unité choisie.
+9. Sélectionner =Soumettre=.
+10. Suivre la proposition dans =Mes propositions= jusqu'à sa validation ou son rejet.
 
 #+CAPTION: Formulaire de proposition utilisé par le profil feuille.
 #+ATTR_HTML: :alt "Formulaire pour proposer une tâche avec dates et charge estimée" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/06-proposer-tache-atall.png]]
+[[file:manual/screenshots/06-proposer-tache-atall.png]]
 
 ** Corriger une proposition rejetée
 :PROPERTIES:
@@ -183,14 +226,16 @@ Cette procédure est réservée aux responsables qui voient le menu =Affecter=. 
 3. Choisir le collaborateur dans la liste autorisée. Cette liste contient les collaborateurs directs, les personnes couvertes par une délégation active et, pour une racine organisationnelle comme =dg=, le responsable lui-même.
 4. Choisir éventuellement l'action institutionnelle; elle reste facultative.
 5. Saisir la date de début.
-6. Définir la fin prévue ou la charge estimée en jours ouvrés; la modification de l'une recalcule l'autre.
+6. Définir la fin prévue ou la charge estimée. La valeur précède le bouton =Jours / Heures=; =Jours= est la valeur par défaut et le survol rappelle qu'un jour ouvré vaut huit heures. Les pas sont de =0,25= jour et =0,5= heure, y compris avec les flèches du clavier ou du champ; une saisie libre est arrondie à la précision correspondante.
 7. Sélectionner =Enregistrer=.
 8. Vérifier la page de détail créée, le collaborateur, le responsable et les dates.
 
 #+CAPTION: Attribution directe d'une tâche par un responsable intermédiaire.
 #+ATTR_HTML: :alt "Formulaire Affecter une tâche avec choix du collaborateur" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/08-affecter-tache-daf.png]]
+[[file:manual/screenshots/08-affecter-tache-daf.png]]
 
 ** Consulter l'équipe
 :PROPERTIES:
@@ -200,14 +245,24 @@ Cette procédure est réservée aux responsables qui voient le menu =Affecter=. 
 1. Sélectionner =Mon équipe=.
 2. Choisir la période avec les commandes communes.
 3. Utiliser =Tous=, =Avec tâches= ou =Sans tâche= pour filtrer les collaborateurs.
-4. Ouvrir une branche pour charger la progression et la charge de ce collaborateur.
-5. Ouvrir ensuite une sous-équipe uniquement lorsque son détail est nécessaire; ses graphiques ne sont chargés qu'à l'ouverture.
-6. Sélectionner le titre d'une tâche pour consulter son détail.
+4. Ouvrir une branche pour afficher les tâches et la synthèse du collaborateur sans quitter la page d'équipe.
+5. Sélectionner uniquement le nom, la fonction ou l'avatar du collaborateur pour ouvrir son profil. Ouvrir une branche ou sélectionner le titre d'une tâche ne doit pas ouvrir ce profil.
+6. Dans le profil collaborateur, consulter son identité et son cahier des charges. Le cahier des charges se trouve après la liste des tâches et reste replié par défaut.
+7. Sélectionner le titre d'une tâche pour consulter uniquement le détail de cette tâche.
 
 #+CAPTION: Synthèse d'équipe d'un responsable intermédiaire.
 #+ATTR_HTML: :alt "Arbre d'équipe avec collaborateurs, tâches, progression et charge" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/07-equipe-daf.png]]
+[[file:manual/screenshots/07-equipe-daf.png]]
+
+#+CAPTION: Profil d'un collaborateur consulté par son responsable avec tâches et cahier des charges replié.
+#+ATTR_HTML: :alt "Profil collaborateur accessible depuis son identité dans Mon équipe" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
+#+ATTR_ORG: :width 1000
+[[file:manual/screenshots/22-profil-collaborateur-daf.png]]
 
 ** Examiner une proposition
 :PROPERTIES:
@@ -222,8 +277,10 @@ Cette procédure est réservée aux responsables qui voient le menu =Affecter=. 
 
 #+CAPTION: Propositions à examiner par un responsable.
 #+ATTR_HTML: :alt "Liste des propositions soumises avec boutons Valider et Rejeter" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/09-valider-proposition-daf.png]]
+[[file:manual/screenshots/09-valider-proposition-daf.png]]
 
 ** Valider l'achèvement ou demander une reprise
 :PROPERTIES:
@@ -241,18 +298,19 @@ Cette procédure est réservée aux responsables qui voient le menu =Affecter=. 
 Le profil =atall= ne possède pas de collaborateur. Il travaille sur ses propres engagements sans pouvoir attribuer ou valider les tâches d'une autre personne.
 
 1. Se connecter selon [[#proc-connexion][Se connecter et se déconnecter]].
-2. Consulter ses engagements selon [[#proc-tableau-bord][Choisir la période et lire le tableau de bord]].
-3. Lire les dates, la charge et l'historique selon [[#proc-lire-tache][Lire le détail et le graphique d'une tâche]].
-4. Saisir l'avancement selon [[#proc-progression][Mettre à jour la progression]].
-5. Échanger avec le responsable selon [[#proc-observation][Publier une observation sans modifier le pourcentage]].
-6. Suggérer un nouvel engagement selon [[#proc-proposer-tache][Proposer une tâche]].
-7. En cas de rejet, appliquer [[#proc-corriger-proposition][Corriger une proposition rejetée]].
+2. Tenir à jour son identité et ses responsabilités selon [[#proc-profil][Gérer son profil, son avatar et son cahier des charges]].
+3. Consulter ses engagements selon [[#proc-tableau-bord][Choisir la période et lire le tableau de bord]].
+4. Lire les dates, la charge et l'historique selon [[#proc-lire-tache][Lire le détail et le graphique d'une tâche]].
+5. Saisir l'avancement selon [[#proc-progression][Mettre à jour la progression]].
+6. Échanger avec le responsable selon [[#proc-observation][Publier une observation sans modifier le pourcentage]].
+7. Suggérer un nouvel engagement selon [[#proc-proposer-tache][Proposer une tâche]].
+8. En cas de rejet, appliquer [[#proc-corriger-proposition][Corriger une proposition rejetée]].
 
 * Parcours du responsable intermédiaire
 
 Le profil =daf= cumule ses opérations personnelles et les responsabilités portant sur ses collaborateurs ou sur un périmètre explicitement délégué.
 
-1. Utiliser les procédures personnelles [[#proc-tableau-bord][du tableau de bord]], [[#proc-progression][de progression]], [[#proc-observation][d'observation]] et [[#proc-proposer-tache][de proposition]].
+1. Utiliser les procédures personnelles [[#proc-profil][de profil]], [[#proc-tableau-bord][du tableau de bord]], [[#proc-progression][de progression]], [[#proc-observation][d'observation]] et [[#proc-proposer-tache][de proposition]].
 2. Surveiller les engagements avec [[#proc-equipe][Consulter l'équipe]].
 3. Créer et attribuer un engagement avec [[#proc-affecter-tache][Créer et attribuer directement une tâche]].
 4. Traiter les initiatives avec [[#proc-examiner-proposition][Examiner une proposition]].
@@ -266,8 +324,10 @@ Le profil =dg= se trouve à la racine de l'organigramme. Son tableau de bord con
 
 #+CAPTION: Tableau de bord personnel de la Direction générale.
 #+ATTR_HTML: :alt "Tableau de bord de la Direction générale avec tâches personnelles" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/10-dashboard-dg.png]]
+[[file:manual/screenshots/10-dashboard-dg.png]]
 
 ** S'attribuer une tâche personnelle
 
@@ -278,8 +338,10 @@ Le profil =dg= se trouve à la racine de l'organigramme. Son tableau de bord con
 
 #+CAPTION: Auto-attribution d'une tâche par la Direction générale.
 #+ATTR_HTML: :alt "Formulaire Affecter avec la Direction générale disponible comme collaborateur" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/11-auto-affectation-dg.png]]
+[[file:manual/screenshots/11-auto-affectation-dg.png]]
 
 ** Superviser le périmètre de direction
 
@@ -287,8 +349,10 @@ Appliquer [[#proc-equipe][Consulter l'équipe]] puis ouvrir seulement les direct
 
 #+CAPTION: Périmètre d'équipe visible par la Direction générale.
 #+ATTR_HTML: :alt "Synthèse hiérarchique des directions et collaborateurs de la Direction générale" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/12-equipe-dg.png]]
+[[file:manual/screenshots/12-equipe-dg.png]]
 
 * Annexe — Support de la réunion de direction
 
@@ -301,8 +365,10 @@ Le compte RH ouvre =Absences et missions=, choisit la semaine, l'agent, la natur
 
 #+CAPTION: Saisie RH des congés, absences et missions.
 #+ATTR_HTML: :alt "Écran RH pour déclarer une indisponibilité d'un agent" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/17-absences-rh.png]]
+[[file:manual/screenshots/17-absences-rh.png]]
 
 ** Préparer et générer le fichier de support
 :PROPERTIES:
@@ -324,15 +390,19 @@ Cette procédure est réalisée par le secrétariat de la Direction générale. 
 
 #+CAPTION: Préparation par le secrétariat avec le calendrier unique de sélection de période.
 #+ATTR_HTML: :alt "Calendrier unique ouvert pour choisir le début et la fin de la période d'un agenda" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/14-agenda-secretariat-preparation.png]]
+[[file:manual/screenshots/14-agenda-secretariat-preparation.png]]
 
 Chaque génération crée une nouvelle version figée et auditable pour une seule direction. Une correction ultérieure ne remplace pas l'ancienne version : enregistrer le brouillon partagé puis générer une version supplémentaire de la direction concernée.
 
 #+CAPTION: Confirmation et version PDF archivée après génération.
 #+ATTR_HTML: :alt "Message de génération réussie et lien vers la version PDF archivée" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/15-agenda-secretariat-version.png]]
+[[file:manual/screenshots/15-agenda-secretariat-version.png]]
 
 ** Consulter et réimprimer comme Direction générale
 :PROPERTIES:
@@ -346,8 +416,10 @@ Chaque génération crée une nouvelle version figée et auditable pour une seul
 
 #+CAPTION: Agendas archivés consultables par la Direction générale.
 #+ATTR_HTML: :alt "Liste en lecture seule des versions d'agenda accessibles à la Direction générale" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/16-agenda-archives-dg.png]]
+[[file:manual/screenshots/16-agenda-archives-dg.png]]
 
 * Annexe — Administration de l'organigramme
 
@@ -374,8 +446,10 @@ Le compte est créé sans mot de passe partagé. Les anciennes appartenances et 
 
 #+CAPTION: Fiche historique de l'administration avancée, conservée comme recours pour les droits techniques.
 #+ATTR_HTML: :alt "Administration avancée d'un utilisateur avec unités, unité principale, responsable et date d'effet" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/18-administration-personne-organigramme.png]]
+[[file:manual/screenshots/18-administration-personne-organigramme.png]]
 
 ** Définir les collaborateurs directs
 :PROPERTIES:
@@ -416,8 +490,10 @@ Une unité subordonnée possède un seul parent. L'application refuse un second 
 
 #+CAPTION: Fiche de création ou de rattachement d'une unité.
 #+ATTR_HTML: :alt "Administration d'une unité avec unité supérieure et unités directement rattachées" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/19-administration-unite.png]]
+[[file:manual/screenshots/19-administration-unite.png]]
 
 ** Accorder ou révoquer une délégation
 :PROPERTIES:
@@ -434,11 +510,31 @@ Les groupes Django gèrent les permissions techniques globales. Ils ne remplacen
 
 #+CAPTION: Liste auditée des délégations de rôles.
 #+ATTR_HTML: :alt "Administration des attributions de rôles avec unité, portée, dates et état" :width "100%"
+#+ATTR_LATEX: :width 0.95\linewidth :placement [H]
+#+ATTR_ODT: :width 16.0
 #+ATTR_ORG: :width 1000
-[[file:docs/manual/screenshots/20-administration-delegations.png]]
+[[file:manual/screenshots/20-administration-delegations.png]]
+
+* Annexe — Déployer depuis dev
+
+Cette annexe concerne l'opérateur technique. Le chemin normal ne consiste pas à lancer un script depuis le checkout =dev=.
+
+1. Intégrer la branche de fonctionnalité dans =dev= par pull request.
+2. Créer une pull request GitHub de =dev= vers =preprod=.
+3. Attendre les contrôles =Python=, =Frontend=, =Playwright=, =Package= et =Promotion policy=.
+4. Merger la pull request puis approuver l'environnement GitHub =preprod=.
+5. Le job =Deploy preproduction= de =.github/workflows/ci.yml= appelle automatiquement le wrapper SSH restreint. Ce wrapper sauvegarde, vérifie le SHA, avance le checkout déployé, puis exécute =scripts/deploy_preprod.sh=.
+6. Contrôler dans GitHub Actions que le job est vert et que la révision de l'image correspond au SHA de =preprod=.
+
+=scripts/deploy_preprod.sh= ne doit pas être exécuté directement depuis =dev=: il construit le checkout courant mais n'effectue ni la promotion GitHub, ni la sauvegarde préalable, ni la validation du SHA distant. En reprise exceptionnelle, un sudoer utilise sur le serveur la commande protégée suivante avec le SHA GitHub complet de =preprod= :
+
+#+begin_src bash
+sudo /usr/local/sbin/csrs-report-preprod-deploy-root <SHA_PREPROD_COMPLET>
+#+end_src
 
 * Résoudre les difficultés courantes
 
+#+ATTR_LATEX: :align p{0.28\linewidth}p{0.65\linewidth}
 | Situation | Contrôle et action |
 |-----------+--------------------|
 | Le menu =Affecter= ou =Mon équipe= est absent | Vérifier la hiérarchie et les délégations avec l'administrateur; masquer un menu reflète une permission serveur. |
@@ -446,6 +542,8 @@ Les groupes Django gèrent les permissions techniques globales. Ils ne remplacen
 | Une baisse de progression ne s'enregistre pas | Saisir l'observation obligatoire expliquant la reprise. |
 | Une écriture annonce que la ressource a changé | Recharger la page, relire les nouvelles données puis recommencer sans écraser le travail récent. |
 | Une proposition est rejetée | Lire le motif et appliquer [[#proc-corriger-proposition][Corriger une proposition rejetée]]. |
+| L'avatar ne s'affiche pas | Vérifier que l'adresse saisie est une URL HTTPS directe vers une image accessible sans authentification. |
+| Le cahier des charges n'apparaît pas dans =Mes tâches= | Aller après la liste des tâches puis ouvrir la section =Cahier des charges=, repliée par défaut. |
 | Le PDF de réunion ne se génère pas | Vérifier la période et la direction, saisir les événements majeurs ou =RAS=, puis réessayer; transmettre le message d'erreur à l'administrateur si l'échec persiste. |
 | Une personne n'apparaît pas dans l'équipe | Vérifier son unité principale, son responsable principal, la date d'effet et le filtre =Tous=. |
 
@@ -465,3 +563,12 @@ cd ..
 #+end_src
 
 Le script demande deux mots de passe temporaires distincts sans les afficher. Il refuse une cible autre que =localhost= ou =127.0.0.1=. Les images résultantes sont placées sous =docs/manual/screenshots/= et doivent être relues avant publication.
+
+* Exporter le manuel                                                  :noexport:
+
+Ouvrir =docs/MANUAL.org= dans Emacs puis utiliser les commandes Org classiques :
+
+- =C-c C-e l p= pour produire =docs/MANUAL.pdf= avec LaTeX.
+- =C-c C-e o o= pour produire puis ouvrir =docs/MANUAL.odt=.
+
+Les liens d'images sont relatifs au fichier Org; l'export fonctionne donc indépendamment du répertoire depuis lequel Emacs a été lancé.

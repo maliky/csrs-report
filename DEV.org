@@ -1,6 +1,21 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-20 jeu.> Déploiement automatisé depuis dev
+** Chemin normal vers la préproduction
+
+Le checkout local reste sur =dev= pour le développement, mais aucun script de déploiement ne doit être lancé depuis cette branche. Une fonctionnalité est intégrée dans =dev= par pull request, puis une pull request distincte =dev → preprod= est créée sur =maliky/csrs-report=. Après le merge, =.github/workflows/ci.yml= exécute Python, Frontend, Playwright et Package, attend l'approbation de l'environnement GitHub =preprod=, puis déploie exactement le SHA testé.
+
+Le job GitHub se connecte avec le compte restreint =csrsreport-deploy=. La commande forcée =/usr/local/bin/csrs-report-preprod-deploy= valide la forme de la demande et appelle =/usr/local/sbin/csrs-report-preprod-deploy-root=. Ce dernier vérifie que le SHA demandé est la tête GitHub de =preprod=, refuse un checkout sale ou une promotion non fast-forward, sauvegarde les données, met à jour =/srv/apps/csrs-report-preprod=, puis appelle =scripts/deploy_preprod.sh= sous l'utilisateur propriétaire. =scripts/deploy_preprod.sh= est donc un composant interne du déploiement et ne doit pas être exécuté directement depuis =dev=.
+
+** Reprise manuelle réservée à l'opérateur
+
+Si GitHub Actions est indisponible alors que le SHA complet est déjà la tête GitHub de =preprod=, l'opérateur sudoer peut lancer sur le serveur =sudo /usr/local/sbin/csrs-report-preprod-deploy-root <SHA_PREPROD_COMPLET>=. Cette commande conserve les vérifications, la sauvegarde, le verrou, la migration, la révision d'image et les sondes HTTP du chemin automatisé. Lancer directement =./scripts/deploy_preprod.sh= contournerait la sauvegarde et la validation du SHA; ce n'est pas la procédure de reprise recommandée.
+
+** Manuel utilisateur illustré
+
+=docs/MANUAL.org= décrit les parcours du collaborateur, du responsable, de la Direction générale, du secrétariat, des RH et de l'administrateur IT. Les captures sont générées localement par =scripts/capture_manual.sh= sans utiliser la préproduction ni des données personnelles. Deux captures couvrent maintenant le profil personnel et le profil collaborateur avec cahier des charges.
+
 * <2026-08-15 sam.> Chemin du deploiement de preproduction
 
 Le checkout de =preprod.report.ent.koba.sarl= reside directement dans =/srv/apps/csrs-report-preprod=. Le projet Compose =csrs_preprod=, le port =18008= et les volumes nommes existants sont conserves.
