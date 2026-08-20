@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly REQUEST="${SSH_ORIGINAL_COMMAND:-}"
+
+if [[ ! $REQUEST =~ ^deploy[[:space:]]([0-9a-f]{40})$ ]]; then
+  echo "Commande de déploiement refusée." >&2
+  exit 2
+fi
+
+exec sudo -n /usr/local/sbin/csrs-report-preprod-deploy-root "${BASH_REMATCH[1]}"

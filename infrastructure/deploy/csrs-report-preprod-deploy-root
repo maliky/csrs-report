@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly REVISION="${1:-}"
+readonly BARE_REPOSITORY=/home/jil/git/csrs_report.git
+readonly DEPLOY_ROOT=/srv/apps/csrs-report-preprod
+readonly LOCK_FILE=/run/lock/csrs-report-preprod-deploy.lock
+readonly LOCAL_HEALTH_HOST=preprod.report.ent.koba.sarl
+readonly WEB_CONTAINER=csrs_preprod_web_1
+
+if [[ ! $REVISION =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Révision Git invalide." >&2
+  exit 2
+fi
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || {
+  echo "Un déploiement CSRS Report est déjà en cours." >&2
+  exit 3
+}
+
+test -f "${DEPLOY_ROOT}/.env"
+test -d "${DEPLOY_ROOT}/.git"
+
+readonly DEPLOY_STATUS="$(runuser -u jil -- git -C "$DEPLOY_ROOT" status --porcelain)"
+if [[ -n $DEPLOY_STATUS ]]; then
+  echo "Le checkout préproduction contient des changements locaux." >&2
+  exit 4
+fi
+
+runuser -u jil -- git --git-dir="$BARE_REPOSITORY" fetch --prune github \
+  "+refs/heads/*:refs/remotes/github/*"
+readonly PREPROD_REVISION="$(
+  runuser -u jil -- git --git-dir="$BARE_REPOSITORY" \
+    rev-parse refs/remotes/github/preprod^{commit}
+)"
+if [[ $REVISION != "$PREPROD_REVISION" ]]; then
+  echo "La révision demandée n'est pas la tête GitHub de preprod." >&2
+  exit 5
+fi
+
+readonly CURRENT_PREPROD="$(
+  runuser -u jil -- git --git-dir="$BARE_REPOSITORY" rev-parse refs/heads/preprod^{commit}
+)"
+if ! runuser -u jil -- git --git-dir="$BARE_REPOSITORY" \
+  merge-base --is-ancestor "$CURRENT_PREPROD" "$REVISION"; then
+  echo "La promotion preprod n'est pas un fast-forward du dépôt local." >&2
+  exit 6
+fi
+
+"${DEPLOY_ROOT}/scripts/backup_db.sh"
+runuser -u jil -- git --git-dir="$BARE_REPOSITORY" \
+  update-ref refs/heads/preprod "$REVISION" "$CURRENT_PREPROD"
+runuser -u jil -- git -C "$DEPLOY_ROOT" fetch origin preprod
+runuser -u jil -- git -C "$DEPLOY_ROOT" checkout preprod
+runuser -u jil -- git -C "$DEPLOY_ROOT" merge --ff-only origin/preprod
+
+"${DEPLOY_ROOT}/scripts/deploy_preprod.sh"
+
+readonly IMAGE_REVISION="$(
+  docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+    "$WEB_CONTAINER"
+)"
+if [[ $IMAGE_REVISION != "$REVISION" ]]; then
+  echo "La révision de l'image déployée ne correspond pas au commit demandé." >&2
+  exit 7
+fi
+
+curl --fail --silent --show-error \
+  --header "Host: ${LOCAL_HEALTH_HOST}" \
+  --header "X-Forwarded-Proto: https" \
+  http://127.0.0.1:18008/connexion/ >/dev/null
+curl --fail --silent --show-error \
+  "https://${LOCAL_HEALTH_HOST}/app/" >/dev/null
+
+echo "CSRS Report preprod déployé : $REVISION"
