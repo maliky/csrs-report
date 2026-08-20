@@ -8,6 +8,22 @@ readonly LOCK_FILE=/run/lock/csrs-report-preprod-deploy.lock
 readonly LOCAL_HEALTH_HOST=preprod.report.ent.koba.sarl
 readonly WEB_CONTAINER=csrs_preprod_web_1
 
+wait_for_http() {
+  local url="$1"
+  shift
+  local attempt
+
+  for attempt in {1..30}; do
+    if curl --fail --silent "$@" "$url" >/dev/null; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "Le service préproduction ne répond pas après 60 secondes : $url" >&2
+  return 1
+}
+
 if [[ ! $REVISION =~ ^[0-9a-f]{40}$ ]]; then
   echo "Révision Git invalide." >&2
   exit 2
@@ -73,11 +89,9 @@ if [[ $IMAGE_REVISION != "$REVISION" ]]; then
   exit 8
 fi
 
-curl --fail --silent --show-error \
+wait_for_http http://127.0.0.1:18008/connexion/ \
   --header "Host: ${LOCAL_HEALTH_HOST}" \
-  --header "X-Forwarded-Proto: https" \
-  http://127.0.0.1:18008/connexion/ >/dev/null
-curl --fail --silent --show-error \
-  "https://${LOCAL_HEALTH_HOST}/app/" >/dev/null
+  --header "X-Forwarded-Proto: https"
+wait_for_http "https://${LOCAL_HEALTH_HOST}/app/"
 
 echo "CSRS Report preprod déployé : $REVISION"
