@@ -71,6 +71,7 @@ backups/
 
 # Other stuff for dev
 *pdf
+*odt
 *svg
 *png
 /docs/Logigrams/Exports
