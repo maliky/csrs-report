@@ -45,6 +45,7 @@ export default defineConfig(({ command }) => ({
     setupFiles: "./src/test/setup.ts",
     css: true,
     globals: true,
+    maxWorkers: 2,
     exclude: ["e2e/**", "manual-e2e/**", "node_modules/**"],
   },
 }));

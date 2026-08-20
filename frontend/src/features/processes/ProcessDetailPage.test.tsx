@@ -13,8 +13,17 @@ function detail(actions = ["claim"]) {
     status: "assistance",
     status_label: "Préparation par l'assistance",
     current_step: "assistance",
-    initiator: { id: 8, name: "Aïssata Koné", position: "DG", login_alias: "dg" },
-    origin_unit: { id: 2, name: "Direction de la recherche", short_name: "drrv" },
+    initiator: {
+      id: 8,
+      name: "Aïssata Koné",
+      position: "DG",
+      login_alias: "dg",
+    },
+    origin_unit: {
+      id: 2,
+      name: "Direction de la recherche",
+      short_name: "drrv",
+    },
     mission_type: "domestic",
     mission_type_label: "Mission nationale",
     destination: "Bouaké",
@@ -36,10 +45,32 @@ function detail(actions = ["claim"]) {
       vehicle_details: "",
       official_number: "",
     },
-    participants: [{ id: 8, name: "Aïssata Koné", position: "DG", login_alias: "dg" }],
+    participants: [
+      { id: 8, name: "Aïssata Koné", position: "DG", login_alias: "dg" },
+    ],
     documents: [],
-    events: [{ id: 1, kind: "created", from_status: "", to_status: "draft", message: "Brouillon créé.", actor: { id: 8, name: "Aïssata Koné", position: "DG", login_alias: "dg" }, occurred_at: "2026-08-01T10:00:00Z" }],
-    capabilities: { edit: false, upload: false, download_documents: true, export: false },
+    events: [
+      {
+        id: 1,
+        kind: "created",
+        from_status: "",
+        to_status: "draft",
+        message: "Brouillon créé.",
+        actor: {
+          id: 8,
+          name: "Aïssata Koné",
+          position: "DG",
+          login_alias: "dg",
+        },
+        occurred_at: "2026-08-01T10:00:00Z",
+      },
+    ],
+    capabilities: {
+      edit: false,
+      upload: false,
+      download_documents: true,
+      export: false,
+    },
     signature: null,
   };
 }
@@ -49,8 +80,13 @@ test("rend la file visible puis permet de prendre le dossier en charge", async (
   server.use(
     http.get("/api/v1/processes/31/", () => HttpResponse.json(state)),
     http.post("/api/v1/processes/31/actions/", async ({ request }) => {
-      const body = (await request.json()) as { action: string; revision: number };
-      expect(body).toEqual(expect.objectContaining({ action: "claim", revision: 3 }));
+      const body = (await request.json()) as {
+        action: string;
+        revision: number;
+      };
+      expect(body).toEqual(
+        expect.objectContaining({ action: "claim", revision: 3 }),
+      );
       state = detail(["send_to_signature"]);
       return HttpResponse.json(state);
     }),
@@ -58,11 +94,15 @@ test("rend la file visible puis permet de prendre le dossier en charge", async (
   const user = userEvent.setup();
   render(
     <MemoryRouter initialEntries={["/processus/31"]}>
-      <Routes><Route path="/processus/:processId" element={<ProcessDetailPage />} /></Routes>
+      <Routes>
+        <Route path="/processus/:processId" element={<ProcessDetailPage />} />
+      </Routes>
     </MemoryRouter>,
   );
 
   expect(await screen.findByText("File de service")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Prendre en charge" }));
-  expect(await screen.findByRole("button", { name: "Transmettre au DG" })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("button", { name: "Transmettre au DG" }),
+  ).toBeInTheDocument();
 });

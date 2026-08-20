@@ -44,7 +44,8 @@ export const profileFixture: UserProfile = {
   last_name: "Koné",
   phone: "+225 07 07 07 07 07",
   avatar: "",
-  terms_of_reference: "Cahier des charges de départ : formaliser les priorités mensuelles et valider les arbitrages.",
+  terms_of_reference:
+    "Cahier des charges de départ : formaliser les priorités mensuelles et valider les arbitrages.",
 };
 
 const chart: ChartPoint[] = Array.from({ length: 75 }, (_, index) => {

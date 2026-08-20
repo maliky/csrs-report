@@ -37,6 +37,8 @@ function UserAvatar({
   const [imageError, setImageError] = useState(false);
   const initial = name.trim().slice(0, 1).toUpperCase() || "?";
 
+  useEffect(() => setImageError(false), [avatar]);
+
   if (!avatar || imageError) {
     return <span className={className}>{initial}</span>;
   }
@@ -66,6 +68,13 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileToggle = useRef<HTMLButtonElement>(null);
   const mobileClose = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const refreshProfile = () => void reload();
+    window.addEventListener("csrs:profile-updated", refreshProfile);
+    return () =>
+      window.removeEventListener("csrs:profile-updated", refreshProfile);
+  }, [reload]);
   const location = useLocation();
 
   useEffect(() => {
@@ -151,7 +160,7 @@ export function AppShell() {
         <button
           className={styles.backdrop}
           type="button"
-          aria-label="Fermer le menu"
+          aria-label="Fermer le menu en touchant l’arrière-plan"
           onClick={() => {
             setMobileOpen(false);
             mobileToggle.current?.focus();

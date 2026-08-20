@@ -8,18 +8,25 @@ test("applique les bons pas/minimum selon l'unité", async () => {
   render(
     <MemoryRouter initialEntries={["/taches/nouvelle"]}>
       <Routes>
-        <Route path="/taches/nouvelle" element={<TaskFormPage mode="create" />} />
+        <Route
+          path="/taches/nouvelle"
+          element={<TaskFormPage mode="create" />}
+        />
       </Routes>
     </MemoryRouter>,
   );
 
   const workload = await screen.findByLabelText(/Charge estimée/);
   expect(workload).toHaveAttribute("min", "0.5");
-  expect(workload).toHaveAttribute("step", "0.5");
+  expect(workload).toHaveAttribute("step", "0.25");
+  const unit = screen.getByRole("group", { name: "Unité" });
+  expect(
+    workload.compareDocumentPosition(unit) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 
   await user.click(screen.getByRole("button", { name: "Heures" }));
   expect(workload).toHaveAttribute("min", "1");
-  expect(workload).toHaveAttribute("step", "1");
+  expect(workload).toHaveAttribute("step", "0.5");
 });
 
 test("arrondit et incrémente le champ charge selon l'unité choisie", async () => {
@@ -27,7 +34,10 @@ test("arrondit et incrémente le champ charge selon l'unité choisie", async () 
   render(
     <MemoryRouter initialEntries={["/taches/nouvelle"]}>
       <Routes>
-        <Route path="/taches/nouvelle" element={<TaskFormPage mode="create" />} />
+        <Route
+          path="/taches/nouvelle"
+          element={<TaskFormPage mode="create" />}
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -37,15 +47,15 @@ test("arrondit et incrémente le champ charge selon l'unité choisie", async () 
   await user.clear(workload);
   await user.type(workload, "1.2");
   await user.tab();
-  expect(workload).toHaveValue(1);
+  expect(workload).toHaveValue(1.25);
 
   await user.click(screen.getByRole("button", { name: "Heures" }));
   await user.clear(workload);
   await user.type(workload, "4.4");
   await user.tab();
-  expect(workload).toHaveValue(4);
+  expect(workload).toHaveValue(4.5);
 
   await user.click(workload);
   await user.keyboard("{ArrowDown}");
-  expect(workload).toHaveValue(3);
+  expect(workload).toHaveValue(4);
 });

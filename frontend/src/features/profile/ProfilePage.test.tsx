@@ -50,7 +50,7 @@ test("charge et met à jour le cahier des charges", async () => {
   const firstNameField = await screen.findByLabelText("Prénom");
   const lastNameField = screen.getByLabelText("Nom");
   const phoneField = screen.getByLabelText("Téléphone");
-  const avatarField = screen.getByLabelText("Avatar");
+  const avatarField = screen.getByLabelText("URL de l’image d’avatar");
   const torField = screen.getByLabelText("Cahier des charges");
 
   await waitFor(() => {
@@ -72,5 +72,7 @@ test("charge et met à jour le cahier des charges", async () => {
     "Le profil a été mis à jour.",
   );
   expect(posted).toEqual(updatedValues);
-  await waitFor(() => expect(torField).toHaveValue(updatedValues.terms_of_reference));
+  await waitFor(() =>
+    expect(torField).toHaveValue(updatedValues.terms_of_reference),
+  );
 });

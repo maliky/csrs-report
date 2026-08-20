@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, preprod]
+  pull_request:
+    branches: [dev, preprod]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m pip install --requirement requirements-dev.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: pytest -m "not selenium"
+      - run: python -m ruff format --check .
+      - run: python -m ruff check .
+      - run: python -m mypy accounts work config
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm run format:check --prefix frontend
+      - run: npm test --prefix frontend
+      - run: npm run build --prefix frontend
+
+  playwright:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npx --prefix frontend playwright install --with-deps chromium
+      - run: npm run test:e2e --prefix frontend
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash -n scripts/*.sh infrastructure/deploy/*
+      - run: cp .env.example .env
+      - run: POSTGRES_PASSWORD=ci docker compose -f compose.yml config --quiet
+      - run: docker build --build-arg "CSRS_GIT_SHA=$GITHUB_SHA" --tag "csrs-report-ci:$GITHUB_SHA" .
+
+  promotion-policy:
+    name: Promotion policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch promotion
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [[ "$BASE" == preprod && "$HEAD" != dev ]]; then
+            echo "preprod accepte uniquement une promotion depuis dev." >&2
+            exit 1
+          fi
+
+  deploy-preprod:
+    name: Deploy preproduction
+    if: github.event_name == 'push' && github.ref == 'refs/heads/preprod'
+    needs: [python, frontend, playwright, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency: csrs-report-preprod
+    environment:
+      name: preprod
+      url: https://preprod.report.ent.koba.sarl/app/
+    steps:
+      - name: Configure restricted SSH access
+        env:
+          DEPLOY_KEY: ${{ secrets.CSRS_REPORT_PREPROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CSRS_REPORT_PREPROD_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" >~/.ssh/csrs_report_preprod
+          chmod 0600 ~/.ssh/csrs_report_preprod
+          printf '%s\n' "$KNOWN_HOSTS" >~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/known_hosts
+      - name: Deploy tested revision
+        env:
+          DEPLOY_HOST: ${{ vars.CSRS_REPORT_PREPROD_HOST }}
+          DEPLOY_PORT: ${{ vars.CSRS_REPORT_PREPROD_PORT }}
+          DEPLOY_USER: ${{ vars.CSRS_REPORT_PREPROD_USER }}
+        run: ssh -i ~/.ssh/csrs_report_preprod -p "${DEPLOY_PORT:-22}" -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA"

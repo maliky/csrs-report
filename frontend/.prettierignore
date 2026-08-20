@@ -2,3 +2,6 @@ node_modules
 public/mockServiceWorker.js
 src/lib/api/schema.ts
 openapi.yml
+test-results
+playwright-report
+blob-report

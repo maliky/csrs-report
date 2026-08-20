@@ -1,4 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "../lib/router";
 import { AppShell } from "./AppShell";
@@ -156,4 +162,39 @@ test("bloque la navigation tant que le mot de passe temporaire subsiste", async 
   expect(
     screen.queryByRole("link", { name: "Mon équipe" }),
   ).not.toBeInTheDocument();
+});
+
+test("rafraîchit l’avatar après la mise à jour du profil", async () => {
+  let avatar = "";
+  server.use(
+    http.get("/api/v1/session/", () =>
+      HttpResponse.json({
+        ...sessionFixture,
+        user: { ...sessionFixture.user, avatar },
+      }),
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route path="/" element={<AppShell />}>
+          <Route index element={<h1>Profil actualisé</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await screen.findByText("Profil actualisé");
+  const profileLink = screen.getByRole("link", { name: /Aïssata Koné/ });
+  expect(profileLink.querySelector("img")).toBeNull();
+
+  avatar = "https://cdn.example.test/avatar.png";
+  await act(async () => {
+    window.dispatchEvent(new Event("csrs:profile-updated"));
+  });
+  await waitFor(() =>
+    expect(
+      screen.getByRole("link", { name: /Aïssata Koné/ }).querySelector("img"),
+    ).toHaveAttribute("src", avatar),
+  );
 });

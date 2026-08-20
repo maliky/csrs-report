@@ -129,7 +129,7 @@ class AssignmentCreateForm(forms.Form):
     estimated_work_days = forms.DecimalField(
         label="Charge estimee (jours ouvres)",
         min_value=Decimal("0.1"),
-        decimal_places=1,
+        decimal_places=4,
         required=False,
         widget=WorkloadInput,
     )
@@ -207,7 +207,7 @@ class AssignmentEditForm(forms.Form):
     estimated_work_days = forms.DecimalField(
         label="Charge estimee (jours ouvres)",
         min_value=Decimal("0.1"),
-        decimal_places=1,
+        decimal_places=4,
         required=False,
         widget=WorkloadInput,
     )

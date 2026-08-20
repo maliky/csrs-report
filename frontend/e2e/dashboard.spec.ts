@@ -20,7 +20,10 @@ test("la navigation latérale reste utilisable", async ({ page }, testInfo) => {
     await expect(
       page.getByRole("link", { name: "Propositions" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Fermer le menu" }).click();
+    await page
+      .getByRole("complementary", { name: "Navigation principale" })
+      .getByRole("button", { name: "Fermer le menu" })
+      .click();
   } else {
     await page.getByRole("button", { name: "Réduire le menu" }).click();
     await expect(
@@ -65,7 +68,7 @@ test("filtre et valide une proposition sans débordement", async ({ page }) => {
     page.getByText("Formaliser le tableau de priorités"),
   ).toBeVisible();
   const card = page
-    .getByRole("link", { name: "Ouvrir Formaliser le tableau de priorités" })
+    .getByRole("heading", { name: "Formaliser le tableau de priorités" })
     .locator("xpath=ancestor::section[1]");
   const validate = card.getByRole("button", { name: "Valider" });
   const [cardBox, buttonBox] = await Promise.all([
@@ -79,10 +82,13 @@ test("filtre et valide une proposition sans débordement", async ({ page }) => {
     cardBox!.x + cardBox!.width,
   );
   await validate.click();
-  await expect(card.getByText("Validée")).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Aucun résultat" }),
+  ).toBeVisible();
 });
 
-test("filtre l'équipe et charge les tâches dans la branche", async ({
+test("filtre l'équipe et ouvre le profil depuis l'identité", async ({
   page,
 }) => {
   await page.goto("equipe?month=2026-07");
@@ -108,22 +114,25 @@ test("filtre l'équipe et charge les tâches dans la branche", async ({
   const direction = page.locator(
     "details[data-team-employee-id='11'] > summary",
   );
-  await direction.click();
+  await expect(direction.locator("xpath=..")).toHaveAttribute("open", "");
   const finances = page.locator(
     "details[data-team-employee-id='12'] > summary",
   );
   await finances.focus();
   await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("link", {
-      name: "Finaliser les priorités de la quinzaine",
-    }),
-  ).toBeVisible();
   await expect(finances.locator("xpath=..")).toHaveAttribute("open", "");
-
+  await expect(
+    page.getByRole("link", { name: "Finaliser les priorités de la quinzaine" }),
+  ).toHaveCount(0);
   const summaryBox = await direction.boundingBox();
   expect(summaryBox).not.toBeNull();
   expect(summaryBox!.height).toBeGreaterThanOrEqual(44);
+  await finances.getByRole("link", { name: /Awa Finances/ }).click();
+  await expect(page).toHaveURL(/equipe\/12\?month=2026-07.*tasks=with/);
+  await expect(
+    page.getByRole("link", { name: "Finaliser les priorités de la quinzaine" }),
+  ).toBeVisible();
+
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );

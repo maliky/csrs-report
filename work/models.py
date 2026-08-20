@@ -489,8 +489,8 @@ class TaskAssignment(models.Model):
     due_date = models.DateField("echeance")
     estimated_work_days = models.DecimalField(
         "charge estimee en jours",
-        max_digits=7,
-        decimal_places=1,
+        max_digits=10,
+        decimal_places=4,
         validators=[MinValueValidator(Decimal("0.1"))],
     )
     status = models.CharField(
@@ -575,7 +575,7 @@ class TaskProposal(models.Model):
     start_date = models.DateField("debut")
     due_date = models.DateField("echeance")
     estimated_work_days = models.DecimalField(
-        "charge estimee en jours", max_digits=7, decimal_places=1
+        "charge estimee en jours", max_digits=10, decimal_places=4
     )
     status = models.CharField(
         max_length=16, choices=ProposalStatus.choices, default=ProposalStatus.SUBMITTED

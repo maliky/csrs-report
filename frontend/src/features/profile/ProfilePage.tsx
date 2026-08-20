@@ -2,7 +2,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "../../lib/api/client";
 import type { UserProfile } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
-import { Button, ButtonLink, Card, ErrorState, Skeleton } from "../../components/ui";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  ErrorState,
+  Skeleton,
+} from "../../components/ui";
 import { useNavigate } from "../../lib/router";
 
 export function ProfilePage() {
@@ -50,6 +56,7 @@ export function ProfilePage() {
       setPhone(saved.phone);
       setAvatar(saved.avatar);
       setTermsOfReference(saved.terms_of_reference);
+      window.dispatchEvent(new Event("csrs:profile-updated"));
       setMessage("Le profil a été mis à jour.");
     } catch (caught) {
       setMutationError(
@@ -63,7 +70,10 @@ export function ProfilePage() {
   if (loading) return <Skeleton label="Chargement du profil" />;
   if (error || !data)
     return (
-      <ErrorState error={error ?? new Error("Profil indisponible")} retry={reload} />
+      <ErrorState
+        error={error ?? new Error("Profil indisponible")}
+        retry={reload}
+      />
     );
 
   return (
@@ -72,7 +82,10 @@ export function ProfilePage() {
         <div>
           <p className="eyebrow">Mon compte</p>
           <h1>Mon profil</h1>
-          <p>Consultez vos informations et mettez à jour votre cahier des charges.</p>
+          <p>
+            Consultez vos informations et mettez à jour votre cahier des
+            charges.
+          </p>
         </div>
         <ButtonLink to="/" variant="quiet">
           Retour au tableau de bord
@@ -113,13 +126,19 @@ export function ProfilePage() {
             />
           </div>
           <div className="form-field wide">
-            <label htmlFor="avatar">Avatar</label>
+            <label htmlFor="avatar">URL de l’image d’avatar</label>
             <input
               id="avatar"
               name="avatar"
+              type="url"
+              placeholder="https://exemple.org/avatar.jpg"
               value={avatar}
               onChange={(event) => setAvatar(event.target.value)}
             />
+            <small className="muted">
+              Cette image remplacera votre initiale dans le menu et dans
+              l’équipe.
+            </small>
           </div>
           <div className="form-field wide">
             <label htmlFor="terms-of-reference">Cahier des charges</label>
@@ -134,10 +153,16 @@ export function ProfilePage() {
             <Button disabled={saving}>
               {saving ? "Enregistrement…" : "Enregistrer"}
             </Button>
-            <Button variant="quiet" type="button" onClick={() => void navigate(-1)}>
+            <Button
+              variant="quiet"
+              type="button"
+              onClick={() => void navigate(-1)}
+            >
               Annuler
             </Button>
-            {mutationError && <div className="error-banner">{mutationError}</div>}
+            {mutationError && (
+              <div className="error-banner">{mutationError}</div>
+            )}
             {message && (
               <p className="success-banner" role="status">
                 {message}

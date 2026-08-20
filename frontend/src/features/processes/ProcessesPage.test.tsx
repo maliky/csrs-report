@@ -38,10 +38,18 @@ test("sépare les dossiers à traiter des dossiers du demandeur", async () => {
     }),
   );
   const user = userEvent.setup();
-  render(<MemoryRouter><ProcessesPage /></MemoryRouter>);
+  render(
+    <MemoryRouter>
+      <ProcessesPage />
+    </MemoryRouter>,
+  );
 
-  expect(await screen.findByRole("heading", { name: "Bouaké" })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "Bouaké" }),
+  ).toBeInTheDocument();
   expect(screen.getByText("2")).toBeInTheDocument();
   await user.click(screen.getByRole("tab", { name: "Mes dossiers" }));
-  expect(await screen.findByText("Créez un ordre de mission pour commencer.")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Créez un ordre de mission pour commencer."),
+  ).toBeInTheDocument();
 });

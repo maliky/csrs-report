@@ -33,8 +33,8 @@ from work.services import (
 
 
 def decimal_text(value: Decimal) -> str:
-    """Render the app-wide tenth-of-a-day precision without trailing zeroes."""
-    return format(value.quantize(Decimal("0.1")).normalize(), "f")
+    """Render workload precision without trailing zeroes."""
+    return format(value.quantize(Decimal("0.0001")).normalize(), "f")
 
 
 def person_payload(user: User) -> dict[str, object]:
