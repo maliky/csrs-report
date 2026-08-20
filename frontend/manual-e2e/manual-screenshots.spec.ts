@@ -134,9 +134,7 @@ test("génère les captures du manuel depuis la démonstration locale", async ({
   await progressHeading.scrollIntoViewIfNeeded();
   await capture(atall.page, "05-progression-observation-atall.png", false);
   await atall.page.goto(site("/app/profil"));
-  await expect(atall.page.locator("main")).toContainText(
-    "Cahier des charges",
-  );
+  await expect(atall.page.locator("main")).toContainText("Cahier des charges");
   await capture(atall.page, "21-profil-atall.png");
   await atall.page.goto(site("/app/propositions/nouvelle"));
   await expect(
@@ -157,9 +155,7 @@ test("génère les captures du manuel depuis la démonstration locale", async ({
   await expect(collaboratorProfile).toBeVisible();
   await collaboratorProfile.click();
   await expect(daf.page).toHaveURL(/\/app\/equipe\/\d+/);
-  await expect(daf.page.locator("main")).toContainText(
-    "Cahier des charges",
-  );
+  await expect(daf.page.locator("main")).toContainText("Cahier des charges");
   await capture(daf.page, "22-profil-collaborateur-daf.png");
   await daf.page.goto(site("/app/taches/nouvelle"));
   await expect(
