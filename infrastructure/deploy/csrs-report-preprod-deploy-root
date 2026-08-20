@@ -48,14 +48,21 @@ if ! runuser -u jil -- git --git-dir="$BARE_REPOSITORY" \
   exit 6
 fi
 
-"${DEPLOY_ROOT}/scripts/backup_db.sh"
+runuser -u jil -- "${DEPLOY_ROOT}/scripts/backup_db.sh"
 runuser -u jil -- git --git-dir="$BARE_REPOSITORY" \
   update-ref refs/heads/preprod "$REVISION" "$CURRENT_PREPROD"
 runuser -u jil -- git -C "$DEPLOY_ROOT" fetch origin preprod
 runuser -u jil -- git -C "$DEPLOY_ROOT" checkout preprod
-runuser -u jil -- git -C "$DEPLOY_ROOT" merge --ff-only origin/preprod
+runuser -u jil -- git -C "$DEPLOY_ROOT" merge --ff-only refs/remotes/origin/preprod
+readonly DEPLOYED_REVISION="$(
+  runuser -u jil -- git -C "$DEPLOY_ROOT" rev-parse HEAD
+)"
+if [[ $DEPLOYED_REVISION != "$REVISION" ]]; then
+  echo "Le checkout préproduction n'est pas sur la révision demandée." >&2
+  exit 7
+fi
 
-"${DEPLOY_ROOT}/scripts/deploy_preprod.sh"
+runuser -u jil -- "${DEPLOY_ROOT}/scripts/deploy_preprod.sh"
 
 readonly IMAGE_REVISION="$(
   docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
@@ -63,7 +70,7 @@ readonly IMAGE_REVISION="$(
 )"
 if [[ $IMAGE_REVISION != "$REVISION" ]]; then
   echo "La révision de l'image déployée ne correspond pas au commit demandé." >&2
-  exit 7
+  exit 8
 fi
 
 curl --fail --silent --show-error \
