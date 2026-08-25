@@ -31,7 +31,12 @@ export function TaskDetailPage() {
     if (data) setDraftPercentage(data.percentage);
   }, [data]);
 
-  async function mutate(path: string, body: object, successMessage = "") {
+  async function mutate(
+    path: string,
+    body: object,
+    successMessage = "",
+    reloadCurrent = false,
+  ) {
     setSaving(true);
     setMutationError(null);
     setMutationSuccess("");
@@ -40,7 +45,8 @@ export function TaskDetailPage() {
         method: "POST",
         body: JSON.stringify(body),
       });
-      setData(updated);
+      if (reloadCurrent) await reload();
+      else setData(updated);
       setMutationSuccess(successMessage);
       return true;
     } catch (caught) {
@@ -239,6 +245,7 @@ export function TaskDetailPage() {
                       reason: "",
                     },
                     "Les répétitions futures ont été annulées.",
+                    true,
                   )
                 }
               >

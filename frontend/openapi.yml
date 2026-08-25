@@ -1762,6 +1762,9 @@ components:
         end_date:
           type: string
           format: date
+        revision:
+          type: integer
+          minimum: 1
       required:
       - end_date
       - frequency

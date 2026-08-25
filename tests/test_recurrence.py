@@ -13,6 +13,7 @@ from work.models import (
     TaskAssignment,
     TaskProposal,
     TaskRecurrence,
+    WorkCalendar,
     WorkCalendarDay,
 )
 from work.services import (
@@ -80,20 +81,24 @@ def test_holiday_shifts_effective_start_without_moving_weekly_anchor(
 ) -> None:
     series = attach_weekly_series(assignment)
     next_anchor = assignment.start_date + timedelta(days=7)
-    WorkCalendarDay.objects.bulk_create(
-        [
-            WorkCalendarDay(
-                calendar=assignment.calendar,
-                day=next_anchor,
-                name="Jour non ouvre",
-                is_working_day=False,
-            )
-        ]
+    WorkCalendar.objects.filter(pk=assignment.calendar_id).update(is_default=False)
+    current_calendar = WorkCalendar.objects.create(
+        name="Calendrier courant",
+        version="test-recurrence",
+        is_default=True,
+        active=True,
+    )
+    WorkCalendarDay.objects.create(
+        calendar=current_calendar,
+        day=next_anchor,
+        name="Jour non ouvre",
+        is_working_day=False,
     )
     with patch("work.services.timezone.localdate", return_value=assignment.start_date):
         close_early_with_recurrence(people["manager"], assignment, "Achevee")
 
     following = series.assignments.get(recurrence_occurrence=2)
+    assert following.calendar == current_calendar
     assert following.recurrence_anchor_date == next_anchor
     assert following.start_date > next_anchor
 

@@ -843,6 +843,7 @@ export interface components {
             frequency: components["schemas"]["FrequencyEnum"];
             /** Format: date */
             end_date: string;
+            revision?: number;
         };
         RecurrenceCancel: {
             revision: number;

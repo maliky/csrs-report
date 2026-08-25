@@ -18,7 +18,12 @@ from django.db import transaction
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
-from work.models import RecurrenceFrequency, RecurrenceStatus, TaskRecurrence
+from work.models import (
+    RecurrenceFrequency,
+    RecurrenceStatus,
+    TaskRecurrence,
+    default_work_calendar_id,
+)
 from django.utils.text import slugify
 
 from access.services import (
@@ -1842,6 +1847,7 @@ def update_assignment_details_with_recurrence(
     expected_revision: int | None,
     recurrence_frequency: str | None,
     recurrence_end_date: date | None,
+    recurrence_revision: int | None,
 ) -> TaskAssignment:
     """Update the current occurrence and the template used by future ones."""
     source_id = assignment.pk
@@ -1873,8 +1879,7 @@ def update_assignment_details_with_recurrence(
         frequency=recurrence_frequency,
         end_date=recurrence_end_date,
     )
-    series = assignment.recurrence
-    if series is None:
+    if assignment.recurrence_id is None:
         series = TaskRecurrence.objects.create(
             employee=assignment.employee,
             created_by=user,
@@ -1892,6 +1897,10 @@ def update_assignment_details_with_recurrence(
         assignment.recurrence_anchor_date = assignment.start_date
         assignment.save()
         return assignment
+    series = TaskRecurrence.objects.select_for_update().get(pk=assignment.recurrence_id)
+    if recurrence_revision is None:
+        raise ValidationError("La revision de la serie est obligatoire.")
+    ensure_revision(series.revision, recurrence_revision)
     series.title = assignment.task.title
     series.description = assignment.task.description
     series.action = assignment.task.action
@@ -2021,17 +2030,16 @@ def advance_task_recurrence(assignment: TaskAssignment) -> TaskAssignment | None
         series.revision += 1
         series.save()
         return None
-    effective_start = next_working_day(series.calendar, next_anchor)
+    calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
+    effective_start = next_working_day(calendar, next_anchor)
     if timezone.localdate() >= effective_start:
         _stop_recurrence(
             series,
             "La precedente occurrence a ete cloturee trop tard pour planifier la suivante.",
         )
         return None
-    next_effective_start = next_working_day(
-        series.calendar, next_anchor + timedelta(days=7)
-    )
-    due_date = series.calendar.due_date_for(effective_start, series.estimated_work_days)
+    next_effective_start = next_working_day(calendar, next_anchor + timedelta(days=7))
+    due_date = calendar.due_date_for(effective_start, series.estimated_work_days)
     if due_date >= next_effective_start:
         _stop_recurrence(series, "La charge estimee chevauche la prochaine occurrence.")
         return None
@@ -2053,7 +2061,7 @@ def advance_task_recurrence(assignment: TaskAssignment) -> TaskAssignment | None
         employee=series.employee,
         manager=manager,
         organization_unit_id=unit_id,
-        calendar=series.calendar,
+        calendar=calendar,
         start_date=effective_start,
         due_date=due_date,
         estimated_work_days=series.estimated_work_days,
@@ -2176,6 +2184,11 @@ def update_assignment_with_optional_recurrence(
         ),
         recurrence_end_date=(
             cast(date, recurrence["end_date"]) if recurrence is not None else None
+        ),
+        recurrence_revision=(
+            cast(int, recurrence.get("revision"))
+            if recurrence is not None and recurrence.get("revision") is not None
+            else None
         ),
     )
 

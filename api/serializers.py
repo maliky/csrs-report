@@ -21,6 +21,7 @@ class ScheduleSerializer(serializers.Serializer):
 class RecurrenceSerializer(serializers.Serializer):
     frequency = serializers.ChoiceField(choices=("weekly",))
     end_date = serializers.DateField()
+    revision = serializers.IntegerField(min_value=1, required=False)
 
 
 class TaskCreateSerializer(ScheduleSerializer):

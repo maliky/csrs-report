@@ -159,7 +159,11 @@ function TaskForm({
       due_date: schedule.due_date,
       estimated_work_days: estimatedWorkDays,
       recurrence: recurrenceEnabled
-        ? { frequency: "weekly", end_date: recurrenceEndDate }
+        ? {
+            frequency: "weekly",
+            end_date: recurrenceEndDate,
+            revision: task?.recurrence?.revision,
+          }
         : null,
     };
     try {
