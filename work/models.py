@@ -744,7 +744,9 @@ class TaskProposal(models.Model):
         if self.recurrence_frequency:
             if self.recurrence_frequency != RecurrenceFrequency.WEEKLY:
                 raise ValidationError(
-                    {"recurrence_frequency": "Seule la repetition hebdomadaire est prise en charge."}
+                    {
+                        "recurrence_frequency": "Seule la repetition hebdomadaire est prise en charge."
+                    }
                 )
             if not self.recurrence_end_date:
                 raise ValidationError(
@@ -752,7 +754,9 @@ class TaskProposal(models.Model):
                 )
             if self.recurrence_end_date < self.start_date + timedelta(days=7):
                 raise ValidationError(
-                    {"recurrence_end_date": "La date de fin doit permettre au moins une repetition."}
+                    {
+                        "recurrence_end_date": "La date de fin doit permettre au moins une repetition."
+                    }
                 )
             next_start = self.start_date + timedelta(days=7)
             while not self.calendar.is_working_day(next_start):

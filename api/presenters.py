@@ -352,8 +352,7 @@ def proposal_payload(proposal: TaskProposal, viewer: User) -> dict[str, object]:
 
     can_review = proposal.status == "submitted" and can_review_proposal(viewer, proposal)
     can_edit = (
-        proposal.employee_id == viewer.pk
-        and proposal.status in {"submitted", "rejected"}
+        proposal.employee_id == viewer.pk and proposal.status in {"submitted", "rejected"}
     ) or can_review
     status_label = {
         "submitted": "Soumise",

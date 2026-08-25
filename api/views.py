@@ -92,7 +92,6 @@ from work.models import (
 )
 from work.services import (
     ReportingPeriod,
-    accept_proposal,
     add_observation,
     assignable_employee_ids,
     can_self_assign,
@@ -100,8 +99,6 @@ from work.services import (
     can_review_proposal,
     can_view_assignment,
     can_view_employee,
-    close_early,
-    create_assignment_for_user,
     due_date_for,
     period_assignments,
     record_progress,
@@ -111,9 +108,6 @@ from work.services import (
     reporting_period,
     reviewable_proposals,
     team_tree_overview,
-    update_assignment_details,
-    update_proposal,
-    validate_completion,
     delete_task_assignments,
     update_primary_collaborators,
     visible_team_proposals,
@@ -869,7 +863,9 @@ class TaskRecurrenceCancelView(APIView):
             expected_revision=data["revision"],
             reason=data["reason"],
         )
-        return Response(assignment_detail_payload(assignment_for_viewer(user, assignment.pk), user))
+        return Response(
+            assignment_detail_payload(assignment_for_viewer(user, assignment.pk), user)
+        )
 
 
 class ProposalListCreateView(APIView):
