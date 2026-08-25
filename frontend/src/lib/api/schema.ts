@@ -132,6 +132,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/profile/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read and edit the current user's own profile details. */
+        get: operations["my_profile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Read and edit the current user's own profile details. */
+        patch: operations["my_profile_update"];
+        trace?: never;
+    };
     "/api/v1/planning/options/": {
         parameters: {
             query?: never;
@@ -288,6 +306,22 @@ export interface paths {
         get: operations["task_management_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/task-recurrences/{id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["task_recurrences_cancel_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -680,6 +714,11 @@ export interface components {
             major_events: string;
             revision?: number | null;
         };
+        /**
+         * @description * `weekly` - weekly
+         * @enum {string}
+         */
+        FrequencyEnum: "weekly";
         Generate: {
             /** Format: date */
             period_start: string;
@@ -702,6 +741,13 @@ export interface components {
             note: string;
             revision?: number;
         };
+        PatchedMeProfile: {
+            first_name?: string;
+            last_name?: string;
+            phone?: string;
+            avatar?: string;
+            terms_of_reference?: string;
+        };
         /** @description Shared, server-validated assignment schedule. */
         PatchedProposalUpdate: {
             /** Format: date */
@@ -714,6 +760,7 @@ export interface components {
             description?: string;
             action_id?: number | null;
             calendar_id?: number;
+            recurrence?: components["schemas"]["Recurrence"] | null;
             revision?: number;
         };
         /** @description Shared, server-validated assignment schedule. */
@@ -728,6 +775,7 @@ export interface components {
             title?: string;
             description?: string;
             action_id?: number | null;
+            recurrence?: components["schemas"]["Recurrence"] | null;
         };
         PatchedUserUpdate: {
             /** Format: email */
@@ -756,6 +804,7 @@ export interface components {
             due_date?: string;
             /** Format: decimal */
             estimated_work_days?: string;
+            recurrence?: components["schemas"]["Recurrence"] | null;
         };
         Progress: {
             revision: number;
@@ -779,6 +828,7 @@ export interface components {
             description: string;
             action_id?: number | null;
             calendar_id?: number;
+            recurrence?: components["schemas"]["Recurrence"] | null;
         };
         ProposalDecision: {
             revision: number;
@@ -788,6 +838,17 @@ export interface components {
         };
         ProposalResubmit: {
             revision: number;
+        };
+        Recurrence: {
+            frequency: components["schemas"]["FrequencyEnum"];
+            /** Format: date */
+            end_date: string;
+            revision?: number;
+        };
+        RecurrenceCancel: {
+            revision: number;
+            /** @default  */
+            reason: string;
         };
         Revision: {
             revision: number;
@@ -819,6 +880,7 @@ export interface components {
             employee_id: number;
             action_id?: number | null;
             calendar_id?: number;
+            recurrence?: components["schemas"]["Recurrence"] | null;
         };
         TaskSelection: {
             id: number;
@@ -1141,6 +1203,54 @@ export interface operations {
             };
         };
     };
+    my_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    my_profile_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedMeProfile"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedMeProfile"];
+                "multipart/form-data": components["schemas"]["PatchedMeProfile"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     planning_options_retrieve: {
         parameters: {
             query?: never;
@@ -1424,6 +1534,35 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    task_recurrences_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurrenceCancel"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecurrenceCancel"];
+                "multipart/form-data": components["schemas"]["RecurrenceCancel"];
+            };
+        };
         responses: {
             200: {
                 headers: {

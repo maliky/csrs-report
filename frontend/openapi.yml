@@ -275,6 +275,48 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/me/profile/:
+    get:
+      operationId: my_profile
+      description: Read and edit the current user's own profile details.
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    patch:
+      operationId: my_profile_update
+      description: Read and edit the current user's own profile details.
+      tags:
+      - me
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMeProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMeProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMeProfile'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/planning/options/:
     get:
       operationId: planning_options_retrieve
@@ -552,6 +594,39 @@ paths:
           type: string
       tags:
       - task-management
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/task-recurrences/{id}/cancel/:
+    post:
+      operationId: task_recurrences_cancel_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - task-recurrences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurrenceCancel'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecurrenceCancel'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecurrenceCancel'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -1389,6 +1464,11 @@ components:
       required:
       - period_end
       - period_start
+    FrequencyEnum:
+      enum:
+      - weekly
+      type: string
+      description: '* `weekly` - weekly'
     Generate:
       type: object
       properties:
@@ -1435,6 +1515,23 @@ components:
         revision:
           type: integer
           minimum: 1
+    PatchedMeProfile:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          maxLength: 32
+        avatar:
+          type: string
+          maxLength: 512
+        terms_of_reference:
+          type: string
     PatchedProposalUpdate:
       type: object
       description: Shared, server-validated assignment schedule.
@@ -1448,7 +1545,7 @@ components:
         estimated_work_days:
           type: string
           format: decimal
-          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
         title:
           type: string
           maxLength: 180
@@ -1461,6 +1558,10 @@ components:
         calendar_id:
           type: integer
           minimum: 1
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/Recurrence'
+          nullable: true
         revision:
           type: integer
           minimum: 1
@@ -1477,7 +1578,7 @@ components:
         estimated_work_days:
           type: string
           format: decimal
-          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
         revision:
           type: integer
           minimum: 1
@@ -1489,6 +1590,10 @@ components:
         action_id:
           type: integer
           minimum: 1
+          nullable: true
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/Recurrence'
           nullable: true
     PatchedUserUpdate:
       type: object
@@ -1559,7 +1664,11 @@ components:
         estimated_work_days:
           type: string
           format: decimal
-          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/Recurrence'
+          nullable: true
       required:
       - calendar_id
       - source
@@ -1600,7 +1709,7 @@ components:
         estimated_work_days:
           type: string
           format: decimal
-          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
         title:
           type: string
           maxLength: 180
@@ -1613,6 +1722,10 @@ components:
         calendar_id:
           type: integer
           minimum: 1
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/Recurrence'
+          nullable: true
       required:
       - description
       - due_date
@@ -1639,6 +1752,31 @@ components:
         revision:
           type: integer
           minimum: 1
+      required:
+      - revision
+    Recurrence:
+      type: object
+      properties:
+        frequency:
+          $ref: '#/components/schemas/FrequencyEnum'
+        end_date:
+          type: string
+          format: date
+        revision:
+          type: integer
+          minimum: 1
+      required:
+      - end_date
+      - frequency
+    RecurrenceCancel:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          default: ''
       required:
       - revision
     Revision:
@@ -1694,7 +1832,7 @@ components:
         estimated_work_days:
           type: string
           format: decimal
-          pattern: ^-?\d{0,6}(?:\.\d{0,1})?$
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
         title:
           type: string
           maxLength: 180
@@ -1710,6 +1848,10 @@ components:
         calendar_id:
           type: integer
           minimum: 1
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/Recurrence'
+          nullable: true
       required:
       - description
       - due_date

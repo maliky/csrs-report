@@ -121,6 +121,11 @@ urlpatterns = [
         views.TaskTransitionView.as_view(),
         name="task-transition",
     ),
+    path(
+        "task-recurrences/<int:pk>/cancel/",
+        views.TaskRecurrenceCancelView.as_view(),
+        name="task-recurrence-cancel",
+    ),
     path("proposals/", views.ProposalListCreateView.as_view(), name="proposal-list"),
     path(
         "proposals/<int:pk>/",

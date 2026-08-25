@@ -203,6 +203,34 @@ def period_payload(period: ReportingPeriod) -> dict[str, object]:
     }
 
 
+def recurrence_payload(
+    assignment: TaskAssignment, viewer: User | None = None
+) -> dict[str, object] | None:
+    series = assignment.recurrence
+    if series is None:
+        return None
+    can_cancel = False
+    if viewer is not None and series.status == "active":
+        from work.services import can_manage_assignment
+
+        can_cancel = (
+            series.created_by_id == viewer.pk and series.employee_id == viewer.pk
+        ) or can_manage_assignment(viewer, assignment)
+    return {
+        "id": series.pk,
+        "frequency": series.frequency,
+        "frequency_label": series.get_frequency_display(),
+        "status": series.status,
+        "end_date": series.end_date.isoformat(),
+        "occurrence_number": assignment.recurrence_occurrence,
+        "planned_start_date": (
+            assignment.recurrence_anchor_date or assignment.start_date
+        ).isoformat(),
+        "revision": series.revision,
+        "can_cancel": can_cancel,
+    }
+
+
 def assignment_summary_payload(
     assignment: TaskAssignment, period: ReportingPeriod
 ) -> dict[str, object]:
@@ -235,6 +263,7 @@ def assignment_summary_payload(
             if assignment.task.action_id
             else None
         ),
+        "recurrence": recurrence_payload(assignment),
     }
 
 
@@ -293,6 +322,7 @@ def assignment_detail_payload(
             if assignment.task.action_id
             else None
         ),
+        "recurrence": recurrence_payload(assignment, viewer),
         "chart": [row.as_json() for row in cached_daily_progress_rows(assignment)],
         "activities": [
             {
@@ -320,10 +350,10 @@ def assignment_detail_payload(
 def proposal_payload(proposal: TaskProposal, viewer: User) -> dict[str, object]:
     from work.services import can_review_proposal
 
-    can_edit = proposal.employee_id == viewer.pk and proposal.status in {
-        "submitted",
-        "rejected",
-    }
+    can_review = proposal.status == "submitted" and can_review_proposal(viewer, proposal)
+    can_edit = (
+        proposal.employee_id == viewer.pk and proposal.status in {"submitted", "rejected"}
+    ) or can_review
     status_label = {
         "submitted": "Soumise",
         "accepted": "Validée",
@@ -349,13 +379,21 @@ def proposal_payload(proposal: TaskProposal, viewer: User) -> dict[str, object]:
         "accepted_assignment_id": proposal.accepted_assignment_id,
         "decision_note": proposal.decision_note,
         "created_at": proposal.created_at.isoformat(),
-        "can_review": proposal.status == "submitted"
-        and can_review_proposal(viewer, proposal),
+        "recurrence": (
+            {
+                "frequency": proposal.recurrence_frequency,
+                "frequency_label": proposal.get_recurrence_frequency_display(),
+                "end_date": proposal.recurrence_end_date.isoformat(),
+                "accepted_recurrence_id": proposal.accepted_recurrence_id,
+            }
+            if proposal.recurrence_frequency and proposal.recurrence_end_date
+            else None
+        ),
+        "can_review": can_review,
         "capabilities": {
             "edit": can_edit,
             "resubmit": proposal.employee_id == viewer.pk
             and proposal.status == "rejected",
-            "review": proposal.status == "submitted"
-            and can_review_proposal(viewer, proposal),
+            "review": can_review,
         },
     }

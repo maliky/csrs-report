@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from accounts.models import AgendaDirection as UserAgendaDirection, User
 from access.models import GrantScope, RoleGrant, ScopedRole
+from agenda.api import version_payload
 from agenda.models import AgendaDirection, AgendaDraft, StaffAvailability, VisitorVisit
 from agenda.services import (
     agenda_pdf_bytes,
@@ -290,6 +291,8 @@ def test_generated_agenda_version_is_private_frozen_and_reprintable(
         agenda_direction=AgendaDirection.ADMINISTRATION,
     )
     assert administration.version == 1
+    assert version_payload(administration)["agenda_direction_label"] == "Agenda DAF"
+    assert b"Agenda DAF" in agenda_pdf_bytes(administration)
 
 
 @pytest.mark.django_db
@@ -322,6 +325,7 @@ def test_user_direction_is_exclusive_and_unclassified_work_appears_in_both(
         period_end=sunday,
         agenda_direction=AgendaDirection.ADMINISTRATION,
     )
+    assert administration["agenda_direction_label"] == "Agenda DAF"
     assert len(administration["units"]) == 1
 
 

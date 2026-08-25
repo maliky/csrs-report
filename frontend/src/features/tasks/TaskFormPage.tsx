@@ -78,6 +78,12 @@ function TaskForm({
   const [source, setSource] = useState<"workload" | "due">("workload");
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
+  const [recurrenceEnabled, setRecurrenceEnabled] = useState(
+    Boolean(task?.recurrence),
+  );
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(
+    task?.recurrence?.end_date ?? "",
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -152,6 +158,13 @@ function TaskForm({
       start_date: schedule.start_date,
       due_date: schedule.due_date,
       estimated_work_days: estimatedWorkDays,
+      recurrence: recurrenceEnabled
+        ? {
+            frequency: "weekly",
+            end_date: recurrenceEndDate,
+            revision: task?.recurrence?.revision,
+          }
+        : null,
     };
     try {
       const saved =
@@ -345,6 +358,41 @@ function TaskForm({
               </button>
             </div>
           </div>
+          <div className="form-field">
+            <label id="task-recurrence-label">Répétition</label>
+            <div
+              role="group"
+              aria-labelledby="task-recurrence-label"
+              className="workload-unit-toggle"
+            >
+              <button
+                type="button"
+                aria-pressed={!recurrenceEnabled}
+                disabled={Boolean(task?.recurrence)}
+                onClick={() => setRecurrenceEnabled(false)}
+              >
+                Unique
+              </button>
+              <button
+                type="button"
+                aria-pressed={recurrenceEnabled}
+                onClick={() => setRecurrenceEnabled(true)}
+              >
+                Chaque semaine
+              </button>
+            </div>
+          </div>
+          {recurrenceEnabled && (
+            <div className="form-field">
+              <label htmlFor="recurrence-end">Répéter jusqu’au</label>
+              <FrenchDateInput
+                id="recurrence-end"
+                required
+                value={recurrenceEndDate}
+                onValueChange={setRecurrenceEndDate}
+              />
+            </div>
+          )}
           <div className="cluster wide">
             <Button disabled={saving}>
               {saving ? "Enregistrement…" : "Enregistrer"}

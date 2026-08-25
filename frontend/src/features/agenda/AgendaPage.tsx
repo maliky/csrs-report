@@ -414,9 +414,7 @@ function SecretaryAgenda() {
       });
       await periodData.reload();
       const label =
-        direction === "programs"
-          ? "Direction des programmes"
-          : "Direction administrative";
+        direction === "programs" ? "Direction des programmes" : "Agenda DAF";
       setMessage(
         `La nouvelle version PDF « ${label} » est archivée et prête à imprimer.`,
       );
@@ -539,9 +537,7 @@ function SecretaryAgenda() {
                   }
                 >
                   <option value="programs">Direction des programmes</option>
-                  <option value="administration">
-                    Direction administrative
-                  </option>
+                  <option value="administration">Agenda DAF</option>
                 </select>
               </div>
               <Button
@@ -611,7 +607,7 @@ function SecretaryAgenda() {
         ) : (
           <div className={styles.unitGrid}>
             {snapshot.units.map((unit) => (
-              <Card key={unit.id}>
+              <Card className={styles.unitCard} key={unit.id}>
                 <h3>{unit.name}</h3>
                 {unit.employees.map((employee) => (
                   <div className={styles.employee} key={employee.person.id}>
