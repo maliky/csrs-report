@@ -414,9 +414,7 @@ function SecretaryAgenda() {
       });
       await periodData.reload();
       const label =
-        direction === "programs"
-          ? "Direction des programmes"
-          : "Agenda DAF";
+        direction === "programs" ? "Direction des programmes" : "Agenda DAF";
       setMessage(
         `La nouvelle version PDF « ${label} » est archivée et prête à imprimer.`,
       );
@@ -539,9 +537,7 @@ function SecretaryAgenda() {
                   }
                 >
                   <option value="programs">Direction des programmes</option>
-                  <option value="administration">
-                    Agenda DAF
-                  </option>
+                  <option value="administration">Agenda DAF</option>
                 </select>
               </div>
               <Button

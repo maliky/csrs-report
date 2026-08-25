@@ -1,4 +1,10 @@
-import { CircleCheckBig, Pencil, Repeat2, RotateCcw, XCircle } from "lucide-react";
+import {
+  CircleCheckBig,
+  Pencil,
+  Repeat2,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { useParams } from "../../lib/router";
 import type { Proposal } from "../../lib/api/types";
@@ -97,8 +103,12 @@ export function ProposalDetailPage() {
         </div>
         {data.recurrence && (
           <div className="detail">
-            <dt><Repeat2 size={16} aria-hidden="true" /> Répétition</dt>
-            <dd>Chaque semaine jusqu’au {formatDate(data.recurrence.end_date)}</dd>
+            <dt>
+              <Repeat2 size={16} aria-hidden="true" /> Répétition
+            </dt>
+            <dd>
+              Chaque semaine jusqu’au {formatDate(data.recurrence.end_date)}
+            </dd>
           </div>
         )}
       </dl>

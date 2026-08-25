@@ -21,7 +21,8 @@ export function TaskCard({
             {showEmployee ? ` · ${task.employee.name}` : ""}
             {task.recurrence ? (
               <span title="Tâche répétée chaque semaine">
-                {" · "}<Repeat2 size={14} aria-label="Répétition hebdomadaire" />
+                {" · "}
+                <Repeat2 size={14} aria-label="Répétition hebdomadaire" />
               </span>
             ) : null}
           </div>

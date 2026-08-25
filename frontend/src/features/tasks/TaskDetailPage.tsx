@@ -125,7 +125,9 @@ export function TaskDetailPage() {
         </div>
         {data.recurrence && (
           <div className="detail">
-            <dt><Repeat2 size={16} aria-hidden="true" /> Répétition</dt>
+            <dt>
+              <Repeat2 size={16} aria-hidden="true" /> Répétition
+            </dt>
             <dd>
               Occurrence {data.recurrence.occurrence_number}, chaque semaine
               jusqu’au {formatDate(data.recurrence.end_date)}
