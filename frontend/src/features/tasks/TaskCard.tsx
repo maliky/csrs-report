@@ -2,6 +2,7 @@ import { Link } from "../../lib/router";
 import type { TaskSummary } from "../../lib/api/types";
 import { dayCount, formatDate } from "../../lib/format";
 import { AlertBadge, Card, StatusBadge } from "../../components/ui";
+import { Repeat2 } from "lucide-react";
 import styles from "./tasks.module.css";
 
 export function TaskCard({
@@ -18,6 +19,11 @@ export function TaskCard({
           <div className={styles.code}>
             {task.code}
             {showEmployee ? ` · ${task.employee.name}` : ""}
+            {task.recurrence ? (
+              <span title="Tâche répétée chaque semaine">
+                {" · "}<Repeat2 size={14} aria-label="Répétition hebdomadaire" />
+              </span>
+            ) : null}
           </div>
           <h2>
             <Link to={`/taches/${task.id}`}>{task.title}</Link>

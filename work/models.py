@@ -431,6 +431,16 @@ class AssignmentStatus(models.TextChoices):
     CLOSED_EARLY = "closed_early", "Cloturee avant achevement"
 
 
+class RecurrenceFrequency(models.TextChoices):
+    WEEKLY = "weekly", "Chaque semaine"
+
+
+class RecurrenceStatus(models.TextChoices):
+    ACTIVE = "active", "Active"
+    FINISHED = "finished", "Terminee"
+    CANCELLED = "cancelled", "Annulee"
+
+
 class Task(models.Model):
     """Reusable task definition shared by one or more assignments."""
 
@@ -453,6 +463,88 @@ class Task(models.Model):
 
     class Meta:
         ordering = ["title"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class TaskRecurrence(models.Model):
+    """Template and lifecycle for a weekly series of task assignments."""
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="task_recurrences",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_task_recurrences",
+    )
+    title = models.CharField("nom court", max_length=180)
+    description = models.TextField("description")
+    action = models.ForeignKey(
+        InstitutionalAction,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="task_recurrences",
+    )
+    calendar = models.ForeignKey(
+        WorkCalendar,
+        on_delete=models.PROTECT,
+        related_name="task_recurrences",
+    )
+    estimated_work_days = models.DecimalField(
+        "charge estimee en jours",
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal("0.1"))],
+    )
+    frequency = models.CharField(
+        max_length=16,
+        choices=RecurrenceFrequency.choices,
+        default=RecurrenceFrequency.WEEKLY,
+    )
+    anchor_start_date = models.DateField("date d'ancrage")
+    end_date = models.DateField("fin inclusive")
+    status = models.CharField(
+        max_length=16,
+        choices=RecurrenceStatus.choices,
+        default=RecurrenceStatus.ACTIVE,
+    )
+    revision = models.PositiveBigIntegerField(default=1)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="cancelled_task_recurrences",
+    )
+    cancellation_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def clean(self) -> None:
+        super().clean()
+        if self.frequency != RecurrenceFrequency.WEEKLY:
+            raise ValidationError(
+                {"frequency": "Seule la repetition hebdomadaire est prise en charge."}
+            )
+        if (
+            self.anchor_start_date
+            and self.end_date
+            and self.end_date < self.anchor_start_date + timedelta(days=7)
+        ):
+            raise ValidationError(
+                {"end_date": "La date de fin doit permettre au moins une repetition."}
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)  # type: ignore[arg-type]
 
     def __str__(self) -> str:
         return self.title
@@ -502,6 +594,15 @@ class TaskAssignment(models.Model):
     closed_reason = models.TextField("motif de cloture", blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     revision = models.PositiveBigIntegerField(default=1)
+    recurrence = models.ForeignKey(
+        TaskRecurrence,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+    )
+    recurrence_occurrence = models.PositiveIntegerField(null=True, blank=True)
+    recurrence_anchor_date = models.DateField(null=True, blank=True)
     history = HistoricalRecords()
 
     class Meta:
@@ -513,6 +614,11 @@ class TaskAssignment(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["task", "employee"], name="unique_task_employee_assignment"
+            ),
+            models.UniqueConstraint(
+                fields=["recurrence", "recurrence_occurrence"],
+                condition=Q(recurrence__isnull=False),
+                name="unique_task_recurrence_occurrence",
             ),
         ]
 
@@ -594,6 +700,19 @@ class TaskProposal(models.Model):
         on_delete=models.SET_NULL,
         related_name="source_proposal",
     )
+    recurrence_frequency = models.CharField(
+        max_length=16,
+        choices=RecurrenceFrequency.choices,
+        blank=True,
+    )
+    recurrence_end_date = models.DateField(null=True, blank=True)
+    accepted_recurrence = models.OneToOneField(
+        TaskRecurrence,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="accepted_proposal",
+    )
     decision_note = models.TextField("motif", blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
     revision = models.PositiveBigIntegerField(default=1)
@@ -621,6 +740,30 @@ class TaskProposal(models.Model):
         if self.due_date != expected:
             raise ValidationError(
                 {"due_date": f"L'echeance calculee est le {expected:%d/%m/%Y}."}
+            )
+        if self.recurrence_frequency:
+            if self.recurrence_frequency != RecurrenceFrequency.WEEKLY:
+                raise ValidationError(
+                    {"recurrence_frequency": "Seule la repetition hebdomadaire est prise en charge."}
+                )
+            if not self.recurrence_end_date:
+                raise ValidationError(
+                    {"recurrence_end_date": "La date de fin est obligatoire."}
+                )
+            if self.recurrence_end_date < self.start_date + timedelta(days=7):
+                raise ValidationError(
+                    {"recurrence_end_date": "La date de fin doit permettre au moins une repetition."}
+                )
+            next_start = self.start_date + timedelta(days=7)
+            while not self.calendar.is_working_day(next_start):
+                next_start += timedelta(days=1)
+            if self.due_date >= next_start:
+                raise ValidationError(
+                    {"estimated_work_days": "La charge fait chevaucher deux occurrences."}
+                )
+        elif self.recurrence_end_date:
+            raise ValidationError(
+                {"recurrence_frequency": "La frequence de repetition est obligatoire."}
             )
 
     def save(self, *args: object, **kwargs: object) -> None:
@@ -687,6 +830,7 @@ class ActivityKind(models.TextChoices):
     REOPENED = "reopened", "Tache rouverte"
     CLOSED = "closed", "Tache cloturee"
     SCHEDULE = "schedule", "Planification modifiee"
+    RECURRENCE = "recurrence", "Repetition"
 
 
 class TaskActivity(models.Model):
