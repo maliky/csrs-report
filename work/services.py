@@ -17,6 +17,13 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
+
+from work.models import (
+    RecurrenceFrequency,
+    RecurrenceStatus,
+    TaskRecurrence,
+    default_work_calendar_id,
+)
 from django.utils.text import slugify
 
 from access.services import (
@@ -1739,6 +1746,512 @@ def create_assignment_for_user(
 
 
 @transaction.atomic
+def next_working_day(calendar: WorkCalendar, planned_day: date) -> date:
+    """Shift an occurrence start without changing its weekly anchor."""
+    effective_day = planned_day
+    while not calendar.is_working_day(effective_day):
+        effective_day += timedelta(days=1)
+    return effective_day
+
+
+def validate_recurrence_schedule(
+    *,
+    calendar: WorkCalendar,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    frequency: str,
+    end_date: date,
+) -> None:
+    """Validate a weekly series and prevent overlapping occurrences."""
+    if frequency != RecurrenceFrequency.WEEKLY:
+        raise ValidationError("Seule la repetition hebdomadaire est prise en charge.")
+    if end_date < start_date + timedelta(days=7):
+        raise ValidationError("La date de fin doit permettre au moins une repetition.")
+    next_start = next_working_day(calendar, start_date + timedelta(days=7))
+    if due_date >= next_start:
+        raise ValidationError(
+            "La charge estimee fait chevaucher deux occurrences hebdomadaires."
+        )
+    expected_due = calendar.due_date_for(start_date, estimated_work_days)
+    if due_date != expected_due:
+        raise ValidationError(f"L'echeance calculee est le {expected_due:%d/%m/%Y}.")
+
+
+@transaction.atomic
+def create_recurring_assignment_for_user(
+    *,
+    manager: User,
+    employee: User,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    calendar: WorkCalendar,
+    recurrence_frequency: str,
+    recurrence_end_date: date,
+    recurrence_creator: User | None = None,
+) -> TaskAssignment:
+    """Create the first assignment and retain the template for future occurrences."""
+    validate_recurrence_schedule(
+        calendar=calendar,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        frequency=recurrence_frequency,
+        end_date=recurrence_end_date,
+    )
+    assignment = create_assignment_for_user(
+        manager=manager,
+        employee=employee,
+        title=title,
+        description=description,
+        action=action,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        calendar=calendar,
+    )
+    series = TaskRecurrence.objects.create(
+        employee=assignment.employee,
+        created_by=recurrence_creator or assignment.manager,
+        title=assignment.task.title,
+        description=assignment.task.description,
+        action=assignment.task.action,
+        calendar=assignment.calendar,
+        estimated_work_days=assignment.estimated_work_days,
+        frequency=recurrence_frequency,
+        anchor_start_date=start_date,
+        end_date=recurrence_end_date,
+    )
+    assignment.recurrence = series
+    assignment.recurrence_occurrence = 1
+    assignment.recurrence_anchor_date = start_date
+    assignment.save()
+    return assignment
+
+
+@transaction.atomic
+def update_assignment_details_with_recurrence(
+    *,
+    user: User,
+    assignment: TaskAssignment,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None,
+    recurrence_frequency: str | None,
+    recurrence_end_date: date | None,
+    recurrence_revision: int | None,
+) -> TaskAssignment:
+    """Update the current occurrence and the template used by future ones."""
+    source_id = assignment.pk
+    update_assignment_details(
+        user=user,
+        assignment=assignment,
+        title=title,
+        description=description,
+        action=action,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        expected_revision=expected_revision,
+    )
+    assignment = TaskAssignment.objects.get(pk=source_id)
+    if recurrence_frequency is None:
+        if assignment.recurrence_id:
+            raise ValidationError(
+                "Utilisez l'action d'annulation pour arreter les repetitions futures."
+            )
+        return assignment
+    if recurrence_end_date is None:
+        raise ValidationError("La date de fin de repetition est obligatoire.")
+    validate_recurrence_schedule(
+        calendar=assignment.calendar,
+        start_date=assignment.start_date,
+        due_date=assignment.due_date,
+        estimated_work_days=assignment.estimated_work_days,
+        frequency=recurrence_frequency,
+        end_date=recurrence_end_date,
+    )
+    if assignment.recurrence_id is None:
+        series = TaskRecurrence.objects.create(
+            employee=assignment.employee,
+            created_by=user,
+            title=assignment.task.title,
+            description=assignment.task.description,
+            action=assignment.task.action,
+            calendar=assignment.calendar,
+            estimated_work_days=assignment.estimated_work_days,
+            frequency=recurrence_frequency,
+            anchor_start_date=assignment.start_date,
+            end_date=recurrence_end_date,
+        )
+        assignment.recurrence = series
+        assignment.recurrence_occurrence = 1
+        assignment.recurrence_anchor_date = assignment.start_date
+        assignment.save()
+        return assignment
+    series = TaskRecurrence.objects.select_for_update().get(pk=assignment.recurrence_id)
+    if recurrence_revision is None:
+        raise ValidationError("La revision de la serie est obligatoire.")
+    ensure_revision(series.revision, recurrence_revision)
+    series.title = assignment.task.title
+    series.description = assignment.task.description
+    series.action = assignment.task.action
+    series.calendar = assignment.calendar
+    series.estimated_work_days = assignment.estimated_work_days
+    series.frequency = recurrence_frequency
+    series.end_date = recurrence_end_date
+    series.revision += 1
+    series.save()
+    assignment.recurrence_anchor_date = assignment.start_date
+    assignment.save()
+    return assignment
+
+
+@transaction.atomic
+def update_proposal_with_recurrence(
+    *,
+    user: User,
+    proposal: TaskProposal,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    calendar: WorkCalendar,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None,
+    recurrence_frequency: str | None,
+    recurrence_end_date: date | None,
+) -> TaskProposal:
+    source_id = proposal.pk
+    update_proposal(
+        user=user,
+        proposal=proposal,
+        title=title,
+        description=description,
+        action=action,
+        calendar=calendar,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        expected_revision=expected_revision,
+    )
+    proposal = TaskProposal.objects.get(pk=source_id)
+    if recurrence_frequency is not None:
+        if recurrence_end_date is None:
+            raise ValidationError("La date de fin de repetition est obligatoire.")
+        validate_recurrence_schedule(
+            calendar=proposal.calendar,
+            start_date=proposal.start_date,
+            due_date=proposal.due_date,
+            estimated_work_days=proposal.estimated_work_days,
+            frequency=recurrence_frequency,
+            end_date=recurrence_end_date,
+        )
+    proposal.recurrence_frequency = recurrence_frequency or ""
+    proposal.recurrence_end_date = recurrence_end_date
+    proposal.save()
+    return proposal
+
+
+@transaction.atomic
+def accept_proposal_with_recurrence(
+    *, user: User, proposal: TaskProposal, expected_revision: int
+) -> TaskAssignment:
+    accepted = accept_proposal(
+        user=user, proposal=proposal, expected_revision=expected_revision
+    )
+    proposal.refresh_from_db()
+    if not proposal.recurrence_frequency or proposal.accepted_recurrence_id:
+        return accepted
+    assignment = proposal.accepted_assignment
+    if assignment is None or proposal.recurrence_end_date is None:
+        raise ValidationError("La proposition recurrente est incomplete.")
+    validate_recurrence_schedule(
+        calendar=assignment.calendar,
+        start_date=assignment.start_date,
+        due_date=assignment.due_date,
+        estimated_work_days=assignment.estimated_work_days,
+        frequency=proposal.recurrence_frequency,
+        end_date=proposal.recurrence_end_date,
+    )
+    series = TaskRecurrence.objects.create(
+        employee=assignment.employee,
+        created_by=proposal.employee,
+        title=assignment.task.title,
+        description=assignment.task.description,
+        action=assignment.task.action,
+        calendar=assignment.calendar,
+        estimated_work_days=assignment.estimated_work_days,
+        frequency=proposal.recurrence_frequency,
+        anchor_start_date=assignment.start_date,
+        end_date=proposal.recurrence_end_date,
+    )
+    assignment.recurrence = series
+    assignment.recurrence_occurrence = 1
+    assignment.recurrence_anchor_date = assignment.start_date
+    assignment.save()
+    proposal.accepted_recurrence = series
+    proposal.save()
+    return accepted
+
+
+def _stop_recurrence(series: TaskRecurrence, reason: str) -> None:
+    series.status = RecurrenceStatus.CANCELLED
+    series.cancelled_at = timezone.now()
+    series.cancellation_reason = reason
+    series.revision += 1
+    series.save()
+
+
+@transaction.atomic
+def advance_task_recurrence(assignment: TaskAssignment) -> TaskAssignment | None:
+    """Create the next planned occurrence after a terminal transition."""
+    if not assignment.recurrence_id or not assignment.recurrence_anchor_date:
+        return None
+    series = TaskRecurrence.objects.select_for_update().get(pk=assignment.recurrence_id)
+    if series.status != RecurrenceStatus.ACTIVE:
+        return None
+    occurrence = assignment.recurrence_occurrence or 1
+    existing = series.assignments.filter(recurrence_occurrence__gt=occurrence).first()
+    if existing:
+        return existing
+    next_anchor = assignment.recurrence_anchor_date + timedelta(days=7)
+    if next_anchor > series.end_date:
+        series.status = RecurrenceStatus.FINISHED
+        series.revision += 1
+        series.save()
+        return None
+    calendar = WorkCalendar.objects.get(pk=default_work_calendar_id())
+    effective_start = next_working_day(calendar, next_anchor)
+    if timezone.localdate() >= effective_start:
+        _stop_recurrence(
+            series,
+            "La precedente occurrence a ete cloturee trop tard pour planifier la suivante.",
+        )
+        return None
+    next_effective_start = next_working_day(calendar, next_anchor + timedelta(days=7))
+    due_date = calendar.due_date_for(effective_start, series.estimated_work_days)
+    if due_date >= next_effective_start:
+        _stop_recurrence(series, "La charge estimee chevauche la prochaine occurrence.")
+        return None
+    reference_day = timezone.localdate()
+    manager = primary_manager(series.employee, reference_day)
+    if manager is None:
+        _stop_recurrence(series, "Aucun responsable actif lors de la planification.")
+        return None
+    unit_id = organization_unit_for_employee(series.employee, reference_day)
+    task = Task.objects.create(
+        code=next_task_code(series.action, effective_start.year),
+        title=series.title,
+        description=series.description,
+        action=series.action,
+        created_by=series.created_by,
+    )
+    following = TaskAssignment.objects.create(
+        task=task,
+        employee=series.employee,
+        manager=manager,
+        organization_unit_id=unit_id,
+        calendar=calendar,
+        start_date=effective_start,
+        due_date=due_date,
+        estimated_work_days=series.estimated_work_days,
+        status=AssignmentStatus.PLANNED,
+        recurrence=series,
+        recurrence_occurrence=occurrence + 1,
+        recurrence_anchor_date=next_anchor,
+    )
+    series.revision += 1
+    series.save()
+    TaskActivity.objects.create(
+        assignment=assignment,
+        kind=ActivityKind.RECURRENCE,
+        actor=assignment.manager,
+        message=f"Occurrence suivante planifiee au {effective_start:%d/%m/%Y}.",
+        details={"next_assignment_id": following.pk},
+    )
+    from work.notifications import queue_assignment_notification
+
+    queue_assignment_notification(following)
+    return following
+
+
+@transaction.atomic
+def cancel_task_recurrence(
+    *, user: User, recurrence: TaskRecurrence, expected_revision: int, reason: str = ""
+) -> TaskAssignment:
+    series = TaskRecurrence.objects.select_for_update().get(pk=recurrence.pk)
+    if series.revision != expected_revision:
+        raise ValidationError("La serie a ete modifiee. Rechargez la page.")
+    current = series.assignments.order_by("-recurrence_occurrence").first()
+    if current is None:
+        raise ValidationError("Cette serie ne contient aucune occurrence.")
+    author_can_cancel = series.created_by_id == user.id and series.employee_id == user.id
+    if not author_can_cancel and not can_manage_assignment(user, current):
+        raise PermissionDenied("Vous ne pouvez pas annuler cette serie.")
+    if series.status != RecurrenceStatus.ACTIVE:
+        raise ValidationError("Cette serie n'est plus active.")
+    series.status = RecurrenceStatus.CANCELLED
+    series.cancelled_at = timezone.now()
+    series.cancelled_by = user
+    series.cancellation_reason = reason.strip()
+    series.revision += 1
+    series.save()
+    TaskActivity.objects.create(
+        assignment=current,
+        kind=ActivityKind.RECURRENCE,
+        actor=user,
+        message="Les repetitions futures ont ete annulees.",
+        details={"reason": reason.strip()},
+    )
+    return current
+
+
+def create_assignment_with_optional_recurrence(
+    *,
+    recurrence: dict[str, Any] | None,
+    manager: User,
+    employee: User,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    calendar: WorkCalendar,
+) -> TaskAssignment:
+    if recurrence is None:
+        return create_assignment_for_user(
+            manager=manager,
+            employee=employee,
+            title=title,
+            description=description,
+            action=action,
+            start_date=start_date,
+            due_date=due_date,
+            estimated_work_days=estimated_work_days,
+            calendar=calendar,
+        )
+    return create_recurring_assignment_for_user(
+        manager=manager,
+        employee=employee,
+        title=title,
+        description=description,
+        action=action,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        calendar=calendar,
+        recurrence_frequency=cast(str, recurrence["frequency"]),
+        recurrence_end_date=cast(date, recurrence["end_date"]),
+    )
+
+
+def update_assignment_with_optional_recurrence(
+    *,
+    recurrence: dict[str, Any] | None,
+    user: User,
+    assignment: TaskAssignment,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None,
+) -> TaskAssignment:
+    return update_assignment_details_with_recurrence(
+        user=user,
+        assignment=assignment,
+        title=title,
+        description=description,
+        action=action,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        expected_revision=expected_revision,
+        recurrence_frequency=(
+            cast(str, recurrence["frequency"]) if recurrence is not None else None
+        ),
+        recurrence_end_date=(
+            cast(date, recurrence["end_date"]) if recurrence is not None else None
+        ),
+        recurrence_revision=(
+            cast(int, recurrence.get("revision"))
+            if recurrence is not None and recurrence.get("revision") is not None
+            else None
+        ),
+    )
+
+
+def update_proposal_with_optional_recurrence(
+    *,
+    recurrence: dict[str, Any] | None,
+    user: User,
+    proposal: TaskProposal,
+    title: str,
+    description: str,
+    action: InstitutionalAction | None,
+    calendar: WorkCalendar,
+    start_date: date,
+    due_date: date,
+    estimated_work_days: Decimal,
+    expected_revision: int | None,
+) -> TaskProposal:
+    return update_proposal_with_recurrence(
+        user=user,
+        proposal=proposal,
+        title=title,
+        description=description,
+        action=action,
+        calendar=calendar,
+        start_date=start_date,
+        due_date=due_date,
+        estimated_work_days=estimated_work_days,
+        expected_revision=expected_revision,
+        recurrence_frequency=(
+            cast(str, recurrence["frequency"]) if recurrence is not None else None
+        ),
+        recurrence_end_date=(
+            cast(date, recurrence["end_date"]) if recurrence is not None else None
+        ),
+    )
+
+
+def validate_completion_with_recurrence(
+    user: User,
+    assignment: TaskAssignment,
+    expected_revision: int | None = None,
+) -> TaskAssignment:
+    source_id = assignment.pk
+    validate_completion(user, assignment, expected_revision)
+    assignment = TaskAssignment.objects.get(pk=source_id)
+    advance_task_recurrence(assignment)
+    return assignment
+
+
+def close_early_with_recurrence(
+    user: User,
+    assignment: TaskAssignment,
+    reason: str,
+    expected_revision: int | None = None,
+) -> TaskAssignment:
+    source_id = assignment.pk
+    close_early(user, assignment, reason, expected_revision)
+    assignment = TaskAssignment.objects.get(pk=source_id)
+    advance_task_recurrence(assignment)
+    return assignment
+
+
 def update_assignment_schedule(
     *,
     user: User,
@@ -2157,7 +2670,7 @@ def update_proposal(
 ) -> TaskProposal:
     """Let an author correct a submitted or rejected proposal."""
     proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
-    if proposal.employee_id != user.pk:
+    if proposal.employee_id != user.pk and not can_review_proposal(user, proposal):
         raise PermissionDenied("Seul l'auteur peut modifier cette proposition.")
     ensure_revision(proposal.revision, expected_revision)
     if proposal.status not in (ProposalStatus.SUBMITTED, ProposalStatus.REJECTED):

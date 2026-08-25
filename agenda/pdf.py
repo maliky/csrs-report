@@ -18,7 +18,7 @@ from reportlab.lib.units import mm  # type: ignore[import-untyped]
 from reportlab.pdfbase import pdfmetrics  # type: ignore[import-untyped]
 from reportlab.pdfbase.ttfonts import TTFont  # type: ignore[import-untyped]
 from reportlab.platypus import (  # type: ignore[import-untyped]
-    KeepTogether,
+    BalancedColumns,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -151,6 +151,11 @@ def render_agenda_pdf(
         alignment=TA_LEFT,
     )
 
+    document_title = (
+        "Agenda DAF"
+        if snapshot["agenda_direction"] == "administration"
+        else f"Agenda — {snapshot['agenda_direction_label']}"
+    )
     output = BytesIO()
     document = SimpleDocTemplate(
         output,
@@ -159,11 +164,11 @@ def render_agenda_pdf(
         rightMargin=12 * mm,
         topMargin=13 * mm,
         bottomMargin=15 * mm,
-        title=f"Agenda — {snapshot['agenda_direction_label']}",
+        title=document_title,
         author="CSRS Report",
     )
     story: list[object] = [
-        Paragraph(f"AGENDA — {_text(snapshot['agenda_direction_label']).upper()}", title),
+        Paragraph(_text(document_title).upper(), title),
         Paragraph(
             f"Période du {_date_text(snapshot['period_start'])} au {_date_text(snapshot['period_end'])}",
             subtitle,
@@ -244,9 +249,9 @@ def render_agenda_pdf(
     )
     story.append(Spacer(1, 5 * mm))
 
-    unit_cards: list[Table] = []
+    unit_cards: list[object] = []
     for unit in cast(list[dict[str, object]], snapshot["units"]):
-        lines: list[str] = []
+        employee_rows: list[list[object]] = []
         for employee in cast(list[dict[str, object]], unit["employees"]):
             person = cast(dict[str, object], employee["person"])
             classification = (
@@ -254,10 +259,10 @@ def render_agenda_pdf(
                 if employee.get("unclassified")
                 else ""
             )
-            lines.append(
+            lines = [
                 f"<b>{_text(person['name'])}</b>{classification} — taux moyen : "
                 f"<b>{cast(int, employee['completion_rate'])}%</b>"
-            )
+            ]
             for task in cast(list[dict[str, object]], employee["tasks"]):
                 delta = cast(int, task["progress_delta"])
                 delta_text = f"+{delta}" if delta >= 0 else str(delta)
@@ -268,12 +273,15 @@ def render_agenda_pdf(
                     f"• {_text(task['title'])} — <b>{cast(int, task['percentage'])}%</b> "
                     f"({delta_text} pt) — {_text(task['status_label'])}{observation}"
                 )
+            employee_rows.append([Paragraph("<br/>".join(lines), unit_body)])
         card = Table(
             [
                 [Paragraph(_text(unit["name"]), unit_title)],
-                [Paragraph("<br/>".join(lines) or "RAS", unit_body)],
+                *(employee_rows or [[Paragraph("RAS", unit_body)]]),
             ],
             colWidths=[88 * mm],
+            repeatRows=1,
+            splitByRow=1,
             style=TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, 0), GREEN),
@@ -287,33 +295,25 @@ def render_agenda_pdf(
                 ]
             ),
         )
-        unit_cards.append(card)
+        unit_cards.extend([card, Spacer(1, 2 * mm)])
 
     if not unit_cards:
         story.append(
             Paragraph("Aucune tâche ouverte ou clôturée sur cette période.", unit_body)
         )
     else:
-        for index in range(0, len(unit_cards), 2):
-            pair: list[object] = [unit_cards[index]]
-            pair.append(unit_cards[index + 1] if index + 1 < len(unit_cards) else "")
-            story.append(
-                KeepTogether(
-                    Table(
-                        [pair],
-                        colWidths=[90 * mm, 90 * mm],
-                        style=TableStyle(
-                            [
-                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                                ("LEFTPADDING", (0, 0), (-1, -1), 1 * mm),
-                                ("RIGHTPADDING", (0, 0), (-1, -1), 1 * mm),
-                                ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
-                                ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
-                            ]
-                        ),
-                    )
-                )
+        story.append(
+            BalancedColumns(
+                unit_cards,
+                nCols=2,
+                needed=30 * mm,
+                innerPadding=2 * mm,
+                leftPadding=0,
+                rightPadding=0,
+                topPadding=0,
+                bottomPadding=0,
             )
+        )
 
     local_generated = timezone.localtime(generated_at)
 

@@ -46,7 +46,7 @@ from work.services import (
 def test_projection_uses_baseline_then_observed_velocity(
     assignment: TaskAssignment, people: dict[str, User]
 ) -> None:
-    monday = week_start_for(timezone.localdate())
+    monday = week_start_for(timezone.localdate()) - timedelta(days=7)
     ProgressEntry.objects.create(
         assignment=assignment,
         entry_date=monday,

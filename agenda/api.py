@@ -190,7 +190,9 @@ def version_payload(version: AgendaVersion) -> dict[str, object]:
         "period_start": version.period_start.isoformat(),
         "period_end": version.period_end.isoformat(),
         "agenda_direction": version.agenda_direction,
-        "agenda_direction_label": version.get_agenda_direction_display(),
+        "agenda_direction_label": AgendaDirection.presentation_label(
+            version.agenda_direction
+        ),
         "version": version.version,
         "snapshot_sha256": version.snapshot_sha256,
         "pdf_sha256": version.pdf_sha256,

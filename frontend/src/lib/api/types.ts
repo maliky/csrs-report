@@ -31,6 +31,18 @@ export type Workload = {
   remaining: string;
 };
 
+export type RecurrenceSummary = {
+  id: number;
+  frequency: "weekly";
+  frequency_label: string;
+  status: "active" | "finished" | "cancelled";
+  end_date: string;
+  occurrence_number: number;
+  planned_start_date: string;
+  revision: number;
+  can_cancel: boolean;
+};
+
 export type TaskSummary = {
   id: number;
   revision: number;
@@ -50,6 +62,7 @@ export type TaskSummary = {
   employee: Person;
   manager: Person;
   action: { id: number; label: string } | null;
+  recurrence?: RecurrenceSummary | null;
 };
 
 export type ChartPoint = {
@@ -420,6 +433,12 @@ export type PlanningOptions = {
 export type Proposal = {
   id: number;
   revision: number;
+  recurrence?: {
+    frequency: "weekly";
+    frequency_label: string;
+    end_date: string;
+    accepted_recurrence_id: number | null;
+  } | null;
   title: string;
   description: string;
   status: string;

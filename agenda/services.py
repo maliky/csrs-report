@@ -384,7 +384,7 @@ def build_agenda_snapshot(
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
         "agenda_direction": agenda_direction,
-        "agenda_direction_label": AgendaDirection(agenda_direction).label,
+        "agenda_direction_label": AgendaDirection.presentation_label(agenda_direction),
         "major_events": major_events.strip(),
         "unclassified_users": [
             _person(user)

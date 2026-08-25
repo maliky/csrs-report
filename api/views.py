@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from api.serializers import RecurrenceCancelSerializer
+from work import services as recurrence_services
+from work.models import TaskRecurrence
+
 from datetime import date
 from decimal import Decimal
 from typing import Any, cast
@@ -88,7 +92,6 @@ from work.models import (
 )
 from work.services import (
     ReportingPeriod,
-    accept_proposal,
     add_observation,
     assignable_employee_ids,
     can_self_assign,
@@ -96,8 +99,6 @@ from work.services import (
     can_review_proposal,
     can_view_assignment,
     can_view_employee,
-    close_early,
-    create_assignment_for_user,
     due_date_for,
     period_assignments,
     record_progress,
@@ -107,9 +108,6 @@ from work.services import (
     reporting_period,
     reviewable_proposals,
     team_tree_overview,
-    update_assignment_details,
-    update_proposal,
-    validate_completion,
     delete_task_assignments,
     update_primary_collaborators,
     visible_team_proposals,
@@ -668,7 +666,8 @@ class TaskCreateView(APIView):
             pk=data.get("calendar_id", default_work_calendar_id()),
             active=True,
         )
-        assignment = create_assignment_for_user(
+        assignment = recurrence_services.create_assignment_with_optional_recurrence(
+            recurrence=data.get("recurrence"),
             manager=user,
             employee=employee,
             title=data["title"],
@@ -777,7 +776,8 @@ class TaskDetailView(APIView):
             if data.get("action_id")
             else None
         )
-        update_assignment_details(
+        recurrence_services.update_assignment_with_optional_recurrence(
+            recurrence=data.get("recurrence"),
             user=user,
             assignment=assignment,
             title=data["title"],
@@ -837,12 +837,35 @@ class TaskTransitionView(APIView):
         user = request_user(request)
         assignment = assignment_for_viewer(user, pk)
         if data["transition"] == "validate":
-            validate_completion(user, assignment, data["revision"])
+            recurrence_services.validate_completion_with_recurrence(
+                user, assignment, data["revision"]
+            )
         elif data["transition"] == "reject":
             reject_completion(user, assignment, data["reason"], data["revision"])
         else:
-            close_early(user, assignment, data["reason"], data["revision"])
+            recurrence_services.close_early_with_recurrence(
+                user, assignment, data["reason"], data["revision"]
+            )
         return Response(assignment_detail_payload(assignment_for_viewer(user, pk), user))
+
+
+class TaskRecurrenceCancelView(APIView):
+    @extend_schema(request=RecurrenceCancelSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request, pk: int) -> Response:
+        serializer = RecurrenceCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request_user(request)
+        recurrence = get_object_or_404(TaskRecurrence, pk=pk)
+        assignment = recurrence_services.cancel_task_recurrence(
+            user=user,
+            recurrence=recurrence,
+            expected_revision=data["revision"],
+            reason=data["reason"],
+        )
+        return Response(
+            assignment_detail_payload(assignment_for_viewer(user, assignment.pk), user)
+        )
 
 
 class ProposalListCreateView(APIView):
@@ -911,6 +934,8 @@ class ProposalListCreateView(APIView):
             start_date=data["start_date"],
             due_date=data["due_date"],
             estimated_work_days=data["estimated_work_days"],
+            recurrence_frequency=(data.get("recurrence") or {}).get("frequency", ""),
+            recurrence_end_date=(data.get("recurrence") or {}).get("end_date"),
         )
         proposal.save()
         return Response(proposal_payload(proposal, user), status=status.HTTP_201_CREATED)
@@ -943,7 +968,8 @@ class ProposalDetailView(APIView):
             pk=data.get("calendar_id", proposal.calendar_id),
             active=True,
         )
-        update_proposal(
+        recurrence_services.update_proposal_with_optional_recurrence(
+            recurrence=data.get("recurrence"),
             user=user,
             proposal=proposal,
             title=data["title"],
@@ -990,7 +1016,9 @@ class ProposalDecisionView(APIView):
         user = request_user(request)
         proposal = proposal_for_viewer(user, pk)
         if data["decision"] == "accept":
-            accept_proposal(user, proposal, expected_revision=data["revision"])
+            recurrence_services.accept_proposal_with_recurrence(
+                user=user, proposal=proposal, expected_revision=data["revision"]
+            )
         else:
             reject_proposal(
                 user, proposal, data["reason"], expected_revision=data["revision"]

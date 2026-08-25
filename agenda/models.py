@@ -166,6 +166,13 @@ class AgendaDirection(models.TextChoices):
     ADMINISTRATION = "administration", "Direction administrative"
     LEGACY = "legacy", "Agenda global historique"
 
+    @classmethod
+    def presentation_label(cls, value: str) -> str:
+        """Return the user-facing title without changing persisted choices."""
+        if value == cls.ADMINISTRATION:
+            return "Agenda DAF"
+        return str(cls(value).label)
+
 
 class AgendaDraft(models.Model):
     """The shared secretary note for an inclusive reporting period."""

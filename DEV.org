@@ -1,6 +1,66 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-25 mar. 10:36> Ajout d'une fonctionnalité pour prendre en compte la répétition
+Il s'agit d'ajouter aux tâches existantes un marqueur de répétition, comme dans Google Agenda. Une tâche peut être unique ou répétée. Dans ce cas, c'est la date de début qui est répétée.
+
+La validation d'une tâche reste dépendante de la validation par le supérieur hiérarchique, qui doit valider les occurrences une par une. Une tâche répétée chaque semaine, avec une échéance en fin de semaine, doit être validée avant de pouvoir être répétée. Si elle n'est pas validée, la première tâche continue et signale un dépassement d'échéance.
+
+Une tâche répétée ne peut pas recommencer avant que l'occurrence précédente soit clôturée. Lors de la création de la tâche, l'échéance d'une occurrence doit être antérieure à la date de début de la répétition suivante. Le créateur d'une proposition qui enfreint cette règle doit recevoir un message explicatif.
+
+Si, à cause d'un dépassement d'échéance, la répétition suivante n'a pas pu démarrer et que la tâche initiale est clôturée plus tard, il faut annuler cette tâche répétitive ou, du moins, toutes les occurrences suivantes. L'utilisateur doit proposer à nouveau une tâche répétitive en adaptant éventuellement les paramètres, par exemple la fréquence de répétition et la charge de travail par occurrence.
+
+Analyser la faisabilité de cette fonctionnalité, puis poser ci-dessous quelques questions préalables permettant de mieux définir la ou les solutions.
+
+** Analyse de faisabilité
+
+Le modèle actuel sépare la définition stable =Task= de l'occurrence datée =TaskAssignment=. La progression, l'état, le responsable, la charge, les dates et la validation appartiennent déjà à l'affectation, ce qui convient à des occurrences indépendantes. En revanche, la contrainte d'unicité =Task + employee= interdit aujourd'hui de réutiliser la même définition pour plusieurs occurrences du même employé. Une série auditée et un lien explicite entre ses occurrences seront donc nécessaires; il faudra soit adapter cette contrainte, soit créer une nouvelle définition de tâche pour chaque occurrence.
+
+Une proposition acceptée crée actuellement une seule =Task= et une seule =TaskAssignment=, liées par =accepted_assignment=. Les paramètres de répétition devront donc être conservés sur la proposition, puis transférés vers la série lors de son acceptation, sans créer à l'avance toutes les occurrences.
+
+La règle d'échéance est déjà centralisée: =due_date= est calculée depuis =start_date=, =estimated_work_days= et le calendrier ouvrable. La validation peut ainsi refuser une série lorsque l'échéance calculée atteint ou dépasse le début prévu de l'occurrence suivante.
+
+La validation d'achèvement et la clôture anticipée sont transactionnelles. L'occurrence suivante peut donc être créée, ou la série arrêtée, dans la même transaction que la clôture de l'occurrence courante. Aucun ordonnanceur supplémentaire n'est nécessaire si une occurrence future peut être créée dès la clôture précédente avec l'état =planned=. L'affectation courante continuera naturellement à afficher son dépassement tant qu'elle n'est pas clôturée.
+
+La fonctionnalité demandera au minimum un modèle et une migration de série, les règles métier de génération et d'arrêt, l'extension des contrats API et des formulaires de tâche et de proposition, un indicateur de répétition dans les cartes et détails, ainsi que des tests de concurrence, de permissions, de calendrier et de validation hiérarchique.
+
+** Questions
+
+1. [ ] Quelles fréquences doivent être proposées dans le MVP: chaque semaine uniquement, ou également chaque jour, chaque mois et un intervalle personnalisé ?
+   proposer chaque semaine
+2. [ ] Comment une série se termine-t-elle: après un nombre d'occurrences, à une date donnée, ou uniquement lorsqu'un utilisateur autorisé l'annule ?
+   elle s'annule a une date donnee
+3. [ ] La répétition doit-elle être disponible pour les tâches affectées directement, les propositions des employés, ou les deux dès la première version ?
+   pour les deux
+4. [ ] Lorsqu'il accepte une proposition répétitive, le responsable peut-il modifier la fréquence, la date de fin et la charge de chaque occurrence avant de l'accepter ?
+   Oui, comme pour n'importe quelle autre taches
+5. [ ] Quelle clôture autorise l'occurrence suivante: uniquement un achèvement à 100 % validé par le responsable, ou également une clôture anticipée avec motif ?
+   n importe quelle cloture donc 100% validee et cloture anticipee avec motif
+6. [ ] Si la validation arrive après la date prévue de l'occurrence suivante, la série est-elle définitivement annulée, mise en pause, ou réactivable explicitement par le responsable ?
+   La serie et definitivement annulee et une nouvelle doit etre recree.
+7. [ ] Une modification du titre, de la description, de la charge, du calendrier ou de la fréquence s'applique-t-elle uniquement à l'occurrence courante ou aussi aux occurrences futures ?
+   s'applique a l occurence courante et les suivantes (pas les precedentes)
+8. [ ] Les occurrences futures doivent-elles reprendre le responsable et le calendrier enregistrés lors de la création de la série, ou utiliser la hiérarchie et le calendrier en vigueur au moment de leur création ?
+   Elle doivent utiliser la hierarchie et le calendrier en vigueur au moment de leur creation individuelle
+9. [ ] Qui peut annuler une série, et faut-il notifier l'employé et son responsable lorsqu'une série est arrêtée ou lorsqu'une nouvelle occurrence est créée ?
+   le reponsable et l employe createur.  utiliser les meme notification que pour des taches simples.
+
+
+* <2026-08-20 jeu.> Déploiement automatisé depuis dev
+** Chemin normal vers la préproduction
+
+Le checkout local reste sur =dev= pour le développement, mais aucun script de déploiement ne doit être lancé depuis cette branche. Une fonctionnalité est intégrée dans =dev= par pull request, puis une pull request distincte =dev → preprod= est créée sur =maliky/csrs-report=. Après le merge, =.github/workflows/ci.yml= exécute Python, Frontend, Playwright et Package, attend l'approbation de l'environnement GitHub =preprod=, puis déploie exactement le SHA testé.
+
+Le job GitHub se connecte avec le compte restreint =csrsreport-deploy=. La commande forcée =/usr/local/bin/csrs-report-preprod-deploy= valide la forme de la demande et appelle =/usr/local/sbin/csrs-report-preprod-deploy-root=. Ce dernier vérifie que le SHA demandé est la tête GitHub de =preprod=, refuse un checkout sale ou une promotion non fast-forward, sauvegarde les données, met à jour =/srv/apps/csrs-report-preprod=, puis appelle =scripts/deploy_preprod.sh= sous l'utilisateur propriétaire. =scripts/deploy_preprod.sh= est donc un composant interne du déploiement et ne doit pas être exécuté directement depuis =dev=.
+
+** Reprise manuelle réservée à l'opérateur
+
+Si GitHub Actions est indisponible alors que le SHA complet est déjà la tête GitHub de =preprod=, l'opérateur sudoer peut lancer sur le serveur =sudo /usr/local/sbin/csrs-report-preprod-deploy-root <SHA_PREPROD_COMPLET>=. Cette commande conserve les vérifications, la sauvegarde, le verrou, la migration, la révision d'image et les sondes HTTP du chemin automatisé. Lancer directement =./scripts/deploy_preprod.sh= contournerait la sauvegarde et la validation du SHA; ce n'est pas la procédure de reprise recommandée.
+
+** Manuel utilisateur illustré
+
+=docs/MANUAL.org= décrit les parcours du collaborateur, du responsable, de la Direction générale, du secrétariat, des RH et de l'administrateur IT. Les captures sont générées localement par =scripts/capture_manual.sh= sans utiliser la préproduction ni des données personnelles. Deux captures couvrent maintenant le profil personnel et le profil collaborateur avec cahier des charges.
+
 * <2026-08-15 sam.> Chemin du deploiement de preproduction
 
 Le checkout de =preprod.report.ent.koba.sarl= reside directement dans =/srv/apps/csrs-report-preprod=. Le projet Compose =csrs_preprod=, le port =18008= et les volumes nommes existants sont conserves.

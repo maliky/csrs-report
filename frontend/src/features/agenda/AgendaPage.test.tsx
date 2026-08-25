@@ -185,6 +185,9 @@ test("enregistre le brouillon avant de générer une version PDF", async () => {
   expect(
     screen.getAllByRole("button", { name: "Générer le PDF" }),
   ).toHaveLength(1);
+  expect(
+    screen.getByRole("option", { name: "Agenda DAF" }),
+  ).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Générer le PDF" }));
 
   expect(

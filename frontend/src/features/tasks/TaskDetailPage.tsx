@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, type FormEvent } from "react";
+import { Repeat2 } from "lucide-react";
 import { useNavigate, useParams } from "../../lib/router";
 import type { TaskDetail } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
@@ -30,7 +31,12 @@ export function TaskDetailPage() {
     if (data) setDraftPercentage(data.percentage);
   }, [data]);
 
-  async function mutate(path: string, body: object, successMessage = "") {
+  async function mutate(
+    path: string,
+    body: object,
+    successMessage = "",
+    reloadCurrent = false,
+  ) {
     setSaving(true);
     setMutationError(null);
     setMutationSuccess("");
@@ -39,7 +45,8 @@ export function TaskDetailPage() {
         method: "POST",
         body: JSON.stringify(body),
       });
-      setData(updated);
+      if (reloadCurrent) await reload();
+      else setData(updated);
       setMutationSuccess(successMessage);
       return true;
     } catch (caught) {
@@ -122,6 +129,17 @@ export function TaskDetailPage() {
           <dt>Charge restante</dt>
           <dd>{dayCount(data.workload.remaining)}</dd>
         </div>
+        {data.recurrence && (
+          <div className="detail">
+            <dt>
+              <Repeat2 size={16} aria-hidden="true" /> Répétition
+            </dt>
+            <dd>
+              Occurrence {data.recurrence.occurrence_number}, chaque semaine
+              jusqu’au {formatDate(data.recurrence.end_date)}
+            </dd>
+          </div>
+        )}
       </dl>
       <div className={styles.detailColumns} style={{ marginTop: "1.5rem" }}>
         <div className="stack">
@@ -208,6 +226,32 @@ export function TaskDetailPage() {
                 mutate(`/api/v1/tasks/${data.id}/transition/`, body)
               }
             />
+          )}
+          {data.recurrence?.can_cancel && (
+            <Card>
+              <h2>Répétition</h2>
+              <p className="muted">
+                L’occurrence actuelle continue ; seules les suivantes seront
+                annulées.
+              </p>
+              <Button
+                variant="danger"
+                disabled={saving}
+                onClick={() =>
+                  void mutate(
+                    `/api/v1/task-recurrences/${data.recurrence?.id}/cancel/`,
+                    {
+                      revision: data.recurrence?.revision,
+                      reason: "",
+                    },
+                    "Les répétitions futures ont été annulées.",
+                    true,
+                  )
+                }
+              >
+                Annuler les répétitions futures
+              </Button>
+            </Card>
           )}
         </aside>
       </div>

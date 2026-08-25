@@ -18,12 +18,19 @@ class ScheduleSerializer(serializers.Serializer):
     )
 
 
+class RecurrenceSerializer(serializers.Serializer):
+    frequency = serializers.ChoiceField(choices=("weekly",))
+    end_date = serializers.DateField()
+    revision = serializers.IntegerField(min_value=1, required=False)
+
+
 class TaskCreateSerializer(ScheduleSerializer):
     title = serializers.CharField(max_length=180)
     description = serializers.CharField()
     employee_id = serializers.IntegerField(min_value=1)
     action_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     calendar_id = serializers.IntegerField(min_value=1, required=False)
+    recurrence = RecurrenceSerializer(required=False, allow_null=True)
 
 
 class TaskUpdateSerializer(ScheduleSerializer):
@@ -31,6 +38,7 @@ class TaskUpdateSerializer(ScheduleSerializer):
     title = serializers.CharField(max_length=180)
     description = serializers.CharField()
     action_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    recurrence = RecurrenceSerializer(required=False, allow_null=True)
 
 
 class TaskManagementQuerySerializer(serializers.Serializer):
@@ -90,11 +98,17 @@ class TransitionSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class RecurrenceCancelSerializer(serializers.Serializer):
+    revision = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class ProposalCreateSerializer(ScheduleSerializer):
     title = serializers.CharField(max_length=180)
     description = serializers.CharField()
     action_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     calendar_id = serializers.IntegerField(min_value=1, required=False)
+    recurrence = RecurrenceSerializer(required=False, allow_null=True)
 
 
 class ProposalUpdateSerializer(ProposalCreateSerializer):
@@ -122,6 +136,7 @@ class PlanningPreviewSerializer(serializers.Serializer):
         min_value=Decimal("0.1"),
         required=False,
     )
+    recurrence = RecurrenceSerializer(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Require the field that is authoritative for the requested preview."""
