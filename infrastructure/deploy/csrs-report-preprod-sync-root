@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly MODE="${1:---apply}"
+readonly DEPLOY_ROOT=/srv/apps/csrs-report-preprod
+readonly LOCK_FILE=/run/lock/csrs-report-preprod-deploy.lock
+
+if [[ "$#" -gt 1 || ( "$MODE" != "--check" && "$MODE" != "--apply" ) ]]; then
+    echo "Usage : csrs-report-preprod-sync-root [--check|--apply]" >&2
+    exit 2
+fi
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || {
+    echo "Un déploiement ou une synchronisation CSRS Report est déjà en cours." >&2
+    exit 3
+}
+
+test -f "${DEPLOY_ROOT}/.env"
+test -x "${DEPLOY_ROOT}/scripts/sync_preprod_from_production.sh"
+
+exec runuser -u jil -- "${DEPLOY_ROOT}/scripts/sync_preprod_from_production.sh" "$MODE"

@@ -3,6 +3,13 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo"
+
+timestamp="${CSRS_BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+if [[ ! "$timestamp" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
+    echo "CSRS_BACKUP_TIMESTAMP doit utiliser le format UTC YYYYMMDDTHHMMSSZ." >&2
+    exit 2
+fi
+
 # shellcheck source=scripts/lib/compose.sh
 source scripts/lib/compose.sh
 csrs_compose_command
@@ -23,7 +30,6 @@ project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -n 1)"
 project="${project:-csrs}"
 mkdir -p backups
 chmod 700 backups
-timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 database_output="backups/csrs_${timestamp}.dump"
 documents_output="backups/csrs_documents_${timestamp}.tar.gz"
 manifest_output="backups/csrs_${timestamp}.sha256"

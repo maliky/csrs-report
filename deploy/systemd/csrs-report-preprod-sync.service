@@ -1,0 +1,11 @@
+[Unit]
+Description=Synchronisation de la production vers la préproduction CSRS Report
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+TimeoutStartSec=30min
+ExecStart=/usr/local/sbin/csrs-report-preprod-sync-root --apply

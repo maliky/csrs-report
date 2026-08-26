@@ -70,6 +70,7 @@ docker-compose.override.yml
 backups/
 
 # Other stuff for dev
+*DEV.org*
 *pdf
 *odt
 *svg
