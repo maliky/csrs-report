@@ -55,12 +55,15 @@ def test_sync_keeps_production_read_only_and_preprod_recoverable() -> None:
     assert "tar --create --gzip --directory /private-media" in source
     assert "CSRS_START_NOTIFIER doit rester à 0" in source
     assert source.index("pg_restore --list") < source.index("./scripts/backup_db.sh")
-    assert source.index("./scripts/backup_db.sh") < source.rindex('stop notifier web')
+    assert source.index("./scripts/backup_db.sh") < source.rindex("stop notifier web")
     assert "rollback_preprod" in source
     assert "dropdb --if-exists --force" in source
     assert "docker compose down" not in source
     assert "scp " not in source
-    assert ".env" not in source[source.index("fetch_database"):source.index("restore_database")]
+    assert (
+        ".env"
+        not in source[source.index("fetch_database") : source.index("restore_database")]
+    )
 
 
 def test_sync_and_deploy_use_the_same_operation_lock() -> None:
