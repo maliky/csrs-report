@@ -1,6 +1,19 @@
 #+TITLE: CSRS Report - Notes et plan de developpement
 #+LANGUAGE: fr
 #+STARTUP: overview
+* <2026-08-25 mar. 20:40> Synchronisation avec la production
+La production sur =179.237.107.40= est constamment mise à jour. Je souhaite que la préproduction reflète son contenu à la fin de chaque journée. Créer un script qui duplique les données de production vers la préproduction sans jamais modifier la production, qui reste en lecture seule pour cette opération. Si une autre solution limite mieux les divergences, proposer une alternative.
+
+La préproduction doit être indisponible pendant la restauration ou la synchronisation programmée à 02 h 30 UTC. En dehors de cette fenêtre, elle doit fonctionner comme la production et permettre notamment la création de tâches. Les données créées en préproduction seront effacées chaque nuit lors de leur remplacement par les données de production.
+
+** Décision d'architecture
+
+La synchronisation copie exactement la base PostgreSQL et les documents privés, mais ne copie jamais le fichier =.env=, les secrets, le domaine ni la configuration SMTP de production. Le notifier de préproduction doit rester désactivé. Le transfert et la validation ont lieu pendant que le site reste disponible; seuls la sauvegarde finale, le remplacement et les contrôles de santé interrompent le service. Le repli Nginx existant présente alors une réponse HTTP 503.
+
+Le script diffuse les sauvegardes directement par SSH sans créer de fichier ni exécuter d'écriture sur la production. Il sauvegarde la préproduction avant le remplacement et restaure automatiquement cette sauvegarde si l'import ou le redémarrage échoue. Le timer s'exécute à 02 h 30 UTC sans rattraper un cycle manqué, afin de ne pas provoquer d'interruption imprévue en journée.
+
+Une alternative réduisant davantage la divergence serait un miroir séparé, alimenté en continu et strictement en lecture seule. Cette solution ne remplace pas la préproduction actuelle, qui doit rester modifiable entre deux synchronisations nocturnes.
+
 * <2026-08-25 mar. 10:36> Ajout d'une fonctionnalité pour prendre en compte la répétition
 Il s'agit d'ajouter aux tâches existantes un marqueur de répétition, comme dans Google Agenda. Une tâche peut être unique ou répétée. Dans ce cas, c'est la date de début qui est répétée.
 
