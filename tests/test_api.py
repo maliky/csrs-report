@@ -301,6 +301,7 @@ def test_manager_accepts_a_proposal_and_receives_the_assignment_link(
     assert payload["status"] == "accepted"
     assert payload["accepted_assignment_id"] is not None
     assert payload["capabilities"] == {
+        "delete": False,
         "edit": False,
         "resubmit": False,
         "review": False,

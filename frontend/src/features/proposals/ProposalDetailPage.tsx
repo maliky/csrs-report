@@ -159,7 +159,7 @@ export function ProposalDetailPage() {
                   method: "DELETE",
                   body: JSON.stringify({ revision: data.revision }),
                 });
-                navigate("/propositions", { replace: true });
+                navigate("/propositions");
               } catch (caught) {
                 setMutationError(
                   caught instanceof Error

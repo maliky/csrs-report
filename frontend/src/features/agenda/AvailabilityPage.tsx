@@ -54,6 +54,7 @@ export function AvailabilityPage() {
         retry={availability.reload}
       />
     );
+  const options = availability.data;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,7 +63,7 @@ export function AvailabilityPage() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const employeeName = String(form.get("employee_name") ?? "").trim();
-    const employees = availability.data.employees.filter((employee) => {
+    const employees = options.employees.filter((employee) => {
       const normalized = employeeName.toLocaleLowerCase("fr");
       return (
         employeeLabel(employee).toLocaleLowerCase("fr") === normalized ||
@@ -169,7 +170,7 @@ export function AvailabilityPage() {
               }
             />
             <datalist id="availability-employees">
-              {availability.data.employees.map((employee) => (
+              {options.employees.map((employee) => (
                 <option value={employeeLabel(employee)} key={employee.id} />
               ))}
             </datalist>
@@ -177,7 +178,7 @@ export function AvailabilityPage() {
           <div className="form-field">
             <label htmlFor="kind">Nature</label>
             <select id="kind" name="kind" required defaultValue={editing?.kind}>
-              {availability.data.kinds.map((kind) => (
+              {options.kinds.map((kind) => (
                 <option value={kind.value} key={kind.value}>
                   {kind.label}
                 </option>
@@ -240,13 +241,13 @@ export function AvailabilityPage() {
             <h2>Indisponibilités déclarées</h2>
           </div>
         </div>
-        {availability.data.items.length === 0 ? (
+        {options.items.length === 0 ? (
           <EmptyState title="Aucune indisponibilité">
             Aucun congé, absence ou mission ne couvre cette semaine.
           </EmptyState>
         ) : (
           <div className="stack">
-            {availability.data.items.map((item) => (
+            {options.items.map((item) => (
               <Card className={styles.version} key={item.id}>
                 <div>
                   <strong>

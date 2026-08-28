@@ -428,6 +428,10 @@ test("permet aux RH d’ajouter un congé à la semaine", async () => {
   expect(screen.getByLabelText("Semaine")).toHaveValue("03/08/2026");
   expect(screen.getByLabelText("Début")).toHaveValue("03/08/2026");
   expect(screen.getByLabelText("Fin")).toHaveValue("03/08/2026");
+  await user.type(
+    screen.getByLabelText("Employé concerné"),
+    "Mariam Koné — Chercheuse",
+  );
   await user.click(screen.getByRole("button", { name: "Ajouter" }));
   expect(await screen.findByText("Mariam Koné — Congé")).toBeInTheDocument();
   expect(screen.getByText("Du 03/08/2026 au 03/08/2026")).toBeInTheDocument();
