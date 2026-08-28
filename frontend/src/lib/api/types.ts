@@ -101,6 +101,7 @@ export type TaskDetail = Omit<
   activities: Activity[];
   capabilities: {
     manage: boolean;
+    validate: boolean;
     comment: boolean;
     update_progress: boolean;
     self_managed: boolean;
@@ -457,6 +458,7 @@ export type Proposal = {
     edit: boolean;
     resubmit: boolean;
     review: boolean;
+    delete: boolean;
   };
 };
 

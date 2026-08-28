@@ -114,7 +114,9 @@ export function AppShell() {
   }
 
   if (session.capabilities.password_change_required)
-    return <PasswordChangePage onComplete={reload} onLogout={signOut} />;
+    return (
+      <PasswordChangePage required onComplete={reload} onLogout={signOut} />
+    );
 
   function toggleCollapsed() {
     setCollapsed((current) => {
