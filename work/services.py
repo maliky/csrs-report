@@ -2763,7 +2763,7 @@ def delete_submitted_proposal(
     if proposal.status != ProposalStatus.SUBMITTED:
         raise ValidationError("Seule une proposition soumise peut être supprimée.")
     proposal_id = proposal.pk
-    proposal.skip_history_when_saving = True
+    setattr(proposal, "skip_history_when_saving", True)
     proposal.delete()
     TaskProposal.history.model._base_manager.filter(id=proposal_id).delete()
 
