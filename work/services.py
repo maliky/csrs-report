@@ -28,7 +28,6 @@ from django.utils.text import slugify
 
 from access.services import (
     MANAGE_PERMISSION,
-    PROPOSAL_PERMISSION,
     VIEW_PERMISSION,
     has_scoped_permission,
     member_user_ids,
@@ -877,6 +876,14 @@ def can_manage_assignment(user: User, assignment: TaskAssignment) -> bool:
             assignment.manager_id == user.pk
             and is_primary_supervisor(user, assignment.employee)
         )
+    )
+
+
+def can_validate_assignment(user: User, assignment: TaskAssignment) -> bool:
+    """Restrict completion decisions to the current primary N+1."""
+    return is_self_managed_assignment(user, assignment) or (
+        assignment.manager_id == user.pk
+        and is_primary_supervisor(user, assignment.employee)
     )
 
 
@@ -2452,7 +2459,10 @@ def validate_completion(
         .select_related("employee", "manager")
         .get(pk=assignment.pk)
     )
-    ensure_manage(user, assignment)
+    if not can_validate_assignment(user, assignment):
+        raise PermissionDenied(
+            "Seul le supérieur hiérarchique direct peut valider cette tâche."
+        )
     ensure_revision(assignment.revision, expected_revision)
     if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
         raise ValidationError("Cette tâche n’est pas en attente de validation.")
@@ -2479,9 +2489,18 @@ def reject_completion(
     reason: str,
     expected_revision: int | None = None,
 ) -> None:
-    assignment = TaskAssignment.objects.select_for_update().get(pk=assignment.pk)
-    ensure_manage(user, assignment)
+    assignment = (
+        TaskAssignment.objects.select_for_update()
+        .select_related("employee", "manager")
+        .get(pk=assignment.pk)
+    )
+    if not can_validate_assignment(user, assignment):
+        raise PermissionDenied(
+            "Seul le supérieur hiérarchique direct peut valider cette tâche."
+        )
     ensure_revision(assignment.revision, expected_revision)
+    if assignment.status != AssignmentStatus.AWAITING_VALIDATION:
+        raise ValidationError("Cette tâche n’est pas en attente de validation.")
     if not reason.strip():
         raise ValidationError("Un motif est obligatoire.")
     assignment.status = AssignmentStatus.ACTIVE
@@ -2729,15 +2748,30 @@ def resubmit_proposal(
     return proposal
 
 
+@transaction.atomic
+def delete_submitted_proposal(
+    *,
+    user: User,
+    proposal: TaskProposal,
+    expected_revision: int | None = None,
+) -> None:
+    """Permanently remove an unstarted proposal at its author's request."""
+    proposal = TaskProposal.objects.select_for_update().get(pk=proposal.pk)
+    if proposal.employee_id != user.pk:
+        raise PermissionDenied("Seul l'auteur peut supprimer cette proposition.")
+    ensure_revision(proposal.revision, expected_revision)
+    if proposal.status != ProposalStatus.SUBMITTED:
+        raise ValidationError("Seule une proposition soumise peut être supprimée.")
+    proposal_id = proposal.pk
+    proposal.skip_history_when_saving = True
+    proposal.delete()
+    TaskProposal.history.model._base_manager.filter(id=proposal_id).delete()
+
+
 def can_review_proposal(user: User, proposal: TaskProposal) -> bool:
-    """Authorize proposal decisions through hierarchy or scoped management."""
-    if proposal.employee_id == user.pk and not (user.is_it_admin or user.is_superuser):
-        return False
-    return (
-        user.is_it_admin
-        or user.is_superuser
-        or is_primary_supervisor(user, proposal.employee)
-        or has_scoped_permission(user, PROPOSAL_PERMISSION, proposal.organization_unit_id)
+    """Authorize proposal decisions only for the current primary N+1."""
+    return proposal.employee_id != user.pk and is_primary_supervisor(
+        user, proposal.employee
     )
 
 
@@ -2746,17 +2780,12 @@ def reviewable_proposals(user: User) -> QuerySet[TaskProposal]:
     queryset = TaskProposal.objects.filter(status=ProposalStatus.SUBMITTED).exclude(
         employee=user
     )
-    if user.is_it_admin or user.is_superuser:
-        return queryset
     direct_ids = (
         active_lines()
         .filter(supervisor=user, is_primary=True)
         .values_list("employee_id", flat=True)
     )
-    delegated_units = scoped_unit_ids(user, PROPOSAL_PERMISSION)
-    return queryset.filter(
-        Q(employee_id__in=direct_ids) | Q(organization_unit_id__in=delegated_units)
-    )
+    return queryset.filter(employee_id__in=direct_ids)
 
 
 def visible_team_proposals(user: User) -> QuerySet[TaskProposal]:

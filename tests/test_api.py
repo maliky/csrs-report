@@ -351,6 +351,47 @@ def test_author_corrects_and_resubmits_a_rejected_proposal(
     assert resubmitted.json()["capabilities"]["edit"] is True
 
 
+def test_author_deletes_a_submitted_proposal_before_review(
+    people: dict[str, User], assignment: TaskAssignment
+) -> None:
+    proposal = proposal_for_assignment(assignment)
+    proposal_id = proposal.pk
+    response = api_client(people["employee"]).delete(
+        reverse("api:proposal-detail", args=[proposal.pk]),
+        {"revision": proposal.revision},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 204
+    assert not TaskProposal.objects.filter(pk=proposal_id).exists()
+    assert not TaskProposal.history.model._base_manager.filter(id=proposal_id).exists()
+
+
+def test_user_changes_password_without_a_temporary_password_flag(
+    people: dict[str, User],
+) -> None:
+    user = people["employee"]
+    user.set_password("Actuel-2026-Securise!")
+    user.password_change_required = False
+    user.save(update_fields=["password", "password_change_required"])
+    client = api_client(user)
+
+    response = client.post(
+        reverse("api:session-password"),
+        {
+            "current_password": "Actuel-2026-Securise!",
+            "new_password": "Nouveau-2026-Securise!",
+            "new_password_confirmation": "Nouveau-2026-Securise!",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 204
+    user.refresh_from_db()
+    assert user.check_password("Nouveau-2026-Securise!")
+    assert client.get(reverse("api:session")).status_code == 200
+
+
 def test_proposal_detail_hides_itself_from_an_outsider(
     people: dict[str, User], assignment: TaskAssignment
 ) -> None:

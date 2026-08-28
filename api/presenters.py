@@ -21,6 +21,7 @@ from work.services import (
     assignment_snapshot,
     can_comment_assignment,
     can_manage_assignment,
+    can_validate_assignment,
     current_progress,
     effective_assignment_status,
     is_self_managed_assignment,
@@ -295,6 +296,7 @@ def assignment_detail_payload(
     status = effective_assignment_status(assignment.status, progress)
     workload = workload_breakdown(assignment.estimated_work_days, progress)
     can_manage = can_manage_assignment(viewer, assignment)
+    can_validate = can_validate_assignment(viewer, assignment)
     can_comment = can_comment_assignment(viewer, assignment)
     return {
         "id": assignment.pk,
@@ -339,6 +341,7 @@ def assignment_detail_payload(
         ],
         "capabilities": {
             "manage": can_manage,
+            "validate": can_validate,
             "comment": can_comment,
             "update_progress": status != "closed_early"
             and (viewer == assignment.employee or can_manage),
@@ -395,5 +398,7 @@ def proposal_payload(proposal: TaskProposal, viewer: User) -> dict[str, object]:
             "resubmit": proposal.employee_id == viewer.pk
             and proposal.status == "rejected",
             "review": can_review,
+            "delete": proposal.employee_id == viewer.pk
+            and proposal.status == "submitted",
         },
     }

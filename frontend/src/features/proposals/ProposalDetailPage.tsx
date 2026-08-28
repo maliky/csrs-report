@@ -6,7 +6,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
-import { useParams } from "../../lib/router";
+import { useNavigate, useParams } from "../../lib/router";
 import type { Proposal } from "../../lib/api/types";
 import { apiFetch } from "../../lib/api/client";
 import { useApi } from "../../lib/useApi";
@@ -23,6 +23,7 @@ import styles from "./proposals.module.css";
 
 export function ProposalDetailPage() {
   const { proposalId } = useParams();
+  const navigate = useNavigate();
   const { data, error, loading, reload, setData } = useApi<Proposal>(
     `/api/v1/proposals/${proposalId}/`,
   );
@@ -138,6 +139,39 @@ export function ProposalDetailPage() {
             }
           >
             <RotateCcw size={18} aria-hidden="true" /> Corriger et resoumettre
+          </Button>
+        </div>
+      )}
+      {data.capabilities.delete && (
+        <div className={styles.detailActions}>
+          <Button
+            variant="danger"
+            disabled={saving}
+            onClick={async () => {
+              if (
+                !window.confirm("Supprimer définitivement cette proposition ?")
+              )
+                return;
+              setSaving(true);
+              setMutationError(null);
+              try {
+                await apiFetch<void>(`/api/v1/proposals/${data.id}/`, {
+                  method: "DELETE",
+                  body: JSON.stringify({ revision: data.revision }),
+                });
+                navigate("/propositions", { replace: true });
+              } catch (caught) {
+                setMutationError(
+                  caught instanceof Error
+                    ? caught
+                    : new Error("Suppression non enregistrée"),
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            <XCircle size={18} aria-hidden="true" /> Supprimer la proposition
           </Button>
         </div>
       )}
