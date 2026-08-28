@@ -28,7 +28,7 @@ from accounts.services import (
     StaleUserStateError,
     bulk_manage_users,
     can_manage_users,
-    complete_temporary_password_change,
+    change_password,
     create_managed_user,
     ensure_can_manage_users,
     reset_managed_user_password,
@@ -97,6 +97,7 @@ from work.services import (
     can_self_assign,
     can_delete_reporting_data,
     can_review_proposal,
+    delete_submitted_proposal,
     can_view_assignment,
     can_view_employee,
     due_date_for,
@@ -254,14 +255,14 @@ class LogoutView(APIView):
 
 
 class SessionPasswordView(APIView):
-    """Complete the mandatory replacement of a temporary password."""
+    """Replace the authenticated user's password."""
 
     @extend_schema(request=TemporaryPasswordChangeSerializer, responses={204: None})
     def post(self, request: Request) -> Response:
         serializer = TemporaryPasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        user = complete_temporary_password_change(
+        user = change_password(
             user=request_user(request),
             current_password=str(data["current_password"]),
             new_password=str(data["new_password"]),
@@ -946,6 +947,22 @@ class ProposalDetailView(APIView):
     def get(self, request: Request, pk: int) -> Response:
         user = request_user(request)
         return Response(proposal_payload(proposal_for_viewer(user, pk), user))
+
+    @extend_schema(
+        operation_id="proposal_delete",
+        request=ProposalResubmitSerializer,
+        responses={204: None},
+    )
+    def delete(self, request: Request, pk: int) -> Response:
+        serializer = ProposalResubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request_user(request)
+        delete_submitted_proposal(
+            user=user,
+            proposal=proposal_for_viewer(user, pk),
+            expected_revision=serializer.validated_data["revision"],
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         operation_id="proposal_update",

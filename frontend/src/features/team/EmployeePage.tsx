@@ -1,4 +1,5 @@
 import { useLocation, useParams } from "../../lib/router";
+import { useState } from "react";
 import type { TeamEmployee } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
 import {
@@ -10,8 +11,10 @@ import {
 } from "../../components/ui";
 import { PeriodNavigation } from "../tasks/PeriodNavigation";
 import { TaskCard } from "../tasks/TaskCard";
+import styles from "../tasks/tasks.module.css";
 
 export function EmployeePage() {
+  const [showFinished, setShowFinished] = useState(false);
   const { employeeId } = useParams();
   const location = useLocation();
   const { data, error, loading, reload } = useApi<TeamEmployee>(
@@ -63,14 +66,35 @@ export function EmployeePage() {
         </dl>
       </Card>
       <PeriodNavigation period={data.period} />
-      {data.tasks.length ? (
+      {data.tasks.some((task) =>
+        ["completed", "closed_early"].includes(task.status),
+      ) && (
+        <label className={styles.finishedFilter}>
+          <input
+            type="checkbox"
+            checked={showFinished}
+            onChange={(event) => setShowFinished(event.target.checked)}
+          />
+          Afficher les tâches terminées
+        </label>
+      )}
+      {data.tasks.some(
+        (task) =>
+          showFinished || !["completed", "closed_early"].includes(task.status),
+      ) ? (
         <div className="grid">
-          {data.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
-          ))}
+          {data.tasks
+            .filter(
+              (task) =>
+                showFinished ||
+                !["completed", "closed_early"].includes(task.status),
+            )
+            .map((task) => (
+              <TaskCard key={task.id} task={task} />
+            ))}
         </div>
       ) : (
-        <EmptyState title="Aucune tâche sur cette période">
+        <EmptyState title="Aucune tâche en cours sur cette période">
           Changez de période pour consulter d'autres engagements.
         </EmptyState>
       )}

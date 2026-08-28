@@ -370,7 +370,7 @@ def test_only_it_can_grant_revoke_and_grants_cannot_be_deleted(
 
 
 @pytest.mark.django_db
-def test_delegated_manager_accepts_proposal_but_natural_manager_stays_accountable(
+def test_only_natural_manager_accepts_proposal(
     scoped_context: dict[str, object],
 ) -> None:
     users = scoped_context["users"]
@@ -392,13 +392,15 @@ def test_delegated_manager_accepts_proposal_but_natural_manager_stays_accountabl
     )
     _grant(scoped_context, "delegate_one", "UNIT_MANAGER", "daf")
 
-    assert can_review_proposal(users["delegate_one"], proposal)
-    accepted = accept_proposal(users["delegate_one"], proposal)
+    assert not can_review_proposal(users["delegate_one"], proposal)
+    with pytest.raises(PermissionDenied):
+        accept_proposal(users["delegate_one"], proposal)
+    accepted = accept_proposal(users["daf_manager"], proposal)
 
     assert accepted.manager == users["daf_manager"]
     assert accepted.organization_unit == finances
     proposal.refresh_from_db()
-    assert proposal.reviewed_by == users["delegate_one"]
+    assert proposal.reviewed_by == users["daf_manager"]
 
 
 @pytest.mark.django_db

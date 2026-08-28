@@ -1,5 +1,6 @@
 import { FileText } from "lucide-react";
 import { useLocation } from "../../lib/router";
+import { useState } from "react";
 import type { Dashboard } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
 import {
@@ -10,9 +11,11 @@ import {
 } from "../../components/ui";
 import { PeriodNavigation } from "./PeriodNavigation";
 import { TaskCard } from "./TaskCard";
+import styles from "./tasks.module.css";
 
 export function DashboardPage() {
   const location = useLocation();
+  const [showArchived, setShowArchived] = useState(false);
   const { data, error, loading, reload } = useApi<Dashboard>(
     `/api/v1/dashboard/${location.search}`,
   );
@@ -48,15 +51,37 @@ export function DashboardPage() {
       {data && (
         <>
           <PeriodNavigation period={data.period} />
-          {data.tasks.length ? (
+          {data.tasks.some((task) =>
+            ["completed", "closed_early"].includes(task.status),
+          ) && (
+            <label className={styles.finishedFilter}>
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(event) => setShowArchived(event.target.checked)}
+              />
+              Afficher les tâches terminées
+            </label>
+          )}
+          {data.tasks.some(
+            (task) =>
+              showArchived ||
+              !["completed", "closed_early"].includes(task.status),
+          ) ? (
             <div className="grid">
-              {data.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
+              {data.tasks
+                .filter(
+                  (task) =>
+                    showArchived ||
+                    !["completed", "closed_early"].includes(task.status),
+                )
+                .map((task) => (
+                  <TaskCard key={task.id} task={task} />
+                ))}
             </div>
           ) : (
             <EmptyState
-              title="Aucune tâche sur cette période"
+              title="Aucune tâche en cours sur cette période"
               action={
                 <ButtonLink to="/propositions/nouvelle">
                   Proposer une tâche

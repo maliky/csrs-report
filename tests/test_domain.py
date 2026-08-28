@@ -195,6 +195,16 @@ def test_primary_change_transfers_active_assignments(
 def test_hundred_percent_waits_for_manager_validation(
     assignment: TaskAssignment, people: dict[str, User]
 ) -> None:
+    from work.models import ReportingLine
+
+    n2 = User.objects.create_user("n2@example.test")
+    ReportingLine.objects.create(
+        employee=people["manager"],
+        supervisor=n2,
+        unit=assignment.organization_unit,
+        start_date=timezone.localdate(),
+        is_primary=True,
+    )
     record_progress(
         user=people["employee"],
         assignment=assignment,
@@ -205,6 +215,8 @@ def test_hundred_percent_waits_for_manager_validation(
     )
     assignment.refresh_from_db()
     assert assignment.status == AssignmentStatus.AWAITING_VALIDATION
+    with pytest.raises(PermissionDenied):
+        validate_completion(n2, assignment)
     validate_completion(people["manager"], assignment)
     assignment.refresh_from_db()
     assert assignment.status == AssignmentStatus.COMPLETED

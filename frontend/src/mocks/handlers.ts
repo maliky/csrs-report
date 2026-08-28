@@ -325,7 +325,12 @@ export const handlers = [
       decision_note: "",
       created_at: `${taskState.today}T12:00:00Z`,
       can_review: false,
-      capabilities: { edit: true, resubmit: false, review: false },
+      capabilities: {
+        edit: true,
+        resubmit: false,
+        review: false,
+        delete: true,
+      },
     };
     proposalState = { ...proposalState, own: [proposal, ...proposalState.own] };
     return HttpResponse.json(proposal, { status: 201 });
@@ -371,10 +376,37 @@ export const handlers = [
       status_label: "Soumise",
       decision_note: "",
       can_review: false,
-      capabilities: { edit: true, resubmit: false, review: false },
+      capabilities: {
+        edit: true,
+        resubmit: false,
+        review: false,
+        delete: true,
+      },
     };
     replaceProposal(updated);
     return HttpResponse.json(updated);
+  }),
+  http.delete("/api/v1/proposals/:id/", async ({ request, params }) => {
+    const proposal = proposalById(Number(params.id));
+    if (!proposal)
+      return apiError(404, "not_found", "Proposition introuvable.");
+    const body = (await request.json()) as { revision: number };
+    if (body.revision !== proposal.revision)
+      return apiError(
+        409,
+        "stale_revision",
+        "Cette ressource a été modifiée depuis son chargement.",
+      );
+    proposalState = {
+      own: proposalState.own.filter((item) => item.id !== proposal.id),
+      reviewable: proposalState.reviewable.filter(
+        (item) => item.id !== proposal.id,
+      ),
+      read_only: proposalState.read_only.filter(
+        (item) => item.id !== proposal.id,
+      ),
+    };
+    return new HttpResponse(null, { status: 204 });
   }),
   http.post("/api/v1/proposals/:id/decision/", async ({ request, params }) => {
     const body = (await request.json()) as { decision: string; reason: string };
@@ -389,7 +421,12 @@ export const handlers = [
       accepted_assignment_id: body.decision === "accept" ? taskState.id : null,
       decision_note: body.reason,
       can_review: false,
-      capabilities: { edit: false, resubmit: false, review: false },
+      capabilities: {
+        edit: false,
+        resubmit: false,
+        review: false,
+        delete: false,
+      },
     };
     proposalState = {
       ...proposalState,

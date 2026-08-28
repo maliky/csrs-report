@@ -17,6 +17,12 @@ import { useApi } from "../../lib/useApi";
 import { formatDate } from "../../lib/format";
 import styles from "./agenda.module.css";
 
+function employeeLabel(employee: AvailabilityOptions["employees"][number]) {
+  return employee.position
+    ? `${employee.name} — ${employee.position}`
+    : employee.name;
+}
+
 function currentWeek(): string {
   const now = new Date();
   const offset = (now.getDay() + 6) % 7;
@@ -48,6 +54,7 @@ export function AvailabilityPage() {
         retry={availability.reload}
       />
     );
+  const options = availability.data;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,8 +62,27 @@ export function AvailabilityPage() {
     setError(null);
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const employeeName = String(form.get("employee_name") ?? "").trim();
+    const employees = options.employees.filter((employee) => {
+      const normalized = employeeName.toLocaleLowerCase("fr");
+      return (
+        employeeLabel(employee).toLocaleLowerCase("fr") === normalized ||
+        employee.name.toLocaleLowerCase("fr") === normalized
+      );
+    });
+    if (employees.length !== 1) {
+      setError(
+        new ApiError(
+          "Sélectionnez un employé précis dans la liste proposée.",
+          400,
+          "invalid_employee",
+        ),
+      );
+      setSaving(false);
+      return;
+    }
     const payload = {
-      employee_id: Number(form.get("employee_id")),
+      employee_id: employees[0].id,
       kind: form.get("kind"),
       start_date: form.get("start_date"),
       end_date: form.get("end_date"),
@@ -130,24 +156,29 @@ export function AvailabilityPage() {
           key={editing?.id ?? "new"}
         >
           <div className="form-field">
-            <label htmlFor="employee">Agent</label>
-            <select
+            <label htmlFor="employee">Employé concerné</label>
+            <input
               id="employee"
-              name="employee_id"
+              name="employee_name"
+              type="search"
+              list="availability-employees"
+              autoComplete="off"
               required
-              defaultValue={editing?.employee.id}
-            >
-              {availability.data.employees.map((employee) => (
-                <option value={employee.id} key={employee.id}>
-                  {employee.name} — {employee.position}
-                </option>
+              readOnly={Boolean(editing)}
+              defaultValue={
+                editing ? employeeLabel(editing.employee) : undefined
+              }
+            />
+            <datalist id="availability-employees">
+              {options.employees.map((employee) => (
+                <option value={employeeLabel(employee)} key={employee.id} />
               ))}
-            </select>
+            </datalist>
           </div>
           <div className="form-field">
             <label htmlFor="kind">Nature</label>
             <select id="kind" name="kind" required defaultValue={editing?.kind}>
-              {availability.data.kinds.map((kind) => (
+              {options.kinds.map((kind) => (
                 <option value={kind.value} key={kind.value}>
                   {kind.label}
                 </option>
@@ -210,13 +241,13 @@ export function AvailabilityPage() {
             <h2>Indisponibilités déclarées</h2>
           </div>
         </div>
-        {availability.data.items.length === 0 ? (
+        {options.items.length === 0 ? (
           <EmptyState title="Aucune indisponibilité">
             Aucun congé, absence ou mission ne couvre cette semaine.
           </EmptyState>
         ) : (
           <div className="stack">
-            {availability.data.items.map((item) => (
+            {options.items.map((item) => (
               <Card className={styles.version} key={item.id}>
                 <div>
                   <strong>

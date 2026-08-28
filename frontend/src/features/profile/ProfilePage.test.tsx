@@ -48,6 +48,9 @@ test("charge et met à jour le cahier des charges", async () => {
   );
 
   const firstNameField = await screen.findByLabelText("Prénom");
+  expect(
+    screen.getByRole("link", { name: "Modifier mon mot de passe" }),
+  ).toHaveAttribute("href", "/profil/mot-de-passe");
   const lastNameField = screen.getByLabelText("Nom");
   const phoneField = screen.getByLabelText("Téléphone");
   const avatarField = screen.getByLabelText("URL de l’image d’avatar");

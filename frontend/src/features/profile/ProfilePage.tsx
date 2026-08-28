@@ -87,9 +87,14 @@ export function ProfilePage() {
             charges.
           </p>
         </div>
-        <ButtonLink to="/" variant="quiet">
-          Retour au tableau de bord
-        </ButtonLink>
+        <div className="cluster">
+          <ButtonLink to="/profil/mot-de-passe" variant="secondary">
+            Modifier mon mot de passe
+          </ButtonLink>
+          <ButtonLink to="/" variant="quiet">
+            Retour au tableau de bord
+          </ButtonLink>
+        </div>
       </header>
       <Card>
         <h2>Informations classiques</h2>

@@ -396,43 +396,44 @@ function TransitionActions({
     <Card>
       <div className={styles.actions}>
         <h2>Décision</h2>
-        {task.status === "awaiting_validation" && (
-          <>
-            <Button
-              disabled={saving}
-              onClick={() =>
-                void submit({
-                  revision: task.revision,
-                  transition: "validate",
-                  reason: "",
-                })
-              }
-            >
-              Valider l'achèvement
-            </Button>
-            <div className="form-field">
-              <label htmlFor="decision-reason">Motif</label>
-              <textarea
-                id="decision-reason"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-              />
-            </div>
-            <Button
-              variant="secondary"
-              disabled={saving || !reason.trim()}
-              onClick={() =>
-                void submit({
-                  revision: task.revision,
-                  transition: "reject",
-                  reason,
-                })
-              }
-            >
-              Demander une reprise
-            </Button>
-          </>
-        )}
+        {task.status === "awaiting_validation" &&
+          task.capabilities.validate && (
+            <>
+              <Button
+                disabled={saving}
+                onClick={() =>
+                  void submit({
+                    revision: task.revision,
+                    transition: "validate",
+                    reason: "",
+                  })
+                }
+              >
+                Valider l'achèvement
+              </Button>
+              <div className="form-field">
+                <label htmlFor="decision-reason">Motif</label>
+                <textarea
+                  id="decision-reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                disabled={saving || !reason.trim()}
+                onClick={() =>
+                  void submit({
+                    revision: task.revision,
+                    transition: "reject",
+                    reason,
+                  })
+                }
+              >
+                Demander une reprise
+              </Button>
+            </>
+          )}
         {task.status !== "closed_early" && task.status !== "completed" && (
           <>
             <div className="form-field">

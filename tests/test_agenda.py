@@ -232,6 +232,26 @@ def test_agenda_snapshot_groups_overlapping_tasks_and_marks_unclassified_users(
     assert snapshot["unclassified_users"][0]["id"] == people["employee"].pk
 
 
+@pytest.mark.parametrize("terminal_status", ["completed", "closed_early"])
+@pytest.mark.django_db
+def test_agenda_snapshot_excludes_terminal_assignments(
+    assignment, terminal_status
+) -> None:
+    assignment.status = terminal_status
+    assignment.completed_at = timezone.now()
+    assignment.save(update_fields=["status", "completed_at"])
+    monday = week_start_for(timezone.localdate())
+
+    snapshot = build_agenda_snapshot(
+        period_start=monday,
+        period_end=monday + timedelta(days=6),
+        agenda_direction=AgendaDirection.PROGRAMS,
+    )
+
+    assert snapshot["units"] == []
+    assert snapshot["unclassified_users"] == []
+
+
 @pytest.mark.django_db
 def test_generated_agenda_version_is_private_frozen_and_reprintable(
     tmp_path: Path, settings, assignment, people, unit
