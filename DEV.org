@@ -4,17 +4,17 @@
 * <2026-08-28 ven. 17:27> Améliorations à apporter au système
 
 -   Gestion des absences par la Capital Humain : permettre à au capital humain de saisir directement le nom de l’employé concerné lors de l’enregistrement d’une absence.
-    
+
 -   Validation des tâches : limiter la validation d’une tâche au supérieur hiérarchique direct (N+1) de l’employé. Les niveaux N+2, N+3, etc. ne doivent pas intervenir dans cette validation.
-    
+
 -   Annulation d’une soumission de tâche : permettre à l’utilisateur de supprimer ou d’annuler une tâche soumise tant qu’elle n’a pas encore été acceptée ou validée.
-    
+
 -   Archivage des tâches réalisées : la liste des tâches réalisées devient progressivement trop longue. Ajouter une fonctionnalité permettant d’archiver ou de retirer de l’affichage les tâches déjà réalisées, afin de garder une liste plus lisible et mieux organisée.
-    
+
 -   Gestion des accès aux comptes : permettre aux différents utilisateurs d’ajouter ou d’utiliser leur adresse e-mail professionnelle comme identifiant de connexion à leur compte.
-    
+
 -   Modification du mot de passe : permettre à chaque utilisateur de modifier son mot de passe depuis son compte, de manière sécurisée. ou et lier le système à office365 pour une connexion via le compte de messagerie office365
-    
+
     Merci pour ta collaboration
 * <2026-08-25 mar. 20:40> Synchronisation avec la production
 La production sur =179.237.107.40= est constamment mise à jour. Je souhaite que la préproduction reflète son contenu à la fin de chaque journée. Créer un script qui duplique les données de production vers la préproduction sans jamais modifier la production, qui reste en lecture seule pour cette opération. Si une autre solution limite mieux les divergences, proposer une alternative.
