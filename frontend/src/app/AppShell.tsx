@@ -84,10 +84,7 @@ export function AppShell() {
   }, [reload]);
 
   useEffect(() => {
-    if (
-      !session?.capabilities.switch_role ||
-      session.impersonation.active
-    )
+    if (!session?.capabilities.switch_role || session.impersonation.active)
       return;
 
     let cancelled = false;
@@ -109,10 +106,7 @@ export function AppShell() {
     return () => {
       cancelled = true;
     };
-  }, [
-    session?.capabilities.switch_role,
-    session?.impersonation.active,
-  ]);
+  }, [session?.capabilities.switch_role, session?.impersonation.active]);
   const location = useLocation();
 
   useEffect(() => {

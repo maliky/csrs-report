@@ -293,7 +293,9 @@ def render_agenda_pdf(
                 task_rows.append(
                     [
                         Paragraph(f"• {_text(task['title'])}{observation}", unit_body),
-                        Paragraph(f"<b>{cast(int, task['percentage'])} %</b>", task_value),
+                        Paragraph(
+                            f"<b>{cast(int, task['percentage'])} %</b>", task_value
+                        ),
                         Paragraph(_text(_short_status_label(task)), task_value),
                     ]
                 )

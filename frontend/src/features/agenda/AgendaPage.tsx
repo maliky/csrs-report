@@ -627,7 +627,9 @@ function SecretaryAgenda() {
                         <li className={styles.task} key={task.id}>
                           <span className={styles.taskTitle}>
                             {task.title}
-                            {task.observation && <small>{task.observation}</small>}
+                            {task.observation && (
+                              <small>{task.observation}</small>
+                            )}
                           </span>
                           <strong className={styles.taskPercentage}>
                             {task.percentage}%
