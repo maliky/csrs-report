@@ -18,6 +18,10 @@ class ScheduleSerializer(serializers.Serializer):
     )
 
 
+class RoleSimulationStartSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(min_value=1)
+
+
 class RecurrenceSerializer(serializers.Serializer):
     frequency = serializers.ChoiceField(choices=("weekly",))
     end_date = serializers.DateField()

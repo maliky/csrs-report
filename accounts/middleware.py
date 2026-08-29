@@ -21,7 +21,7 @@ class TemporaryPasswordChangeMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        user = request.user
+        user = getattr(request, "real_user", request.user)
         if not (
             user.is_authenticated and getattr(user, "password_change_required", False)
         ):

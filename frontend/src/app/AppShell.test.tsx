@@ -198,3 +198,96 @@ test("rafraîchit l’avatar après la mise à jour du profil", async () => {
     ).toHaveAttribute("src", avatar),
   );
 });
+
+test("permet au superuser de simuler un utilisateur puis de revenir", async () => {
+  const user = userEvent.setup();
+  const administrator = {
+    id: 1,
+    name: "Administrateur CSRS",
+    position: "Superuser",
+    login_alias: "admin",
+  };
+  const target = {
+    id: 19,
+    name: "Mariam Koné",
+    position: "Chercheuse",
+    login_alias: "mkone",
+    roles: [
+      {
+        code: "UNIT_VIEWER",
+        name: "Lecture de service",
+        unit_id: 4,
+        unit: "Unité de recherche",
+        scope: "tree",
+      },
+    ],
+    units: [
+      {
+        id: 4,
+        code: "UR",
+        name: "Unité de recherche",
+        is_primary: true,
+      },
+    ],
+  };
+  const adminSession = {
+    ...sessionFixture,
+    user: administrator,
+    capabilities: { ...sessionFixture.capabilities, switch_role: true },
+  };
+  const simulatedSession = {
+    ...sessionFixture,
+    user: target,
+    capabilities: { ...sessionFixture.capabilities, switch_role: true },
+    impersonation: {
+      active: true,
+      administrator,
+      target,
+    },
+  };
+  server.use(
+    http.get("/api/v1/session/", () => HttpResponse.json(adminSession)),
+    http.get("/api/v1/session/impersonation/options/", () =>
+      HttpResponse.json({ users: [target] }),
+    ),
+    http.post("/api/v1/session/impersonation/", () =>
+      HttpResponse.json(simulatedSession),
+    ),
+    http.delete("/api/v1/session/impersonation/", () =>
+      HttpResponse.json(adminSession),
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route path="/" element={<AppShell />}>
+          <Route index element={<h1>Simulation</h1>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await user.click(
+    await screen.findByRole("button", { name: "Changer de rôle" }),
+  );
+  expect(
+    await screen.findByRole("dialog", { name: "Changer de rôle" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Lecture de service.*Unité de recherche/),
+  ).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: "Agir comme Mariam Koné" }),
+  );
+
+  expect(await screen.findByText("Mode utilisateur simulé")).toBeVisible();
+  expect(screen.getByText(/Vous agissez comme Mariam Koné/)).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: "Revenir en administrateur" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByText("Mode utilisateur simulé"),
+    ).not.toBeInTheDocument(),
+  );
+});
