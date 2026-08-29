@@ -72,6 +72,7 @@ export function AppShell() {
   const [roleOptions, setRoleOptions] = useState<RoleSimulationOptions | null>(
     null,
   );
+  const [roleLoading, setRoleLoading] = useState(false);
   const [roleError, setRoleError] = useState("");
   const [switchingUserId, setSwitchingUserId] = useState<number | null>(null);
   const navigate = useNavigate();
@@ -89,15 +90,20 @@ export function AppShell() {
 
     let cancelled = false;
     setRoleOptions(null);
+    setRoleLoading(true);
     setRoleError("");
     void apiFetch<RoleSimulationOptions>(
       "/api/v1/session/impersonation/options/",
     )
       .then((options) => {
-        if (!cancelled) setRoleOptions(options);
+        if (!cancelled) {
+          setRoleOptions(options);
+          setRoleLoading(false);
+        }
       })
       .catch((caught) => {
         if (cancelled) return;
+        setRoleLoading(false);
         setRoleError(
           caught instanceof Error ? caught.message : "Liste indisponible",
         );
@@ -107,6 +113,25 @@ export function AppShell() {
       cancelled = true;
     };
   }, [session?.capabilities.switch_role, session?.impersonation.active]);
+
+  async function retryRoleOptions() {
+    if (roleLoading) return;
+    setRoleLoading(true);
+    setRoleError("");
+    try {
+      setRoleOptions(
+        await apiFetch<RoleSimulationOptions>(
+          "/api/v1/session/impersonation/options/",
+        ),
+      );
+    } catch (caught) {
+      setRoleError(
+        caught instanceof Error ? caught.message : "Liste indisponible",
+      );
+    } finally {
+      setRoleLoading(false);
+    }
+  }
   const location = useLocation();
 
   useEffect(() => {
@@ -363,7 +388,7 @@ export function AppShell() {
                   aria-label="Changer de rôle"
                   title="Changer de rôle"
                   value=""
-                  disabled={roleOptions === null || switchingUserId !== null}
+                  disabled={roleLoading || switchingUserId !== null}
                   aria-describedby={
                     roleError ? "role-switcher-error" : undefined
                   }
@@ -375,13 +400,15 @@ export function AppShell() {
                   <option value="">
                     {switchingUserId !== null
                       ? "Activation en cours…"
-                      : roleOptions
-                        ? "Changer de rôle…"
-                        : "Chargement des utilisateurs…"}
+                      : roleLoading
+                        ? "Chargement des utilisateurs…"
+                        : roleOptions
+                          ? "Changer de rôle…"
+                          : "Liste indisponible"}
                   </option>
                   {roleOptions?.users.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.name} —{" "}
+                      {option.name} — @{option.login_alias} —{" "}
                       {option.position || "Fonction non renseignée"}
                     </option>
                   ))}
@@ -394,7 +421,14 @@ export function AppShell() {
               className={styles.roleSwitcherError}
               role="alert"
             >
-              {roleError}
+              {roleError}{" "}
+              <button
+                type="button"
+                className={styles.roleSwitcherRetry}
+                onClick={() => void retryRoleOptions()}
+              >
+                Réessayer
+              </button>
             </small>
           )}
         </div>

@@ -168,6 +168,16 @@
 .roleSwitcherError {
   color: #ffd6cf;
 }
+.roleSwitcherRetry {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .collapseButton {
   min-height: 3rem;
   display: flex;
