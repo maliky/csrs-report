@@ -97,6 +97,13 @@
   padding: 0.75rem;
   border-top: 1px solid rgb(255 255 255 / 12%);
 }
+.userAccount {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem;
+  align-items: center;
+  gap: 0.35rem;
+}
 .user {
   min-height: 3.2rem;
   display: flex;
@@ -144,6 +151,23 @@
 .userDetails small {
   color: #b8cbc5;
 }
+.roleSwitcherCompact {
+  width: 3rem;
+  min-height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: var(--radius-sm);
+  color: white;
+  background: #214c44;
+  font: inherit;
+  cursor: pointer;
+}
+.roleSwitcherCompact:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.roleSwitcherError {
+  color: #ffd6cf;
+}
 .collapseButton {
   min-height: 3rem;
   display: flex;
@@ -168,6 +192,10 @@
   justify-content: center;
   padding-right: 0;
   padding-left: 0;
+}
+.collapsed .userAccount {
+  grid-template-columns: 1fr;
+  justify-items: center;
 }
 .collapsed .active {
   box-shadow: inset 3px 0 #f4c95d;
@@ -204,50 +232,6 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-}
-.roleModalBackdrop {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgb(12 23 20 / 70%);
-}
-.roleModal {
-  width: min(46rem, 100%);
-  max-height: min(44rem, calc(100dvh - 2rem));
-  overflow: auto;
-  padding: clamp(1rem, 4vw, 2rem);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: 0 24px 70px rgb(0 0 0 / 35%);
-}
-.roleModalHeading,
-.roleOption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.roleOptions {
-  display: grid;
-  gap: 0.65rem;
-  margin-top: 1rem;
-}
-.roleOption {
-  padding: 0.9rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-canvas);
-}
-.roleOption div {
-  display: grid;
-  gap: 0.2rem;
-}
-.roleOption span,
-.roleOption small {
-  color: var(--color-muted);
 }
 .main,
 .loadingMain {
@@ -339,11 +323,13 @@
     min-height: calc(100vh - 9rem);
     padding-top: 1.5rem;
   }
-  .impersonationBanner,
-  .roleModalHeading,
-  .roleOption {
+  .impersonationBanner {
     align-items: stretch;
     flex-direction: column;
+  }
+  .collapsed .userAccount {
+    grid-template-columns: minmax(0, 1fr) 3rem;
+    justify-items: stretch;
   }
 }
 

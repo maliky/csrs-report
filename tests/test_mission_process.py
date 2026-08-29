@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from access.models import GrantScope, RoleGrant, ScopedRole
 from accounts.models import User
+from processes.api import case_payload
 from processes.exports import export_case_zip
 from processes.models import (
     CaseStatus,
@@ -531,6 +532,12 @@ def test_new_document_version_replaces_metadata_without_rewriting_old_record(
     _upload(case, users["requester"], DocumentKind.TERMS_OF_REFERENCE, storage)
     first.refresh_from_db()
     assert first.replaced_by_id is not None
+    documents = case_payload(users["requester"], case, detail=True)["documents"]
+    assert isinstance(documents, list)
+    assert [document["id"] for document in documents] == [
+        first.replaced_by_id,
+        first.pk,
+    ]
     assert (
         case.documents.filter(
             kind=DocumentKind.TERMS_OF_REFERENCE, replaced_by__isnull=True

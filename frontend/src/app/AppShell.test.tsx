@@ -267,18 +267,12 @@ test("permet au superuser de simuler un utilisateur puis de revenir", async () =
     </MemoryRouter>,
   );
 
-  await user.click(
-    await screen.findByRole("button", { name: "Changer de rôle" }),
-  );
-  expect(
-    await screen.findByRole("dialog", { name: "Changer de rôle" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByText(/Lecture de service.*Unité de recherche/),
-  ).toBeVisible();
-  await user.click(
-    screen.getByRole("button", { name: "Agir comme Mariam Koné" }),
-  );
+  const roleSwitcher = await screen.findByRole("combobox", {
+    name: "Changer de rôle",
+  });
+  expect(roleSwitcher.parentElement).toHaveTextContent("Administrateur CSRS");
+  await screen.findByRole("option", { name: /Mariam Koné/ });
+  await user.selectOptions(roleSwitcher, "19");
 
   expect(await screen.findByText("Mode utilisateur simulé")).toBeVisible();
   expect(screen.getByText(/Vous agissez comme Mariam Koné/)).toBeVisible();
