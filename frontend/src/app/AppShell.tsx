@@ -8,18 +8,17 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Repeat2,
   Settings,
   UserCog,
   Users,
   UserRoundCheck,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "../lib/router";
 import { apiFetch } from "../lib/api/client";
 import type { RoleSimulationOptions, Session } from "../lib/api/types";
-import { Button, ErrorState, Skeleton } from "../components/ui";
+import { ErrorState, Skeleton } from "../components/ui";
 import { useApi } from "../lib/useApi";
 import styles from "./shell.module.css";
 import { PasswordChangePage } from "../features/users/PasswordChangePage";
@@ -70,30 +69,13 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileToggle = useRef<HTMLButtonElement>(null);
   const mobileClose = useRef<HTMLButtonElement>(null);
-  const roleSwitcherButton = useRef<HTMLButtonElement>(null);
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleOptions, setRoleOptions] = useState<RoleSimulationOptions | null>(
     null,
   );
-  const [roleQuery, setRoleQuery] = useState("");
+  const [roleLoading, setRoleLoading] = useState(false);
   const [roleError, setRoleError] = useState("");
   const [switchingUserId, setSwitchingUserId] = useState<number | null>(null);
   const navigate = useNavigate();
-  const filteredRoleOptions = useMemo(() => {
-    const query = roleQuery.trim().toLocaleLowerCase("fr");
-    if (!query) return roleOptions?.users ?? [];
-    return (roleOptions?.users ?? []).filter((option) =>
-      [
-        option.name,
-        option.position,
-        option.login_alias ?? "",
-        ...option.roles.map((role) => `${role.name} ${role.unit}`),
-      ]
-        .join(" ")
-        .toLocaleLowerCase("fr")
-        .includes(query),
-    );
-  }, [roleOptions, roleQuery]);
 
   useEffect(() => {
     const refreshProfile = () => void reload();
@@ -101,6 +83,55 @@ export function AppShell() {
     return () =>
       window.removeEventListener("csrs:profile-updated", refreshProfile);
   }, [reload]);
+
+  useEffect(() => {
+    if (!session?.capabilities.switch_role || session.impersonation.active)
+      return;
+
+    let cancelled = false;
+    setRoleOptions(null);
+    setRoleLoading(true);
+    setRoleError("");
+    void apiFetch<RoleSimulationOptions>(
+      "/api/v1/session/impersonation/options/",
+    )
+      .then((options) => {
+        if (!cancelled) {
+          setRoleOptions(options);
+          setRoleLoading(false);
+        }
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        setRoleLoading(false);
+        setRoleError(
+          caught instanceof Error ? caught.message : "Liste indisponible",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.capabilities.switch_role, session?.impersonation.active]);
+
+  async function retryRoleOptions() {
+    if (roleLoading) return;
+    setRoleLoading(true);
+    setRoleError("");
+    try {
+      setRoleOptions(
+        await apiFetch<RoleSimulationOptions>(
+          "/api/v1/session/impersonation/options/",
+        ),
+      );
+    } catch (caught) {
+      setRoleError(
+        caught instanceof Error ? caught.message : "Liste indisponible",
+      );
+    } finally {
+      setRoleLoading(false);
+    }
+  }
   const location = useLocation();
 
   useEffect(() => {
@@ -110,17 +141,14 @@ export function AppShell() {
   useEffect(() => {
     function closeOnEscape(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (roleDialogOpen) {
-        setRoleDialogOpen(false);
-        roleSwitcherButton.current?.focus();
-      } else if (mobileOpen) {
+      if (mobileOpen) {
         setMobileOpen(false);
         mobileToggle.current?.focus();
       }
     }
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [mobileOpen, roleDialogOpen]);
+  }, [mobileOpen]);
 
   if (loading)
     return (
@@ -143,23 +171,6 @@ export function AppShell() {
     window.location.assign("/connexion/");
   }
 
-  async function openRoleSwitcher() {
-    setRoleDialogOpen(true);
-    setRoleError("");
-    setRoleQuery("");
-    try {
-      setRoleOptions(
-        await apiFetch<RoleSimulationOptions>(
-          "/api/v1/session/impersonation/options/",
-        ),
-      );
-    } catch (caught) {
-      setRoleError(
-        caught instanceof Error ? caught.message : "Liste indisponible",
-      );
-    }
-  }
-
   async function startRoleSimulation(userId: number) {
     setSwitchingUserId(userId);
     setRoleError("");
@@ -169,7 +180,6 @@ export function AppShell() {
         body: JSON.stringify({ user_id: userId }),
       });
       setData(next);
-      setRoleDialogOpen(false);
       navigate("/");
     } catch (caught) {
       setRoleError(
@@ -345,18 +355,6 @@ export function AppShell() {
               <span className={styles.navLabel}>Administration avancée</span>
             </a>
           )}
-          {session.capabilities.switch_role && (
-            <button
-              ref={roleSwitcherButton}
-              type="button"
-              className={styles.navItem}
-              title="Changer de rôle"
-              onClick={() => void openRoleSwitcher()}
-            >
-              <Repeat2 size={iconSize} aria-hidden="true" />
-              <span className={styles.navLabel}>Changer de rôle</span>
-            </button>
-          )}
           <button
             type="button"
             className={styles.navItem}
@@ -366,21 +364,73 @@ export function AppShell() {
             <LogOut size={iconSize} aria-hidden="true" />
             <span className={styles.navLabel}>Déconnexion</span>
           </button>
-          <NavLink
-            to="/profil"
-            className={`${styles.user} ${styles.userLink}`}
-            title="Voir mon profil"
-          >
-            <UserAvatar
-              avatar={session.user.avatar ?? null}
-              name={session.user.name}
-              className={styles.avatar}
-            />
-            <span className={styles.userDetails}>
-              <strong>{session.user.name}</strong>
-              <small>{session.user.position}</small>
-            </span>
-          </NavLink>
+          <div className={styles.userAccount}>
+            <NavLink
+              to="/profil"
+              className={`${styles.user} ${styles.userLink}`}
+              title="Voir mon profil"
+            >
+              <UserAvatar
+                avatar={session.user.avatar ?? null}
+                name={session.user.name}
+                className={styles.avatar}
+              />
+              <span className={styles.userDetails}>
+                <strong>{session.user.name}</strong>
+                <small>{session.user.position}</small>
+              </span>
+            </NavLink>
+            {session.capabilities.switch_role &&
+              !session.impersonation.active && (
+                <select
+                  id="administrator-role-switcher"
+                  className={styles.roleSwitcherCompact}
+                  aria-label="Changer de rôle"
+                  title="Changer de rôle"
+                  value=""
+                  disabled={roleLoading || switchingUserId !== null}
+                  aria-describedby={
+                    roleError ? "role-switcher-error" : undefined
+                  }
+                  onChange={(event) => {
+                    const userId = Number(event.target.value);
+                    if (userId) void startRoleSimulation(userId);
+                  }}
+                >
+                  <option value="">
+                    {switchingUserId !== null
+                      ? "Activation en cours…"
+                      : roleLoading
+                        ? "Chargement des utilisateurs…"
+                        : roleOptions
+                          ? "Changer de rôle…"
+                          : "Liste indisponible"}
+                  </option>
+                  {roleOptions?.users.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name} — @{option.login_alias} —{" "}
+                      {option.position || "Fonction non renseignée"}
+                    </option>
+                  ))}
+                </select>
+              )}
+          </div>
+          {roleError && (
+            <small
+              id="role-switcher-error"
+              className={styles.roleSwitcherError}
+              role="alert"
+            >
+              {roleError}{" "}
+              <button
+                type="button"
+                className={styles.roleSwitcherRetry}
+                onClick={() => void retryRoleOptions()}
+              >
+                Réessayer
+              </button>
+            </small>
+          )}
         </div>
         <button
           type="button"
@@ -423,75 +473,6 @@ export function AppShell() {
           CSRS Report · Suivi collaboratif et responsable
         </footer>
       </div>
-      {roleDialogOpen && (
-        <div className={styles.roleModalBackdrop}>
-          <section
-            className={styles.roleModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="role-switcher-title"
-          >
-            <div className={styles.roleModalHeading}>
-              <div>
-                <p className="eyebrow">Simulation sécurisée</p>
-                <h2 id="role-switcher-title">Changer de rôle</h2>
-              </div>
-              <Button
-                type="button"
-                variant="quiet"
-                onClick={() => setRoleDialogOpen(false)}
-              >
-                Fermer
-              </Button>
-            </div>
-            <div className="form-field">
-              <label htmlFor="role-user-search">Rechercher une personne</label>
-              <input
-                id="role-user-search"
-                type="search"
-                autoFocus
-                value={roleQuery}
-                onChange={(event) => setRoleQuery(event.target.value)}
-              />
-            </div>
-            {roleError && (
-              <div className="error-banner" role="alert">
-                {roleError}
-              </div>
-            )}
-            <div className={styles.roleOptions}>
-              {filteredRoleOptions.map((option) => (
-                <article className={styles.roleOption} key={option.id}>
-                  <div>
-                    <strong>{option.name}</strong>
-                    <span>{option.position || "Fonction non renseignée"}</span>
-                    <small>
-                      {option.roles
-                        .map((role) =>
-                          role.unit ? `${role.name} · ${role.unit}` : role.name,
-                        )
-                        .join(" · ")}
-                    </small>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={switchingUserId !== null}
-                    onClick={() => void startRoleSimulation(option.id)}
-                  >
-                    {switchingUserId === option.id
-                      ? "Activation…"
-                      : `Agir comme ${option.name}`}
-                  </Button>
-                </article>
-              ))}
-              {roleOptions && filteredRoleOptions.length === 0 && (
-                <p className="muted">Aucun utilisateur ne correspond.</p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }

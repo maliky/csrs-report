@@ -44,4 +44,3 @@ Ces directives s'appliquent a tout le depot `csrs_report` et restent volontairem
 - Ne pas modifier Nginx, DNS, Certbot ou le service de production sans demande explicite.
 - Pour le futur deploiement, verifier dans l'ordre DNS, service applicatif, port local, vhost Nginx, `nginx -t`, puis certificat TLS.
 - Aucun certificat ne doit etre demande avant que `csrs.koba.sarl` resolve vers ce serveur et que le vhost HTTP fonctionne.
-- La preproduction etudiante utilise `psiaka.koba.sarl`, le projet Compose `csrs_psiaka` et le port local `18006`. Le compte `psiaka` ne doit pas recevoir l'acces au groupe `docker`; un administrateur execute le deploiement apres revue.

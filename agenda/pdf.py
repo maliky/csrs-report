@@ -88,6 +88,15 @@ def _availability_summary(rows: list[dict[str, object]]) -> str:
     return "<br/>".join(lines)
 
 
+def _short_status_label(task: dict[str, object]) -> str:
+    labels = {
+        "planned": "Plan.",
+        "active": "En cours",
+        "awaiting_validation": "À val.",
+    }
+    return labels.get(str(task.get("status")), str(task.get("status_label", "")))
+
+
 def render_agenda_pdf(
     snapshot: dict[str, object], *, generated_at: datetime, version: int
 ) -> bytes:
@@ -149,6 +158,21 @@ def render_agenda_pdf(
         leading=9.8,
         textColor=colors.HexColor("#24372D"),
         alignment=TA_LEFT,
+    )
+    employee_name = ParagraphStyle(
+        "AgendaEmployeeName",
+        parent=unit_body,
+        fontName=bold,
+        fontSize=7.7,
+        leading=9.4,
+        spaceAfter=1.2 * mm,
+    )
+    task_value = ParagraphStyle(
+        "AgendaTaskValue",
+        parent=unit_body,
+        fontSize=7.2,
+        leading=9.2,
+        alignment=TA_CENTER,
     )
 
     document_title = (
@@ -259,21 +283,46 @@ def render_agenda_pdf(
                 if employee.get("unclassified")
                 else ""
             )
-            lines = [
-                f"<b>{_text(person['name'])}</b>{classification} — taux moyen : "
-                f"<b>{cast(int, employee['completion_rate'])}%</b>"
-            ]
+            task_rows: list[list[object]] = []
             for task in cast(list[dict[str, object]], employee["tasks"]):
-                delta = cast(int, task["progress_delta"])
-                delta_text = f"+{delta}" if delta >= 0 else str(delta)
                 observation = (
-                    f" — {_text(task['observation'])}" if task.get("observation") else ""
+                    f"<br/><font size='6.7' color='#52615A'>{_text(task['observation'])}</font>"
+                    if task.get("observation")
+                    else ""
                 )
-                lines.append(
-                    f"• {_text(task['title'])} — <b>{cast(int, task['percentage'])}%</b> "
-                    f"({delta_text} pt) — {_text(task['status_label'])}{observation}"
+                task_rows.append(
+                    [
+                        Paragraph(f"• {_text(task['title'])}{observation}", unit_body),
+                        Paragraph(
+                            f"<b>{cast(int, task['percentage'])} %</b>", task_value
+                        ),
+                        Paragraph(_text(_short_status_label(task)), task_value),
+                    ]
                 )
-            employee_rows.append([Paragraph("<br/>".join(lines), unit_body)])
+            task_table = Table(
+                task_rows,
+                colWidths=[49 * mm, 13 * mm, 20 * mm],
+                style=TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (0, -1), 1.5 * mm),
+                        ("RIGHTPADDING", (1, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0.7 * mm),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.7 * mm),
+                    ]
+                ),
+            )
+            employee_rows.append(
+                [
+                    [
+                        Paragraph(
+                            f"{_text(person['name'])}{classification}", employee_name
+                        ),
+                        task_table,
+                    ]
+                ]
+            )
         card = Table(
             [
                 [Paragraph(_text(unit["name"]), unit_title)],

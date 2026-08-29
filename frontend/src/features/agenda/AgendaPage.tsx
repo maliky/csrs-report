@@ -56,6 +56,13 @@ function defaultAgendaPeriod(value = new Date()): [string, string] {
   return [localIsoDate(nextMonday), localIsoDate(addDays(nextMonday, 6))];
 }
 
+function shortAgendaStatus(status: string, fallback: string): string {
+  if (status === "planned") return "Plan.";
+  if (status === "active") return "En cours";
+  if (status === "awaiting_validation") return "À val.";
+  return fallback;
+}
+
 function periodValidation(start: string, end: string): string {
   if (!start || !end) return "Choisissez une date de début et une date de fin.";
   const startDate = new Date(`${start}T12:00:00`);
@@ -615,16 +622,25 @@ function SecretaryAgenda() {
                       {employee.person.name}
                       {employee.unclassified && " — non classé"}
                     </strong>
-                    <span>{employee.completion_rate}% en moyenne</span>
-                    <ul>
+                    <ul className={styles.taskList}>
                       {employee.tasks.map((task) => (
-                        <li key={task.id}>
-                          {task.title} — <strong>{task.percentage}%</strong> (
-                          {task.progress_delta >= 0 ? "+" : ""}
-                          {task.progress_delta} pt)
-                          {task.observation && (
-                            <small>{task.observation}</small>
-                          )}
+                        <li className={styles.task} key={task.id}>
+                          <span className={styles.taskTitle}>
+                            {task.title}
+                            {task.observation && (
+                              <small>{task.observation}</small>
+                            )}
+                          </span>
+                          <strong className={styles.taskPercentage}>
+                            {task.percentage}%
+                          </strong>
+                          <span
+                            className={styles.taskStatus}
+                            aria-label={`Statut : ${task.status_label}`}
+                            title={task.status_label}
+                          >
+                            {shortAgendaStatus(task.status, task.status_label)}
+                          </span>
                         </li>
                       ))}
                     </ul>

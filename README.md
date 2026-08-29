@@ -74,7 +74,7 @@ navigateur React (/app/)
   -> base configurée (PostgreSQL en preproduction, SQLite local par défaut)
 ```
 
-Django reste donc responsable de l'authentification, des permissions, des règles métier, de l'audit et de la base. React présente les données et envoie les actions autorisées. Le client conserve les cookies de session et transmet le jeton CSRF pour les écritures. Le déploiement public CSRS sert React, l'API et la connexion sur la même origine à `https://csrs.koba.sarl/` et `https://179.237.107.40/`. La préproduction de release est séparée à `https://preprod.report.ent.koba.sarl/`; la préproduction étudiante reste à `https://psiaka.koba.sarl/`.
+Django reste donc responsable de l'authentification, des permissions, des règles métier, de l'audit et de la base. React présente les données et envoie les actions autorisées. Le client conserve les cookies de session et transmet le jeton CSRF pour les écritures. Le déploiement public CSRS sert React, l'API et la connexion sur la même origine à `https://csrs.koba.sarl/` et `https://179.237.107.40/`. La préproduction de release est séparée à `https://preprod.report.ent.koba.sarl/`.
 
 Les principaux points d'entrée sont `frontend/src/lib/api/` pour le client et les types, `frontend/src/features/` pour les écrans métier, `api/urls.py` et `api/views.py` pour l'API, puis `work/services.py` et `access/services.py` pour les règles applicatives.
 
@@ -194,53 +194,6 @@ La référence complète des endpoints, des corps JSON, des erreurs, des session
 
 La compilation Docker est multi-étape : Node produit les fichiers React, puis WhiteNoise les sert avec les autres fichiers statiques. Aucun changement Nginx n'est nécessaire pour `/app/`.
 
-## Git et preproduction psiaka
-
-La branche de travail et de preproduction de l'étudiant est `psiaka`. La branche `dev` reste la branche d'intégration : l'administrateur y fusionne les changements validés après revue. Depuis la machine locale :
-
-```bash
-git clone ssh://psiaka@tuvs.koba.sarl/home/jil/git/csrs_report.git
-cd csrs_report
-git switch --track origin/psiaka
-git pull --ff-only
-# modifier et tester
-git add .
-git commit -m "description claire"
-git push origin psiaka
-```
-
-Dans le compte serveur `psiaka`, mettre à jour la copie de preproduction :
-
-```bash
-cd /srv/apps/psiaka/app
-git switch psiaka
-git pull --ff-only
-```
-
-Ce pull actualise uniquement les fichiers dans le checkout. Il ne modifie pas les conteneurs déjà en cours. Après revue du commit, l'administrateur lance :
-
-```bash
-cd /srv/apps/psiaka/app
-./scripts/deploy_preprod.sh
-```
-
-Le script préfère `docker compose up -d --build` lorsque le greffon Compose v2 est disponible et utilise `docker-compose` v1 comme solution de compatibilité. Docker réutilise ses couches en cache. Si le frontend a changé, l'étape Node relance `npm run build`; elle ne relance `npm ci` que si `package.json` ou `package-lock.json` a changé. Le bundle produit est copié dans `static/react` de la nouvelle image, puis servi par le conteneur web avec WhiteNoise. Aucune copie manuelle dans un conteneur en cours n'est nécessaire.
-
-Le site est publié sur `https://psiaka.koba.sarl/`. Le code Python et les assets React sont intégrés dans l'image. Le compte `psiaka` n'est volontairement pas membre du groupe `docker` : lui-même pousse et tire les commits, puis un administrateur contrôle et exécute le déploiement.
-
-Le développeur travaille et teste normalement sur sa machine, pousse ses commits sur la branche `psiaka`, puis informe l'administrateur du serveur en précisant le commit, les migrations éventuelles et les contrôles exécutés. L'administrateur revoit les changements, actualise la preproduction depuis `psiaka`, effectue le redéploiement puis fusionne les changements validés vers `dev`. Une modification n'est donc pas visible sur le site public immédiatement après le push. L'étudiant ne pousse pas directement sur `dev`.
-
-Pour reprendre dans `psiaka` les changements ajoutés entre-temps à `dev` :
-
-```bash
-git fetch origin
-git switch psiaka
-git merge origin/dev
-git push origin psiaka
-```
-
-La preproduction contient des comptes fictifs, notamment `dev`, `dg` et les comptes de la hiérarchie pilote. Leurs mots de passe ne sont pas versionnés : sur le serveur, ils sont indiqués dans le guide privé `/home/psiaka/CSRS_README.org`. Ces identifiants sont réservés aux essais et ne doivent jamais être réutilisés en production.
-
 ## Conteneurs et déploiement
 
 Sous Linux ou WSL :
@@ -259,7 +212,7 @@ Sous Windows PowerShell :
 .\scripts\backup_db.ps1
 ```
 
-Les variantes PowerShell utilisent `docker compose` v2. La preproduction `psiaka` reste administrée sur son hôte Linux avec les scripts Bash; le script PowerShell de déploiement sert aux stacks Docker exécutées depuis Windows.
+Les variantes PowerShell utilisent `docker compose` v2. Le script PowerShell de déploiement sert aux stacks Docker exécutées depuis Windows.
 
 Le chargeur de population fictive exige temporairement deux variables distinctes, `CSRS_DEMO_PASSWORD` et `CSRS_ADMIN_PASSWORD`. Il accepte `--dry-run`, `--replace-legacy` et `--reset-password`. Ces variables ne doivent rester ni dans `.env` ni dans les conteneurs après le chargement.
 
@@ -305,4 +258,4 @@ docker compose -p "$project" -f compose.yml exec -T web \
 ```
 
 
-Par défaut, l'application écoute sur `127.0.0.1:18005`. La preproduction `psiaka` utilise `CSRS_PORT=18006` et le projet `csrs_psiaka`. Les modèles de vhost se trouvent dans `deploy/nginx/`. Les sauvegardes validées par `pg_restore --list` sont conservées localement pendant 14 jours dans un dossier ignoré par Git. Aucun secret ni donnée personnelle réelle ne doit être ajouté au dépôt ou aux données de démonstration.
+Par défaut, l'application écoute sur `127.0.0.1:18005`. Les modèles de vhost se trouvent dans `deploy/nginx/`. Les sauvegardes validées par `pg_restore --list` sont conservées localement pendant 14 jours dans un dossier ignoré par Git. Aucun secret ni donnée personnelle réelle ne doit être ajouté au dépôt ou aux données de démonstration.

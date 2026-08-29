@@ -418,17 +418,9 @@ class ResponsiveSmokeTest(StaticLiveServerTestCase):
                 f"details[data-team-employee-id='{self.subordinate.pk}']",
             )
             assert subordinate_branch.get_attribute("open") is None
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located(
-                    (
-                        By.CSS_SELECTOR,
-                        f"[data-team-task-id='{self.team_assignment.pk}']",
-                    )
-                )
-            )
             assert driver.find_element(
                 By.CSS_SELECTOR,
-                f"a[href='/app/taches/{self.team_assignment.pk}']",
+                f"a[href='/app/equipe/{self.member.pk}?week={timezone.localdate()}']",
             )
             driver.find_element(
                 By.CSS_SELECTOR, "button[data-task-filter='with']"
