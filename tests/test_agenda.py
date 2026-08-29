@@ -10,6 +10,7 @@ from accounts.models import AgendaDirection as UserAgendaDirection, User
 from access.models import GrantScope, RoleGrant, ScopedRole
 from agenda.api import version_payload
 from agenda.models import AgendaDirection, AgendaDraft, StaffAvailability, VisitorVisit
+from agenda.pdf import _short_status_label
 from agenda.services import (
     agenda_pdf_bytes,
     build_agenda_snapshot,
@@ -376,3 +377,17 @@ def test_next_week_period_is_monday_through_sunday() -> None:
     start, end = next_week_period(timezone.datetime(2026, 8, 5).date())
     assert start.isoformat() == "2026-08-10"
     assert end.isoformat() == "2026-08-16"
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("planned", "Plan."),
+        ("active", "En cours"),
+        ("awaiting_validation", "À val."),
+    ],
+)
+def test_pdf_uses_compact_open_task_statuses(status: str, expected: str) -> None:
+    task = {"status": status, "status_label": "Libellé complet"}
+
+    assert _short_status_label(task) == expected
