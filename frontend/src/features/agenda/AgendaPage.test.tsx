@@ -381,6 +381,86 @@ test("conserve le dernier agenda visible si le changement de période échoue", 
   );
 });
 
+test("présente les tâches en trois colonnes sans moyenne ni variation", async () => {
+  server.use(
+    http.get("/api/v1/agenda/preview/", () =>
+      HttpResponse.json({
+        draft: {
+          period_start: "2026-08-10",
+          period_end: "2026-08-16",
+          major_events: "",
+          revision: 0,
+        },
+        snapshot: {
+          ...emptySnapshot,
+          units: [
+            {
+              id: 102,
+              name: "Intendance",
+              employees: [
+                {
+                  person: {
+                    id: 69,
+                    name: "Esther YOHOU",
+                    position: "Secrétaire de la Direction générale",
+                  },
+                  unclassified: false,
+                  completion_rate: 30,
+                  tasks: [
+                    {
+                      id: 318,
+                      title: "Atelier CSA",
+                      status: "active",
+                      status_label: "En cours",
+                      percentage: 60,
+                      progress_delta: 40,
+                      observation: "Préparation avancée",
+                    },
+                    {
+                      id: 369,
+                      title: "Atelier CSA",
+                      status: "planned",
+                      status_label: "Planifiée",
+                      percentage: 0,
+                      progress_delta: 0,
+                      observation: "",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ),
+    http.get("/api/v1/visits/", () =>
+      HttpResponse.json({
+        period_start: "2026-08-10",
+        period_end: "2026-08-16",
+        visits: [],
+      }),
+    ),
+    http.get("/api/v1/agenda/versions/", () =>
+      HttpResponse.json({ versions: [] }),
+    ),
+  );
+
+  render(
+    <MemoryRouter>
+      <AgendaPage />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findAllByText("Atelier CSA")).toHaveLength(2);
+  expect(screen.getByText("60%")).toBeInTheDocument();
+  expect(screen.getByText("0%")).toBeInTheDocument();
+  expect(screen.getByText("En cours")).toBeInTheDocument();
+  expect(screen.getByText("Plan.")).toBeInTheDocument();
+  expect(screen.getByText("Préparation avancée")).toBeInTheDocument();
+  expect(screen.queryByText(/en moyenne/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/pt\)/i)).not.toBeInTheDocument();
+});
+
 test("permet aux RH d’ajouter un congé à la semaine", async () => {
   let items: object[] = [];
   let submitted: Record<string, unknown> | null = null;
