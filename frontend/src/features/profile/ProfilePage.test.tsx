@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "../../lib/router";
 import { http, HttpResponse } from "msw";
-import { profileFixture } from "../../mocks/fixtures";
+import { profileFixture, sessionFixture } from "../../mocks/fixtures";
 import { server } from "../../mocks/server";
 import { ProfilePage } from "./ProfilePage";
 
@@ -48,6 +48,9 @@ test("charge et met à jour le cahier des charges", async () => {
   );
 
   const firstNameField = await screen.findByLabelText("Prénom");
+  expect(
+    screen.getByRole("link", { name: "Modifier mon mot de passe" }),
+  ).toHaveAttribute("href", "/profil/mot-de-passe");
   const lastNameField = screen.getByLabelText("Nom");
   const phoneField = screen.getByLabelText("Téléphone");
   const avatarField = screen.getByLabelText("URL de l’image d’avatar");
@@ -75,4 +78,42 @@ test("charge et met à jour le cahier des charges", async () => {
   await waitFor(() =>
     expect(torField).toHaveValue(updatedValues.terms_of_reference),
   );
+});
+
+test("rend le profil non modifiable pendant une simulation", async () => {
+  server.use(
+    http.get("/api/v1/session/", () =>
+      HttpResponse.json({
+        ...sessionFixture,
+        impersonation: {
+          active: true,
+          administrator: {
+            id: 1,
+            name: "Administrateur CSRS",
+            position: "Superuser",
+            login_alias: "admin",
+          },
+          target: sessionFixture.user,
+        },
+      }),
+    ),
+  );
+  render(
+    <MemoryRouter initialEntries={["/profil"]}>
+      <Routes>
+        <Route path="/profil" element={<ProfilePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  expect(
+    await screen.findByText(/Ce profil est affiché en mode simulé/),
+  ).toBeVisible();
+  expect(screen.getByLabelText("Prénom")).toHaveAttribute("readonly");
+  expect(
+    screen.queryByRole("link", { name: "Modifier mon mot de passe" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Enregistrer" }),
+  ).not.toBeInTheDocument();
 });

@@ -14,6 +14,16 @@ urlpatterns = [
         name="documentation",
     ),
     path("session/", views.SessionView.as_view(), name="session"),
+    path(
+        "session/impersonation/options/",
+        views.SessionImpersonationOptionsView.as_view(),
+        name="session-impersonation-options",
+    ),
+    path(
+        "session/impersonation/",
+        views.SessionImpersonationView.as_view(),
+        name="session-impersonation",
+    ),
     path("session/logout/", views.LogoutView.as_view(), name="logout"),
     path(
         "session/password/",

@@ -452,6 +452,21 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+    delete:
+      operationId: proposal_delete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - proposals
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/proposals/{id}/decision/:
     post:
       operationId: proposal_decision
@@ -548,7 +563,7 @@ paths:
   /api/v1/session/password/:
     post:
       operationId: session_password_create
-      description: Complete the mandatory replacement of a temporary password.
+      description: Replace the authenticated user's password.
       tags:
       - session
       requestBody:

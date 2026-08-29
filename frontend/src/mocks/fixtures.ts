@@ -30,7 +30,13 @@ export const sessionFixture: Session = {
     view_weekly_agenda: true,
     delete_tasks: false,
     manage_users: false,
+    switch_role: false,
     password_change_required: false,
+  },
+  impersonation: {
+    active: false,
+    administrator: null,
+    target: null,
   },
 };
 
@@ -213,6 +219,7 @@ export const taskDetailFixture: TaskDetail = {
   ],
   capabilities: {
     manage: true,
+    validate: true,
     comment: true,
     update_progress: true,
     self_managed: true,
@@ -264,7 +271,12 @@ export const proposalsFixture: ProposalGroups = {
       accepted_assignment_id: null,
       decision_note: "Préciser les destinataires et le format attendu.",
       can_review: false,
-      capabilities: { edit: true, resubmit: true, review: false },
+      capabilities: {
+        edit: true,
+        resubmit: true,
+        review: false,
+        delete: false,
+      },
     },
   ],
   reviewable: [
@@ -286,7 +298,12 @@ export const proposalsFixture: ProposalGroups = {
       accepted_assignment_id: null,
       decision_note: "",
       can_review: true,
-      capabilities: { edit: false, resubmit: false, review: true },
+      capabilities: {
+        edit: false,
+        resubmit: false,
+        review: true,
+        delete: false,
+      },
     },
   ],
   read_only: [
@@ -307,7 +324,12 @@ export const proposalsFixture: ProposalGroups = {
       accepted_assignment_id: 31,
       decision_note: "",
       can_review: false,
-      capabilities: { edit: false, resubmit: false, review: false },
+      capabilities: {
+        edit: false,
+        resubmit: false,
+        review: false,
+        delete: false,
+      },
     },
   ],
 };

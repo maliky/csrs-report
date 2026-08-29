@@ -30,7 +30,7 @@ from agenda.models import (
     VisitorVisit,
 )
 from processes.storage import configured_storage
-from work.models import OrganizationMembership, TaskAssignment
+from work.models import AssignmentStatus, OrganizationMembership, TaskAssignment
 from work.services import (
     ReportingPeriod,
     StaleRevisionError,
@@ -277,8 +277,12 @@ def build_agenda_snapshot(
         )
         .filter(employee__include_in_direction_agendas=True)
         .filter(
-            Q(start_date__lte=period_end)
-            & (Q(completed_at__isnull=True) | Q(completed_at__date__gte=period_start))
+            start_date__lte=period_end,
+            status__in=(
+                AssignmentStatus.PLANNED,
+                AssignmentStatus.ACTIVE,
+                AssignmentStatus.AWAITING_VALIDATION,
+            ),
         )
         .select_related("task", "employee", "manager", "organization_unit", "calendar")
         .prefetch_related("progress_entries", "activities__actor")

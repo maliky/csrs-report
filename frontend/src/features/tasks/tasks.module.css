@@ -127,6 +127,18 @@
   border-radius: var(--radius-sm);
   background: var(--color-surface-alt);
 }
+.finishedFilter {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  font-weight: 750;
+}
+.finishedFilter input {
+  width: 1.15rem;
+  height: 1.15rem;
+}
 
 .chartWrap {
   position: relative;

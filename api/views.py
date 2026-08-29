@@ -24,11 +24,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import AgendaDirection, User
+from access.impersonation import (
+    ROLE_SIMULATION_SESSION_KEY,
+    end_role_simulation,
+    role_simulation_options,
+    start_role_simulation,
+)
+from access.models import RoleSimulation
 from accounts.services import (
     StaleUserStateError,
     bulk_manage_users,
     can_manage_users,
-    complete_temporary_password_change,
+    change_password,
     create_managed_user,
     ensure_can_manage_users,
     reset_managed_user_password,
@@ -60,6 +67,7 @@ from api.presenters import (
 )
 from api.serializers import (
     ObservationSerializer,
+    RoleSimulationStartSerializer,
     CollaboratorUpdateSerializer,
     PlanningPreviewSerializer,
     ProgressSerializer,
@@ -97,6 +105,7 @@ from work.services import (
     can_self_assign,
     can_delete_reporting_data,
     can_review_proposal,
+    delete_submitted_proposal,
     can_view_assignment,
     can_view_employee,
     due_date_for,
@@ -124,6 +133,57 @@ PERIOD_PARAMETERS = [
 def request_user(request: Request) -> User:
     """Return the authenticated custom user after DRF permission checks."""
     return cast(User, request.user)
+
+
+def request_principal(request: Request) -> User:
+    """Return the real authenticated user behind an optional simulation."""
+    return cast(User, getattr(request._request, "real_user", request.user))
+
+
+def request_role_simulation(request: Request) -> RoleSimulation | None:
+    return cast(
+        RoleSimulation | None,
+        getattr(request._request, "role_simulation", None),
+    )
+
+
+def session_payload(
+    request: Request,
+    *,
+    effective_user: User | None = None,
+    principal: User | None = None,
+    simulation: RoleSimulation | None = None,
+) -> dict[str, object]:
+    user = effective_user or request_user(request)
+    administrator = principal or request_principal(request)
+    active_simulation = simulation or request_role_simulation(request)
+    is_impersonating = active_simulation is not None
+    return {
+        "user": person_payload(user),
+        "csrf_token": get_token(request._request),
+        "capabilities": {
+            "create_task": bool(assignable_employee_ids(user)),
+            "create_proposal": user.is_active,
+            "view_team": bool(visible_employee_ids(user) - {user.pk}),
+            "self_assign": can_self_assign(user),
+            "admin": user.is_staff,
+            "manage_visits": can_manage_visits(user),
+            "manage_availability": can_manage_availability(user),
+            "prepare_weekly_agenda": can_prepare_agenda(user),
+            "view_weekly_agenda": can_view_agenda(user),
+            "delete_tasks": can_delete_reporting_data(user),
+            "manage_users": can_manage_users(user),
+            "switch_role": bool(administrator.is_active and administrator.is_superuser),
+            "password_change_required": administrator.password_change_required,
+        },
+        "impersonation": {
+            "active": is_impersonating,
+            "administrator": (
+                person_payload(administrator) if is_impersonating else None
+            ),
+            "target": person_payload(user) if is_impersonating else None,
+        },
+    }
 
 
 def managed_user_queryset() -> QuerySet[User]:
@@ -194,26 +254,71 @@ class SessionView(APIView):
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request: Request) -> Response:
-        user = request_user(request)
+        return Response(session_payload(request))
+
+
+class SessionImpersonationOptionsView(APIView):
+    """List real users whose complete access context can be simulated."""
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request) -> Response:
+        administrator = request_principal(request)
+        if not administrator.is_active or not administrator.is_superuser:
+            raise PermissionDenied("Seul un superutilisateur peut changer de role.")
+        return Response({"users": role_simulation_options(administrator)})
+
+
+class SessionImpersonationView(APIView):
+    """Start, replace, or stop the current superuser simulation."""
+
+    @extend_schema(request=RoleSimulationStartSerializer, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request) -> Response:
+        administrator = request_principal(request)
+        if not administrator.is_active or not administrator.is_superuser:
+            raise PermissionDenied("Seul un superutilisateur peut changer de role.")
+        serializer = RoleSimulationStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        target = get_object_or_404(
+            User,
+            pk=serializer.validated_data["user_id"],
+            is_active=True,
+            is_superuser=False,
+            is_it_admin=False,
+        )
+        current = request_role_simulation(request)
+        if current is not None:
+            end_role_simulation(current, reason="replaced")
+        simulation = start_role_simulation(
+            administrator=administrator,
+            target=target,
+        )
+        request._request.session[ROLE_SIMULATION_SESSION_KEY] = simulation.pk
         return Response(
-            {
-                "user": person_payload(user),
-                "csrf_token": get_token(request._request),
-                "capabilities": {
-                    "create_task": bool(assignable_employee_ids(user)),
-                    "create_proposal": user.is_active,
-                    "view_team": bool(visible_employee_ids(user) - {user.pk}),
-                    "self_assign": can_self_assign(user),
-                    "admin": user.is_staff,
-                    "manage_visits": can_manage_visits(user),
-                    "manage_availability": can_manage_availability(user),
-                    "prepare_weekly_agenda": can_prepare_agenda(user),
-                    "view_weekly_agenda": can_view_agenda(user),
-                    "delete_tasks": can_delete_reporting_data(user),
-                    "manage_users": can_manage_users(user),
-                    "password_change_required": user.password_change_required,
-                },
-            }
+            session_payload(
+                request,
+                effective_user=target,
+                principal=administrator,
+                simulation=simulation,
+            )
+        )
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    def delete(self, request: Request) -> Response:
+        administrator = request_principal(request)
+        if not administrator.is_active or not administrator.is_superuser:
+            raise PermissionDenied("Seul un superutilisateur peut changer de role.")
+        simulation = request_role_simulation(request)
+        if simulation is not None:
+            end_role_simulation(simulation, reason="manual")
+        request._request.session.pop(ROLE_SIMULATION_SESSION_KEY, None)
+        if hasattr(request._request, "role_simulation"):
+            delattr(request._request, "role_simulation")
+        return Response(
+            session_payload(
+                request,
+                effective_user=administrator,
+                principal=administrator,
+            )
         )
 
 
@@ -254,14 +359,14 @@ class LogoutView(APIView):
 
 
 class SessionPasswordView(APIView):
-    """Complete the mandatory replacement of a temporary password."""
+    """Replace the authenticated user's password."""
 
     @extend_schema(request=TemporaryPasswordChangeSerializer, responses={204: None})
     def post(self, request: Request) -> Response:
         serializer = TemporaryPasswordChangeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        user = complete_temporary_password_change(
+        user = change_password(
             user=request_user(request),
             current_password=str(data["current_password"]),
             new_password=str(data["new_password"]),
@@ -946,6 +1051,22 @@ class ProposalDetailView(APIView):
     def get(self, request: Request, pk: int) -> Response:
         user = request_user(request)
         return Response(proposal_payload(proposal_for_viewer(user, pk), user))
+
+    @extend_schema(
+        operation_id="proposal_delete",
+        request=ProposalResubmitSerializer,
+        responses={204: None},
+    )
+    def delete(self, request: Request, pk: int) -> Response:
+        serializer = ProposalResubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request_user(request)
+        delete_submitted_proposal(
+            user=user,
+            proposal=proposal_for_viewer(user, pk),
+            expected_revision=serializer.validated_data["revision"],
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         operation_id="proposal_update",

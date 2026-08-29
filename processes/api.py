@@ -252,7 +252,11 @@ def case_payload(user: User, case: ProcessCase, *, detail: bool) -> dict[str, ob
                         else None
                     ),
                 }
-                for document in case.documents.all()
+                for document in sorted(
+                    case.documents.all(),
+                    key=lambda item: (item.created_at, item.pk),
+                    reverse=True,
+                )
             ],
             "events": [
                 {

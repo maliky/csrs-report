@@ -10,6 +10,7 @@ from accounts.models import AgendaDirection as UserAgendaDirection, User
 from access.models import GrantScope, RoleGrant, ScopedRole
 from agenda.api import version_payload
 from agenda.models import AgendaDirection, AgendaDraft, StaffAvailability, VisitorVisit
+from agenda.pdf import _short_status_label
 from agenda.services import (
     agenda_pdf_bytes,
     build_agenda_snapshot,
@@ -232,6 +233,26 @@ def test_agenda_snapshot_groups_overlapping_tasks_and_marks_unclassified_users(
     assert snapshot["unclassified_users"][0]["id"] == people["employee"].pk
 
 
+@pytest.mark.parametrize("terminal_status", ["completed", "closed_early"])
+@pytest.mark.django_db
+def test_agenda_snapshot_excludes_terminal_assignments(
+    assignment, terminal_status
+) -> None:
+    assignment.status = terminal_status
+    assignment.completed_at = timezone.now()
+    assignment.save(update_fields=["status", "completed_at"])
+    monday = week_start_for(timezone.localdate())
+
+    snapshot = build_agenda_snapshot(
+        period_start=monday,
+        period_end=monday + timedelta(days=6),
+        agenda_direction=AgendaDirection.PROGRAMS,
+    )
+
+    assert snapshot["units"] == []
+    assert snapshot["unclassified_users"] == []
+
+
 @pytest.mark.django_db
 def test_generated_agenda_version_is_private_frozen_and_reprintable(
     tmp_path: Path, settings, assignment, people, unit
@@ -356,3 +377,17 @@ def test_next_week_period_is_monday_through_sunday() -> None:
     start, end = next_week_period(timezone.datetime(2026, 8, 5).date())
     assert start.isoformat() == "2026-08-10"
     assert end.isoformat() == "2026-08-16"
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("planned", "Plan."),
+        ("active", "En cours"),
+        ("awaiting_validation", "À val."),
+    ],
+)
+def test_pdf_uses_compact_open_task_statuses(status: str, expected: str) -> None:
+    task = {"status": status, "status_label": "Libellé complet"}
+
+    assert _short_status_label(task) == expected

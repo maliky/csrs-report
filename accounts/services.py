@@ -462,21 +462,23 @@ def reset_managed_user_password(
 
 
 @transaction.atomic
-def complete_temporary_password_change(
-    *, user: User, current_password: str, new_password: str
-) -> User:
-    """Replace a temporary password and clear the mandatory-change marker."""
+def change_password(*, user: User, current_password: str, new_password: str) -> User:
+    """Replace the current password and clear any mandatory-change marker."""
     locked = User.objects.select_for_update().get(pk=user.pk)
-    if not locked.password_change_required:
-        raise ValidationError("Aucun changement de mot de passe n'est requis.")
     if not locked.check_password(current_password):
         raise ValidationError(
             {"current_password": "Le mot de passe actuel est incorrect."}
         )
     password_validation.validate_password(new_password, locked)
+    was_required = locked.password_change_required
     locked.set_password(new_password)
     locked.password_change_required = False
-    _attribute_history(locked, locked, "Remplacement du mot de passe temporaire")
+    reason = (
+        "Remplacement du mot de passe temporaire"
+        if was_required
+        else "Modification du mot de passe"
+    )
+    _attribute_history(locked, locked, reason)
     locked.save(update_fields=["password", "password_change_required"])
     return locked
 

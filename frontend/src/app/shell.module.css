@@ -97,6 +97,13 @@
   padding: 0.75rem;
   border-top: 1px solid rgb(255 255 255 / 12%);
 }
+.userAccount {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem;
+  align-items: center;
+  gap: 0.35rem;
+}
 .user {
   min-height: 3.2rem;
   display: flex;
@@ -144,6 +151,23 @@
 .userDetails small {
   color: #b8cbc5;
 }
+.roleSwitcherCompact {
+  width: 3rem;
+  min-height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: var(--radius-sm);
+  color: white;
+  background: #214c44;
+  font: inherit;
+  cursor: pointer;
+}
+.roleSwitcherCompact:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.roleSwitcherError {
+  color: #ffd6cf;
+}
 .collapseButton {
   min-height: 3rem;
   display: flex;
@@ -169,6 +193,10 @@
   padding-right: 0;
   padding-left: 0;
 }
+.collapsed .userAccount {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
 .collapsed .active {
   box-shadow: inset 3px 0 #f4c95d;
 }
@@ -176,6 +204,34 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+.impersonationBanner {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem clamp(1rem, 4vw, 2rem);
+  border-bottom: 1px solid #9d7414;
+  color: #352606;
+  background: #f4c95d;
+}
+.impersonationBanner div {
+  display: grid;
+  gap: 0.15rem;
+}
+.impersonationBanner button {
+  min-height: 2.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #352606;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  background: rgb(255 255 255 / 45%);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 .main,
 .loadingMain {
@@ -266,6 +322,14 @@
   .main {
     min-height: calc(100vh - 9rem);
     padding-top: 1.5rem;
+  }
+  .impersonationBanner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .collapsed .userAccount {
+    grid-template-columns: minmax(0, 1fr) 3rem;
+    justify-items: stretch;
   }
 }
 

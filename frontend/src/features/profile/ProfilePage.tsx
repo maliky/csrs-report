@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "../../lib/api/client";
-import type { UserProfile } from "../../lib/api/types";
+import type { Session, UserProfile } from "../../lib/api/types";
 import { useApi } from "../../lib/useApi";
 import {
   Button,
@@ -24,6 +24,8 @@ export function ProfilePage() {
   const [message, setMessage] = useState("");
   const [mutationError, setMutationError] = useState("");
   const navigate = useNavigate();
+  const session = useApi<Session>("/api/v1/session/");
+  const simulated = session.data?.impersonation.active ?? false;
 
   useEffect(() => {
     if (!data) return;
@@ -36,6 +38,7 @@ export function ProfilePage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (simulated) return;
     setSaving(true);
     setMutationError("");
     setMessage("");
@@ -87,10 +90,23 @@ export function ProfilePage() {
             charges.
           </p>
         </div>
-        <ButtonLink to="/" variant="quiet">
-          Retour au tableau de bord
-        </ButtonLink>
+        <div className="cluster">
+          {!simulated && (
+            <ButtonLink to="/profil/mot-de-passe" variant="secondary">
+              Modifier mon mot de passe
+            </ButtonLink>
+          )}
+          <ButtonLink to="/" variant="quiet">
+            Retour au tableau de bord
+          </ButtonLink>
+        </div>
       </header>
+      {simulated && (
+        <div className="warning-banner" role="status">
+          Ce profil est affiché en mode simulé. Revenez en administrateur pour
+          modifier les informations ou le mot de passe.
+        </div>
+      )}
       <Card>
         <h2>Informations classiques</h2>
         <p className="muted">
@@ -103,6 +119,7 @@ export function ProfilePage() {
               id="first-name"
               name="first_name"
               value={firstName}
+              readOnly={simulated}
               onChange={(event) => setFirstName(event.target.value)}
             />
           </div>
@@ -112,6 +129,7 @@ export function ProfilePage() {
               id="last-name"
               name="last_name"
               value={lastName}
+              readOnly={simulated}
               onChange={(event) => setLastName(event.target.value)}
             />
           </div>
@@ -122,6 +140,7 @@ export function ProfilePage() {
               name="phone"
               type="tel"
               value={phone}
+              readOnly={simulated}
               onChange={(event) => setPhone(event.target.value)}
             />
           </div>
@@ -133,6 +152,7 @@ export function ProfilePage() {
               type="url"
               placeholder="https://exemple.org/avatar.jpg"
               value={avatar}
+              readOnly={simulated}
               onChange={(event) => setAvatar(event.target.value)}
             />
             <small className="muted">
@@ -146,13 +166,16 @@ export function ProfilePage() {
               id="terms-of-reference"
               name="terms_of_reference"
               value={termsOfReference}
+              readOnly={simulated}
               onChange={(event) => setTermsOfReference(event.target.value)}
             />
           </div>
           <div className="cluster wide">
-            <Button disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
+            {!simulated && (
+              <Button disabled={saving}>
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+            )}
             <Button
               variant="quiet"
               type="button"

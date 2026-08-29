@@ -208,7 +208,7 @@ export interface paths {
         get: operations["proposal_detail"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["proposal_delete"];
         options?: never;
         head?: never;
         patch: operations["proposal_update"];
@@ -288,7 +288,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Complete the mandatory replacement of a temporary password. */
+        /** @description Replace the authenticated user's password. */
         post: operations["session_password_create"];
         delete?: never;
         options?: never;
@@ -1367,6 +1367,26 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+        };
+    };
+    proposal_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
