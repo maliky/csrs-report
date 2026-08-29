@@ -4,7 +4,12 @@ from django.contrib import admin
 from django.http import HttpRequest
 from simple_history.admin import SimpleHistoryAdmin
 
-from access.models import RoleGrant, ScopedRole
+from access.models import (
+    RoleGrant,
+    RoleSimulation,
+    RoleSimulationAction,
+    ScopedRole,
+)
 from access.services import can_administer_grants
 
 
@@ -82,3 +87,35 @@ class RoleGrantAdmin(ITOnlyAdminMixin, SimpleHistoryAdmin):
         if obj.revoked_at is not None and obj.revoked_by_id is None:
             obj.revoked_by = request.user  # type: ignore[assignment]
         obj.save()
+
+
+class ReadOnlyAuditAdminMixin(ITOnlyAdminMixin):
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: object = None) -> bool:
+        return False
+
+
+@admin.register(RoleSimulation)
+class RoleSimulationAdmin(ReadOnlyAuditAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "administrator_label",
+        "target_label",
+        "started_at",
+        "ended_at",
+        "end_reason",
+    )
+    search_fields = ("administrator_label", "target_label")
+    list_filter = ("end_reason",)
+
+
+@admin.register(RoleSimulationAction)
+class RoleSimulationActionAdmin(ReadOnlyAuditAdminMixin, admin.ModelAdmin):
+    list_display = ("simulation", "method", "path", "status_code", "occurred_at")
+    search_fields = (
+        "simulation__administrator_label",
+        "simulation__target_label",
+        "path",
+    )
+    list_filter = ("method", "status_code")

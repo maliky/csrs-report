@@ -30,7 +30,13 @@ export const sessionFixture: Session = {
     view_weekly_agenda: true,
     delete_tasks: false,
     manage_users: false,
+    switch_role: false,
     password_change_required: false,
+  },
+  impersonation: {
+    active: false,
+    administrator: null,
+    target: null,
   },
 };
 

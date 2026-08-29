@@ -123,8 +123,36 @@ export type Session = {
     view_weekly_agenda: boolean;
     delete_tasks: boolean;
     manage_users: boolean;
+    switch_role: boolean;
     password_change_required: boolean;
   };
+  impersonation: {
+    active: boolean;
+    administrator: Person | null;
+    target: Person | null;
+  };
+};
+
+export type RoleSimulationRole = {
+  code: string;
+  name: string;
+  unit_id: number | null;
+  unit: string;
+  scope: string;
+};
+
+export type RoleSimulationOption = Person & {
+  roles: RoleSimulationRole[];
+  units: Array<{
+    id: number;
+    code: string;
+    name: string;
+    is_primary: boolean;
+  }>;
+};
+
+export type RoleSimulationOptions = {
+  users: RoleSimulationOption[];
 };
 
 export type OrganizationUnitOption = {

@@ -191,3 +191,72 @@ class RoleGrant(models.Model):
         raise ValidationError(
             "Une delegation doit etre revoquee et ne peut pas etre supprimee."
         )
+
+
+class ImmutableAuditQuerySet(models.QuerySet):
+    """Protect role-simulation audit records from bulk deletion."""
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        raise ValidationError("Le journal d'impersonation ne peut pas etre supprime.")
+
+
+class RoleSimulation(models.Model):
+    """Audited session in which a superuser acts as another active user."""
+
+    administrator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="started_role_simulations",
+    )
+    target = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="received_role_simulations",
+    )
+    administrator_label = models.CharField(max_length=255)
+    target_label = models.CharField(max_length=255)
+    role_snapshot = models.JSONField(default=list)
+    unit_snapshot = models.JSONField(default=list)
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    end_reason = models.CharField(max_length=80, blank=True)
+
+    objects = ImmutableAuditQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-started_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"{self.administrator_label} comme {self.target_label}"
+
+    def delete(self, *args: object, **kwargs: object) -> tuple[int, dict[str, int]]:
+        del args, kwargs
+        raise ValidationError("Le journal d'impersonation ne peut pas etre supprime.")
+
+
+class RoleSimulationAction(models.Model):
+    """One mutating HTTP request executed during a role simulation."""
+
+    simulation = models.ForeignKey(
+        RoleSimulation,
+        on_delete=models.PROTECT,
+        related_name="actions",
+    )
+    method = models.CharField(max_length=10)
+    path = models.CharField(max_length=512)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ImmutableAuditQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-occurred_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"{self.method} {self.path}"
+
+    def delete(self, *args: object, **kwargs: object) -> tuple[int, dict[str, int]]:
+        del args, kwargs
+        raise ValidationError("Le journal d'impersonation ne peut pas etre supprime.")
